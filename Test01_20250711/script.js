@@ -181,7 +181,7 @@ function draw() {
             // パドルのどの部分に当たったかを計算（0.0 から 1.0 の値）
             const hitPosition = (x - paddleX) / paddleWidth;
 
-            // パドル位置による角度調整（-60度から+60度の範囲に制限）
+            // パドル位置による角度調整（-80度から+80度の範囲に制限）
             const maxAngleAdjustment = 80;
             const angleAdjustment = (hitPosition - 0.5) * 2 * maxAngleAdjustment;
 
