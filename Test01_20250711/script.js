@@ -3,8 +3,9 @@ const ctx = canvas.getContext('2d');
 
 let x = canvas.width / 2;
 let y = canvas.height - 30;
-let dx = 2;
-let dy = -2;
+const ballSpeed = 1; // ボールスピードを一つの変数で制御
+let dx = ballSpeed;
+let dy = -ballSpeed;
 const ballRadius = 10;
 
 const paddleHeight = 10;
@@ -77,8 +78,8 @@ function clickHandler() {
 function resetGame() {
     x = canvas.width / 2;
     y = canvas.height - 30;
-    dx = 2;
-    dy = -2;
+    dx = ballSpeed;
+    dy = -ballSpeed;
     paddleX = (canvas.width - paddleWidth) / 2;
     score = 0;
     initBricks(); // Re-initialize bricks for a new game
@@ -172,10 +173,52 @@ function draw() {
     }
     if (y + dy < ballRadius) {
         dy = -dy;
-    } else if (y + dy > canvas.height - ballRadius) {
+    } else if (y + dy > canvas.height - paddleHeight - ballRadius + 5) { // パドルの上端で判定
         if (x > paddleX && x < paddleX + paddleWidth) {
+            // まず通常の反射を行う
             dy = -dy;
-        } else {
+
+            // パドルのどの部分に当たったかを計算（0.0 から 1.0 の値）
+            const hitPosition = (x - paddleX) / paddleWidth;
+
+            // パドル位置による角度調整（-60度から+60度の範囲に制限）
+            const maxAngleAdjustment = 80;
+            const angleAdjustment = (hitPosition - 0.5) * 2 * maxAngleAdjustment;
+
+            // 現在の速度を計算
+            const speed = Math.sqrt(dx * dx + dy * dy);
+
+            // 現在の角度を計算（上向きを基準とする）
+            const currentAngle = Math.atan2(dx, -dy) * 180 / Math.PI;
+
+            // 調整後の角度を計算
+            let newAngle = currentAngle + angleAdjustment;
+
+            // 角度を制限：-75度から+75度の範囲に制限（下向きを防ぐ）
+            const minAngle = -75;
+            const maxAngle = 75;
+            newAngle = Math.max(minAngle, Math.min(maxAngle, newAngle));
+
+            const newAngleRad = newAngle * Math.PI / 180;
+
+            // 新しい速度ベクトルを計算
+            dx = speed * Math.sin(newAngleRad);
+            dy = -speed * Math.cos(newAngleRad);
+
+            // 下向きの動きを完全に防ぐクリッピング
+            if (dy > 0) {
+                dy = -Math.abs(dy);
+            }
+
+            // 最小速度を保証
+            const minSpeed = ballSpeed;
+            if (Math.abs(dx) < minSpeed) {
+                dx = dx > 0 ? minSpeed : -minSpeed;
+            }
+            if (Math.abs(dy) < minSpeed) {
+                dy = -minSpeed; // 必ず上向きにする
+            }
+        } else if (y + dy > canvas.height - paddleHeight - ballRadius + 40) { // ゲームオーバー判定（パドル上端より5ピクセル下）
             alert('GAME OVER. Your score: ' + score);
             resetGame(); // Reset game instead of reloading
         }
