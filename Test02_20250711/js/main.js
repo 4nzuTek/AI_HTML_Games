@@ -9,6 +9,13 @@ let survivalTime = 0.00;
 let mouseNearPlayer = false; // マウスが自機に近いかどうか
 let highScore = 0.00; // ハイスコア
 
+// ゲームオーバーダイアログ用
+let gameOverDialog = false;
+let gameOverInfo = { time: 0, isNewRecord: false };
+let mouseX = 0;
+let mouseY = 0;
+let isMouseOverRestart = false;
+
 // プレイヤー（宇宙船）
 const player = {
     x: 360,
@@ -48,6 +55,8 @@ function resetGame() {
     bullets = [];
     bulletSpawnTimer = 0;
     bulletSpawnInterval = 30; // リセット時に間隔も元に戻す
+    gameOverDialog = false;
+    gameOverInfo = { time: 0, isNewRecord: false };
     updateUI();
 }
 
@@ -56,8 +65,8 @@ function setupEventListeners() {
     // マウスイベント
     canvas.addEventListener('mousemove', (e) => {
         const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
 
         if (gameRunning) {
             player.x = mouseX;
@@ -66,6 +75,9 @@ function setupEventListeners() {
             // 境界内に制限
             player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
             player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+        } else if (gameOverDialog) {
+            // ダイアログ表示中はリスタート範囲判定のみ
+            // 判定はdraw内で行う
         } else {
             // ゲーム開始前はマウスが自機に近いかチェック
             const distance = Math.sqrt(
@@ -78,6 +90,13 @@ function setupEventListeners() {
 
     // ゲーム開始（プレイヤー自機の近くをクリックする必要がある）
     canvas.addEventListener('click', (e) => {
+        if (gameOverDialog) {
+            // Click to Restart範囲内のみリセット
+            if (isMouseOverRestart) {
+                resetGame();
+            }
+            return;
+        }
         if (!gameRunning) {
             const rect = canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
@@ -241,14 +260,9 @@ function saveHighScore(score) {
 function gameOver() {
     const finalTime = (Date.now() - gameStartTime) / 1000;
     const isNewRecord = saveHighScore(finalTime);
-
-    let message = `GAME OVER. Survival Time: ${finalTime.toFixed(2)}s`;
-    if (isNewRecord) {
-        message += '\n🎉 NEW HIGH SCORE! 🎉';
-    }
-
-    alert(message);
-    resetGame();
+    gameOverInfo = { time: finalTime, isNewRecord: isNewRecord };
+    gameOverDialog = true;
+    gameRunning = false;
 }
 
 // UI更新
@@ -256,7 +270,8 @@ function updateUI() {
     if (gameRunning) {
         survivalTime = (Date.now() - gameStartTime) / 1000; // 小数点以下も含める
     }
-    document.getElementById('score').textContent = survivalTime.toFixed(2); // 0.01秒まで表示
+    // Survival TimeのDOM更新は不要になったので削除
+    // document.getElementById('score').textContent = survivalTime.toFixed(2);
     document.getElementById('highscore').textContent = highScore.toFixed(2); // ハイスコア表示
 }
 
@@ -270,7 +285,7 @@ function draw() {
     let currentRadius = player.radius;
     let currentColor = '#00FF00';
 
-    if (!gameRunning && mouseNearPlayer) {
+    if (!gameRunning && mouseNearPlayer && !gameOverDialog) {
         // ゲーム開始前でマウスが近い場合は滑らかな変化
         const time = Date.now() * 0.02;
         const scale = Math.sin(time) * 0.3 + 1.0; // 0.7倍〜1.3倍の滑らかな変化
@@ -297,13 +312,100 @@ function draw() {
         ctx.fill();
     });
 
+    // ゲーム中は中央に大きなタイマーを描画
+    if (gameRunning) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = '#CCC';
+        ctx.font = 'bold 64px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(survivalTime.toFixed(2) + 's', canvas.width / 2, canvas.height / 2);
+        ctx.restore();
+    }
+
+    // ゲームオーバーダイアログ
+    if (gameOverDialog) {
+        // ダイアログ背景
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#222';
+        const dialogW = 400;
+        const dialogH = gameOverInfo.isNewRecord ? 220 : 170;
+        const dialogX = (canvas.width - dialogW) / 2;
+        const dialogY = (canvas.height - dialogH) / 2;
+        ctx.fillRect(dialogX, dialogY, dialogW, dialogH);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = '#FFF';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(dialogX, dialogY, dialogW, dialogH);
+
+        // GAME OVERテキスト
+        ctx.font = 'bold 40px Arial';
+        ctx.fillStyle = '#FF3333'; // 常に赤
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('GAME OVER', canvas.width / 2, dialogY + 24);
+
+        // Survival Time
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#FFF';
+        ctx.fillText('Survival Time: ' + gameOverInfo.time.toFixed(2) + 's', canvas.width / 2, dialogY + 80);
+
+        // NEW HIGH SCORE
+        if (gameOverInfo.isNewRecord) {
+            ctx.font = 'bold 28px Arial';
+            ctx.fillStyle = '#00FF99';
+            ctx.fillText('🎉 NEW HIGH SCORE! 🎉', canvas.width / 2, dialogY + 130);
+        }
+
+        // Click to Restart
+        // テキスト範囲計算
+        const restartText = 'Click to Restart';
+        let baseFontSize = 20;
+        let fontSize = baseFontSize;
+        let blinkAlpha = 1.0;
+        // まずマウスオーバー判定用に最大サイズで計算
+        let hoverFontSize = 28;
+        ctx.font = 'bold ' + hoverFontSize + 'px Arial';
+        const hoverMetrics = ctx.measureText(restartText);
+        const hoverW = hoverMetrics.width;
+        const hoverH = hoverFontSize * 1.2;
+        const centerX = canvas.width / 2;
+        const centerY = dialogY + dialogH - 40;
+        // 中心基準で判定
+        isMouseOverRestart = (
+            mouseX >= centerX - hoverW / 2 && mouseX <= centerX + hoverW / 2 &&
+            mouseY >= centerY - hoverH / 2 && mouseY <= centerY + hoverH / 2
+        );
+        if (isMouseOverRestart) {
+            fontSize = hoverFontSize;
+            ctx.fillStyle = '#FFD700'; // オーバー時は黄色
+        } else {
+            ctx.fillStyle = '#AAA'; // 通常はグレー
+        }
+        ctx.font = 'bold ' + fontSize + 'px Arial';
+        ctx.globalAlpha = 1.0;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(restartText, centerX, centerY);
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+        return;
+    }
+
     // ゲーム停止時のメッセージ
     if (!gameRunning) {
-        ctx.fillStyle = '#FFF';
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
+        if (mouseNearPlayer) {
+            ctx.fillStyle = '#FFD700'; // 黄色
+        } else {
+            ctx.fillStyle = '#FFF';
+        }
         ctx.fillText('Click near the player to Start', canvas.width / 2, canvas.height / 2);
         ctx.font = '16px Arial';
+        ctx.fillStyle = '#FFF';
         ctx.fillText('Use Mouse to Move', canvas.width / 2, canvas.height / 2 + 40);
     }
 }
