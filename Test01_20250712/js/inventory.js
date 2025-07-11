@@ -2,6 +2,7 @@ class InventorySystem {
     constructor() {
         this.gridSize = 10;
         this.cellSize = 40;
+        this.gridGap = 1; // gap: 1px
         this.inventory = [];
         this.placedItems = new Map();
         this.draggedItem = null;
@@ -16,6 +17,7 @@ class InventorySystem {
         this.createGrid();
         this.setupDragAndDrop();
         this.loadInitialItems();
+        this.setupPaletteDrag(); // 追加
     }
 
     createGrid() {
@@ -176,10 +178,10 @@ class InventorySystem {
         itemElement.dataset.row = row;
         itemElement.dataset.col = col;
         itemElement.dataset.size = item.size;
-        itemElement.style.width = `${size.width * this.cellSize}px`;
-        itemElement.style.height = `${size.height * this.cellSize}px`;
-        itemElement.style.left = `${col * this.cellSize}px`;
-        itemElement.style.top = `${row * this.cellSize}px`;
+        itemElement.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+        itemElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+        itemElement.style.left = `${col * (this.cellSize + this.gridGap)}px`;
+        itemElement.style.top = `${row * (this.cellSize + this.gridGap)}px`;
         itemElement.textContent = item.content;
 
         document.getElementById('inventoryGrid').appendChild(itemElement);
@@ -214,9 +216,9 @@ class InventorySystem {
             const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
             const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
             this.showShadowItem(row, col, size, itemId);
-            // アイテム自体も中央を持つ
-            const left = col * this.cellSize;
-            const top = row * this.cellSize;
+            // gap補正
+            const left = col * (this.cellSize + this.gridGap);
+            const top = row * (this.cellSize + this.gridGap);
             itemElement.style.left = `${left}px`;
             itemElement.style.top = `${top}px`;
         };
@@ -266,8 +268,8 @@ class InventorySystem {
         // アイテム位置を更新
         itemElement.dataset.row = newRow;
         itemElement.dataset.col = newCol;
-        itemElement.style.left = `${newCol * this.cellSize}px`;
-        itemElement.style.top = `${newRow * this.cellSize}px`;
+        itemElement.style.left = `${newCol * (this.cellSize + this.gridGap)}px`;
+        itemElement.style.top = `${newRow * (this.cellSize + this.gridGap)}px`;
 
         // アイテム情報を更新
         const itemInfo = this.placedItems.get(itemId);
@@ -280,9 +282,10 @@ class InventorySystem {
     resetItemPosition(itemElement) {
         const row = parseInt(itemElement.dataset.row);
         const col = parseInt(itemElement.dataset.col);
+        const size = this.parseSize(itemElement.dataset.size);
 
-        itemElement.style.left = `${col * this.cellSize}px`;
-        itemElement.style.top = `${row * this.cellSize}px`;
+        itemElement.style.left = `${col * (this.cellSize + this.gridGap)}px`;
+        itemElement.style.top = `${row * (this.cellSize + this.gridGap)}px`;
     }
 
     loadInitialItems() {
@@ -347,10 +350,10 @@ class InventorySystem {
         const grid = document.getElementById('inventoryGrid');
         const shadow = document.createElement('div');
         shadow.className = 'shadow-item ' + (canPlace ? 'can-place' : 'cannot-place');
-        shadow.style.width = `${size.width * this.cellSize}px`;
-        shadow.style.height = `${size.height * this.cellSize}px`;
-        shadow.style.left = `${col * this.cellSize}px`;
-        shadow.style.top = `${row * this.cellSize}px`;
+        shadow.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+        shadow.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+        shadow.style.left = `${col * (this.cellSize + this.gridGap)}px`;
+        shadow.style.top = `${row * (this.cellSize + this.gridGap)}px`;
         grid.appendChild(shadow);
         this.shadowItem = shadow;
     }
@@ -359,6 +362,75 @@ class InventorySystem {
             this.shadowItem.parentNode.removeChild(this.shadowItem);
         }
         this.shadowItem = null;
+    }
+
+    setupPaletteDrag() {
+        // パレットアイテムも自前ドラッグに
+        document.querySelectorAll('.item').forEach(item => {
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const size = this.parseSize(item.dataset.size);
+                const content = item.querySelector('.item-content').textContent;
+                this.startNewItemDrag(e, {
+                    id: item.dataset.itemId,
+                    size: item.dataset.size,
+                    content: content
+                });
+            });
+        });
+    }
+    startNewItemDrag(e, item) {
+        // パレットから新規追加用の自前ドラッグ
+        const grid = document.getElementById('inventoryGrid');
+        // ドラッグ用の仮アイテムを作成
+        const size = this.parseSize(item.size);
+        const dragElem = document.createElement('div');
+        dragElem.className = 'placed-item';
+        dragElem.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+        dragElem.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+        dragElem.style.position = 'absolute';
+        dragElem.style.pointerEvents = 'none';
+        dragElem.textContent = item.content;
+        grid.appendChild(dragElem);
+        // ドラッグ開始時のオフセット
+        const gridRect = grid.getBoundingClientRect();
+        const x0 = e.clientX - gridRect.left;
+        const y0 = e.clientY - gridRect.top;
+        const dragOffset = {
+            x: (size.width / 2) * this.cellSize,
+            y: (size.height / 2) * this.cellSize
+        };
+        const moveHandler = (e2) => {
+            const x = e2.clientX - gridRect.left;
+            const y = e2.clientY - gridRect.top;
+            // 中央を持つ方式
+            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
+            this.showShadowItem(row, col, size);
+            // アイテム自体も中央を持つ
+            const left = col * (this.cellSize + this.gridGap);
+            const top = row * (this.cellSize + this.gridGap);
+            dragElem.style.left = `${left}px`;
+            dragElem.style.top = `${top}px`;
+        };
+        const upHandler = (e2) => {
+            document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('mouseup', upHandler);
+            this.removeShadowItem();
+            // ドロップ位置を計算
+            const x = e2.clientX - gridRect.left;
+            const y = e2.clientY - gridRect.top;
+            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
+            if (this.canPlaceItem(row, col, size.width + 'x' + size.height)) {
+                this.placeItem(row, col, item);
+            }
+            if (dragElem.parentNode) dragElem.parentNode.removeChild(dragElem);
+        };
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+        // 最初の位置を即時反映
+        moveHandler(e);
     }
 }
 
