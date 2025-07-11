@@ -221,6 +221,12 @@ class InventorySystem {
             const top = row * (this.cellSize + this.gridGap);
             itemElement.style.left = `${left}px`;
             itemElement.style.top = `${top}px`;
+            // 置けるかどうかで色を変える
+            if (this.canPlaceItem(row, col, size.width + 'x' + size.height, itemId)) {
+                itemElement.classList.remove('cannot-place');
+            } else {
+                itemElement.classList.add('cannot-place');
+            }
         };
         const upHandler = (e) => {
             document.removeEventListener('mousemove', moveHandler);
@@ -240,6 +246,7 @@ class InventorySystem {
             }
             itemElement.style.zIndex = '';
             itemElement.style.opacity = '';
+            itemElement.classList.remove('cannot-place'); // ここで必ず色を戻す
         };
         document.addEventListener('mousemove', moveHandler);
         document.addEventListener('mouseup', upHandler);
@@ -412,6 +419,12 @@ class InventorySystem {
             const top = row * (this.cellSize + this.gridGap);
             dragElem.style.left = `${left}px`;
             dragElem.style.top = `${top}px`;
+            // 置けるかどうかで色を変える
+            if (this.canPlaceItem(row, col, size.width + 'x' + size.height)) {
+                dragElem.classList.remove('cannot-place');
+            } else {
+                dragElem.classList.add('cannot-place');
+            }
         };
         const upHandler = (e2) => {
             document.removeEventListener('mousemove', moveHandler);
@@ -426,6 +439,7 @@ class InventorySystem {
                 this.placeItem(row, col, item);
             }
             if (dragElem.parentNode) dragElem.parentNode.removeChild(dragElem);
+            dragElem.classList.remove('cannot-place'); // ここで必ず色を戻す
         };
         document.addEventListener('mousemove', moveHandler);
         document.addEventListener('mouseup', upHandler);
