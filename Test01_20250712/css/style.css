@@ -1,0 +1,172 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #ffd700;
+}
+
+.inventory-container {
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+    align-items: flex-start;
+    border: 2px solid #555;
+    /* 外枠をここで再現 */
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #333;
+}
+
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 40px);
+    grid-template-rows: repeat(10, 40px);
+    gap: 1px;
+    background-color: #333;
+    border-radius: 5px;
+    position: relative;
+}
+
+.grid-cell {
+    width: 40px;
+    height: 40px;
+    background-color: #444;
+    border: 1px solid #666;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.grid-cell:hover {
+    background-color: #555;
+}
+
+.grid-cell.occupied {
+    background-color: #2a5a2a;
+    border-color: #4a7a4a;
+}
+
+.grid-cell.drag-over {
+    background-color: #4a7a4a;
+    border-color: #6a9a6a;
+}
+
+.item-palette {
+    background-color: #333;
+    padding: 20px;
+    border-radius: 5px;
+    border: 2px solid #555;
+    min-width: 200px;
+}
+
+.item-palette h3 {
+    margin-bottom: 15px;
+    color: #ffd700;
+}
+
+.item {
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #444;
+    border: 1px solid #666;
+    border-radius: 3px;
+    cursor: grab;
+    transition: all 0.2s;
+}
+
+.item:hover {
+    background-color: #555;
+    transform: translateY(-2px);
+}
+
+.item:active {
+    cursor: grabbing;
+}
+
+.item-content {
+    font-size: 12px;
+    text-align: center;
+}
+
+.item.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg);
+}
+
+/* アイテムサイズ別のスタイル */
+.item[data-size="1x1"] {
+    width: 40px;
+    height: 40px;
+}
+
+.item[data-size="1x2"] {
+    width: 40px;
+    height: 80px;
+}
+
+.item[data-size="2x2"] {
+    width: 80px;
+    height: 80px;
+}
+
+.item[data-size="3x2"] {
+    width: 120px;
+    height: 80px;
+}
+
+/* 配置されたアイテムのスタイル */
+.placed-item {
+    position: absolute;
+    background-color: #2a5a2a;
+    border: 2px solid #4a7a4a;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+    cursor: move;
+    user-select: none;
+}
+
+.placed-item:hover {
+    background-color: #3a6a3a;
+    border-color: #5a8a5a;
+}
+
+.shadow-item {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.5;
+    z-index: 999;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shadow-item.can-place {
+    background-color: #2a5a2a;
+    border: 2px solid #4a7a4a;
+}
+
+.shadow-item.cannot-place {
+    background-color: #7a2a2a;
+    border: 2px solid #aa4444;
+}

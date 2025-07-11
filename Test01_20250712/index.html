@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarkov風インベントリシステム</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>インベントリシステム</h1>
+
+        <div class="inventory-container">
+            <div class="inventory-grid" id="inventoryGrid">
+                <!-- 10x10のグリッドがJavaScriptで生成される -->
+            </div>
+
+            <div class="item-palette">
+                <h3>アイテム</h3>
+                <div class="item" data-item-id="medkit" data-size="2x2" draggable="true">
+                    <div class="item-content">医療キット</div>
+                </div>
+                <div class="item" data-item-id="ammo" data-size="1x1" draggable="true">
+                    <div class="item-content">弾薬</div>
+                </div>
+                <div class="item" data-item-id="weapon" data-size="3x2" draggable="true">
+                    <div class="item-content">武器</div>
+                </div>
+                <div class="item" data-item-id="food" data-size="1x2" draggable="true">
+                    <div class="item-content">食料</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/inventory.js"></script>
+</body>
+
+</html>
