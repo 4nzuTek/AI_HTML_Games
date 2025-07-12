@@ -10,6 +10,8 @@ class InventorySystem {
         // this.gridPadding = 10; // 不要
         // this.gridBorder = 2;   // 不要
         this.shadowItem = null;
+        this.isDragging = false; // ドラッグ状態を追跡
+        this.currentDragItem = null; // 現在ドラッグ中のアイテム情報
         this.init();
     }
 
@@ -18,6 +20,123 @@ class InventorySystem {
         this.setupDragAndDrop();
         this.loadInitialItems();
         this.setupPaletteDrag(); // 追加
+        this.setupRotationHandler(); // 回転機能を追加
+    }
+
+    setupRotationHandler() {
+        // Rキーで回転するイベントリスナーを追加
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'r' && this.isDragging && this.currentDragItem) {
+                e.preventDefault();
+                this.rotateCurrentItem();
+            }
+        });
+    }
+
+    rotateCurrentItem() {
+        if (!this.currentDragItem) return;
+
+        // サイズを回転（幅と高さを入れ替え）
+        const currentSize = this.parseSize(this.currentDragItem.size);
+        const rotatedSize = {
+            width: currentSize.height,
+            height: currentSize.width
+        };
+
+        // 新しいサイズ文字列を作成
+        this.currentDragItem.size = `${rotatedSize.width}x${rotatedSize.height}`;
+
+        // ドラッグ中の要素のサイズと位置を更新（中心を維持）
+        if (this.isDragging && this.currentDragElement) {
+            // 既存アイテム移動時は直近のマウス座標を使う
+            let x = 0, y = 0;
+            if (typeof lastMouseX !== 'undefined' && typeof lastMouseY !== 'undefined') {
+                x = lastMouseX;
+                y = lastMouseY;
+            } else {
+                // fallback: 要素の中心
+                x = parseFloat(this.currentDragElement.style.left) + parseFloat(this.currentDragElement.style.width) / 2;
+                y = parseFloat(this.currentDragElement.style.top) + parseFloat(this.currentDragElement.style.height) / 2;
+            }
+            const size = this.parseSize(this.currentDragItem.size);
+            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
+            const left = col * (this.cellSize + this.gridGap);
+            const top = row * (this.cellSize + this.gridGap);
+            this.currentDragElement.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+            this.currentDragElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+            this.currentDragElement.style.left = `${left}px`;
+            this.currentDragElement.style.top = `${top}px`;
+            this.showShadowItem(row, col, size);
+        }
+        // シャドウアイテムも更新
+        if (this.shadowItem) {
+            this.updateShadowItemSize(rotatedSize);
+        }
+    }
+
+    updateDraggedElementSize(size) {
+        // ドラッグ中の要素を更新
+        const draggedElements = document.querySelectorAll('.placed-item');
+        draggedElements.forEach(element => {
+            if (element.classList.contains('cannot-place') || element.style.pointerEvents === 'none') {
+                element.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+                element.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+            }
+        });
+    }
+
+    updateDraggedElementSizeAndPosition(size) {
+        // ドラッグ中の要素を更新（サイズと位置）
+        const draggedElements = document.querySelectorAll('.placed-item');
+        draggedElements.forEach(element => {
+            if (element.classList.contains('cannot-place') || element.style.pointerEvents === 'none') {
+                // 要素の中心位置を計算
+                const centerX = parseFloat(element.style.left) + parseFloat(element.style.width) / 2;
+                const centerY = parseFloat(element.style.top) + parseFloat(element.style.height) / 2;
+
+                // 新しいサイズで要素を更新
+                element.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+                element.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+
+                // 中心位置を維持して新しい位置を計算
+                const newLeft = centerX - (size.width * this.cellSize + (size.width - 1) * this.gridGap) / 2;
+                const newTop = centerY - (size.height * this.cellSize + (size.height - 1) * this.gridGap) / 2;
+
+                element.style.left = `${newLeft}px`;
+                element.style.top = `${newTop}px`;
+            }
+        });
+
+        // パレットからのドラッグ要素も更新
+        if (this.currentDragElement) {
+            // 要素の中心位置を計算
+            const centerX = parseFloat(this.currentDragElement.style.left) + parseFloat(this.currentDragElement.style.width) / 2;
+            const centerY = parseFloat(this.currentDragElement.style.top) + parseFloat(this.currentDragElement.style.height) / 2;
+
+            // 新しいサイズで要素を更新
+            this.currentDragElement.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+            this.currentDragElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+
+            // 中心位置を維持して新しい位置を計算
+            const newLeft = centerX - (size.width * this.cellSize + (size.width - 1) * this.gridGap) / 2;
+            const newTop = centerY - (size.height * this.cellSize + (size.height - 1) * this.gridGap) / 2;
+
+            this.currentDragElement.style.left = `${newLeft}px`;
+            this.currentDragElement.style.top = `${newTop}px`;
+
+            // シャドウアイテムも更新
+            if (this.shadowItem) {
+                this.updateShadowItemSize(size);
+            }
+        }
+    }
+
+    updateShadowItemSize(size) {
+        if (this.shadowItem) {
+            this.shadowItem.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+            this.shadowItem.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+        }
     }
 
     createGrid() {
@@ -207,26 +326,41 @@ class InventorySystem {
         itemElement.style.opacity = '0.8';
         const size = this.parseSize(itemElement.dataset.size);
         const itemId = itemElement.dataset.itemId;
+        this.currentDragItem = {
+            id: itemId,
+            size: itemElement.dataset.size,
+            content: itemElement.textContent
+        };
+        this.isDragging = true;
+        this.currentDragElement = itemElement;
+        // 直近のマウス座標を保存
+        let lastMouseX = 0;
+        let lastMouseY = 0;
         const moveHandler = (e) => {
             const grid = document.getElementById('inventoryGrid');
             const gridRect = grid.getBoundingClientRect();
             const x = e.clientX - gridRect.left;
             const y = e.clientY - gridRect.top;
-            // 中央を持つ方式
-            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-            this.showShadowItem(row, col, size, itemId);
-            // gap補正
+            lastMouseX = x;
+            lastMouseY = y;
+            const currentSize = this.parseSize(this.currentDragItem.size);
+            // グリッド座標
+            const col = Math.floor(x / this.cellSize - (currentSize.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (currentSize.height / 2) + 0.5);
+            // ピクセル座標
             const left = col * (this.cellSize + this.gridGap);
             const top = row * (this.cellSize + this.gridGap);
+            itemElement.style.width = `${currentSize.width * this.cellSize + (currentSize.width - 1) * this.gridGap}px`;
+            itemElement.style.height = `${currentSize.height * this.cellSize + (currentSize.height - 1) * this.gridGap}px`;
             itemElement.style.left = `${left}px`;
             itemElement.style.top = `${top}px`;
             // 置けるかどうかで色を変える
-            if (this.canPlaceItem(row, col, size.width + 'x' + size.height, itemId)) {
+            if (this.canPlaceItem(row, col, currentSize.width + 'x' + currentSize.height, itemId)) {
                 itemElement.classList.remove('cannot-place');
             } else {
                 itemElement.classList.add('cannot-place');
             }
+            this.showShadowItem(row, col, currentSize, itemId);
         };
         const upHandler = (e) => {
             document.removeEventListener('mousemove', moveHandler);
@@ -236,17 +370,20 @@ class InventorySystem {
             const gridRect = grid.getBoundingClientRect();
             const x = e.clientX - gridRect.left;
             const y = e.clientY - gridRect.top;
-            // 中央を持つ方式
-            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-            if (this.canPlaceItem(row, col, size.width + 'x' + size.height, itemId)) {
-                this.moveItem(itemElement, row, col);
+            const currentSize = this.parseSize(this.currentDragItem.size);
+            const col = Math.floor(x / this.cellSize - (currentSize.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (currentSize.height / 2) + 0.5);
+            if (this.canPlaceItem(row, col, currentSize.width + 'x' + currentSize.height, itemId)) {
+                this.moveItemWithRotation(itemElement, row, col, currentSize);
             } else {
                 this.resetItemPosition(itemElement);
             }
             itemElement.style.zIndex = '';
             itemElement.style.opacity = '';
             itemElement.classList.remove('cannot-place'); // ここで必ず色を戻す
+            this.isDragging = false;
+            this.currentDragItem = null;
+            this.currentDragElement = null;
         };
         document.addEventListener('mousemove', moveHandler);
         document.addEventListener('mouseup', upHandler);
@@ -283,6 +420,44 @@ class InventorySystem {
         if (itemInfo) {
             itemInfo.row = newRow;
             itemInfo.col = newCol;
+        }
+    }
+
+    moveItemWithRotation(itemElement, newRow, newCol, newSize) {
+        const itemId = itemElement.dataset.itemId;
+        const oldRow = parseInt(itemElement.dataset.row);
+        const oldCol = parseInt(itemElement.dataset.col);
+        const oldSize = this.parseSize(itemElement.dataset.size);
+
+        // 古い位置を解放
+        for (let r = oldRow; r < oldRow + oldSize.height; r++) {
+            for (let c = oldCol; c < oldCol + oldSize.width; c++) {
+                this.setCellOccupied(r, c, false);
+            }
+        }
+
+        // 新しい位置を占有
+        for (let r = newRow; r < newRow + newSize.height; r++) {
+            for (let c = newCol; c < newCol + newSize.width; c++) {
+                this.setCellOccupied(r, c, true);
+            }
+        }
+
+        // アイテムのサイズと位置を更新
+        itemElement.dataset.row = newRow;
+        itemElement.dataset.col = newCol;
+        itemElement.dataset.size = `${newSize.width}x${newSize.height}`;
+        itemElement.style.width = `${newSize.width * this.cellSize + (newSize.width - 1) * this.gridGap}px`;
+        itemElement.style.height = `${newSize.height * this.cellSize + (newSize.height - 1) * this.gridGap}px`;
+        itemElement.style.left = `${newCol * (this.cellSize + this.gridGap)}px`;
+        itemElement.style.top = `${newRow * (this.cellSize + this.gridGap)}px`;
+
+        // アイテム情報を更新
+        const itemInfo = this.placedItems.get(itemId);
+        if (itemInfo) {
+            itemInfo.row = newRow;
+            itemInfo.col = newCol;
+            itemInfo.size = `${newSize.width}x${newSize.height}`;
         }
     }
 
@@ -393,58 +568,74 @@ class InventorySystem {
         const size = this.parseSize(item.size);
         const dragElem = document.createElement('div');
         dragElem.className = 'placed-item';
-        dragElem.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
-        dragElem.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
         dragElem.style.position = 'absolute';
         dragElem.style.pointerEvents = 'none';
         dragElem.textContent = item.content;
         grid.appendChild(dragElem);
+
+        // ドラッグ状態を設定
+        this.isDragging = true;
+        this.currentDragItem = { ...item };
+        this.currentDragElement = dragElem;
+
         // ドラッグ開始時のオフセット
         const gridRect = grid.getBoundingClientRect();
-        const x0 = e.clientX - gridRect.left;
-        const y0 = e.clientY - gridRect.top;
-        const dragOffset = {
-            x: (size.width / 2) * this.cellSize,
-            y: (size.height / 2) * this.cellSize
-        };
-        const moveHandler = (e2) => {
-            const x = e2.clientX - gridRect.left;
-            const y = e2.clientY - gridRect.top;
-            // 中央を持つ方式
-            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-            this.showShadowItem(row, col, size);
-            // アイテム自体も中央を持つ
+        const updateDragElem = (x, y) => {
+            const currentSize = this.parseSize(this.currentDragItem.size);
+            // グリッド座標
+            const col = Math.floor(x / this.cellSize - (currentSize.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (currentSize.height / 2) + 0.5);
+            // ピクセル座標
             const left = col * (this.cellSize + this.gridGap);
             const top = row * (this.cellSize + this.gridGap);
+            // サイズ
+            dragElem.style.width = `${currentSize.width * this.cellSize + (currentSize.width - 1) * this.gridGap}px`;
+            dragElem.style.height = `${currentSize.height * this.cellSize + (currentSize.height - 1) * this.gridGap}px`;
             dragElem.style.left = `${left}px`;
             dragElem.style.top = `${top}px`;
             // 置けるかどうかで色を変える
-            if (this.canPlaceItem(row, col, size.width + 'x' + size.height)) {
+            if (this.canPlaceItem(row, col, currentSize.width + 'x' + currentSize.height)) {
                 dragElem.classList.remove('cannot-place');
             } else {
                 dragElem.classList.add('cannot-place');
             }
+            // シャドウも更新
+            this.showShadowItem(row, col, currentSize);
+        };
+        const moveHandler = (e2) => {
+            const x = e2.clientX - gridRect.left;
+            const y = e2.clientY - gridRect.top;
+            updateDragElem(x, y);
         };
         const upHandler = (e2) => {
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('mouseup', upHandler);
             this.removeShadowItem();
             // ドロップ位置を計算
+            const currentSize = this.parseSize(this.currentDragItem.size);
             const x = e2.clientX - gridRect.left;
             const y = e2.clientY - gridRect.top;
-            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-            if (this.canPlaceItem(row, col, size.width + 'x' + size.height)) {
-                this.placeItem(row, col, item);
+            const col = Math.floor(x / this.cellSize - (currentSize.width / 2) + 0.5);
+            const row = Math.floor(y / this.cellSize - (currentSize.height / 2) + 0.5);
+            if (this.canPlaceItem(row, col, currentSize.width + 'x' + currentSize.height)) {
+                // 回転後のサイズでアイテムを配置
+                const rotatedItem = {
+                    id: this.currentDragItem.id,
+                    size: this.currentDragItem.size,
+                    content: this.currentDragItem.content
+                };
+                this.placeItem(row, col, rotatedItem);
             }
             if (dragElem.parentNode) dragElem.parentNode.removeChild(dragElem);
             dragElem.classList.remove('cannot-place'); // ここで必ず色を戻す
+            this.isDragging = false;
+            this.currentDragItem = null;
+            this.currentDragElement = null;
         };
         document.addEventListener('mousemove', moveHandler);
         document.addEventListener('mouseup', upHandler);
         // 最初の位置を即時反映
-        moveHandler(e);
+        updateDragElem(e.clientX - gridRect.left, e.clientY - gridRect.top);
     }
 }
 

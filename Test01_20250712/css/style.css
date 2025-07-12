@@ -130,6 +130,11 @@ h1 {
     height: 80px;
 }
 
+.item[data-size="4x2"] {
+    width: 160px;
+    height: 80px;
+}
+
 /* 配置されたアイテムのスタイル */
 .placed-item {
     position: absolute;
