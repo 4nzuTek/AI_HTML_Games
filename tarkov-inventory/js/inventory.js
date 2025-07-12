@@ -150,10 +150,14 @@ class InventorySystem {
         this.currentDragElement.style.top = `${top}px`;
 
         // 銃アイテムの場合は画像の回転も更新
-        if (this.currentDragItem.id === 'gun') {
+        // itemIdから元のアイテムタイプを抽出（例：gun_1234567890 → gun）
+        const itemType = this.currentDragItem.id.split('_')[0];
+        if (itemType === 'gun') {
             const currentRotation = parseInt(this.currentDragElement.dataset.rotation || '0');
             const newRotation = (currentRotation === 0) ? 90 : 0;
             this.currentDragElement.dataset.rotation = newRotation.toString();
+            // currentDragItemにも回転状態を保存
+            this.currentDragItem.rotation = newRotation.toString();
             setGunImage(this.currentDragElement, newRotation);
         }
 
@@ -710,7 +714,10 @@ class InventorySystem {
 
         // ドラッグ状態を設定
         this.isDragging = true;
-        this.currentDragItem = { ...item };
+        this.currentDragItem = {
+            ...item,
+            rotation: '0' // 初期回転状態を設定
+        };
         this.currentDragElement = dragElem;
 
         // ドラッグ開始時のオフセット
@@ -761,7 +768,8 @@ class InventorySystem {
                 const rotatedItem = {
                     id: this.currentDragItem.id,
                     size: this.currentDragItem.size,
-                    content: this.currentDragItem.content
+                    content: this.currentDragItem.content,
+                    rotation: this.currentDragItem.rotation || '0' // 回転状態も渡す
                 };
                 this.placeItem(row, col, rotatedItem);
             }
