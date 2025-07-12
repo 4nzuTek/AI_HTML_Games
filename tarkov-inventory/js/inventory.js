@@ -158,7 +158,24 @@ class InventorySystem {
             this.currentDragElement.dataset.rotation = newRotation.toString();
             // currentDragItemにも回転状態を保存
             this.currentDragItem.rotation = newRotation.toString();
-            setGunImage(this.currentDragElement, newRotation);
+
+            // スケール値を自動計算（回転時のみ）
+            const scale = this.calculateScaleForRotation(rotatedSize, newRotation);
+            this.currentDragElement.dataset.scale = scale.toString();
+            this.currentDragItem.scale = scale.toString();
+
+            setGunImage(this.currentDragElement, newRotation, scale);
+
+            // 回転後に画像サイズを強制的に再設定
+            setTimeout(() => {
+                const img = this.currentDragElement.querySelector('.item-image');
+                if (img) {
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.minWidth = '100%';
+                    img.style.minHeight = '100%';
+                }
+            }, 10);
         }
 
         // シャドウアイテムも更新
@@ -229,6 +246,24 @@ class InventorySystem {
             this.shadowItem.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
             this.shadowItem.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
         }
+    }
+
+    calculateScaleForRotation(size, rotation) {
+        // 回転時のみスケール値を計算、通常状態は1.0
+        if (rotation === 0) {
+            return 1.0; // 通常状態はスケール1.0
+        }
+
+        // 回転時（90度）のスケール計算
+        const width = size.width;
+        const height = size.height;
+
+        // W/H と H/W の大きい方をスケール値とする
+        const scaleX = width / height;
+        const scaleY = height / width;
+        const scale = Math.max(scaleX, scaleY);
+
+        return scale;
     }
 
     createGrid() {
@@ -394,8 +429,11 @@ class InventorySystem {
         // 銃アイテムの場合は画像をセット
         if (item.id === 'gun') {
             const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
+            // スケールを自動計算または指定された値を使用
+            const scale = parseFloat(item.scale) || this.calculateScaleForRotation(size, rotation);
             itemElement.dataset.rotation = rotation;
-            setGunImage(itemElement, rotation);
+            itemElement.dataset.scale = scale;
+            setGunImage(itemElement, rotation, scale);
         } else {
             itemElement.textContent = item.content;
         }
@@ -481,7 +519,8 @@ class InventorySystem {
         // 銃アイテムの場合はimgタグを必ず入れる
         if (itemId && itemId.includes('gun')) {
             const rotation = (parseInt(itemElement.dataset.rotation) === 90) ? 90 : 0;
-            setGunImage(itemElement, rotation);
+            const scale = parseFloat(itemElement.dataset.scale) || this.calculateScaleForRotation(this.parseSize(itemElement.dataset.size), rotation);
+            setGunImage(itemElement, rotation, scale);
         }
         // 直近のマウス座標を保存
         this.lastMouseX = 0;
@@ -611,11 +650,17 @@ class InventorySystem {
                 itemInfo.rotation = itemElement.dataset.rotation;
             }
         }
-        // 銃アイテムの場合はimgの回転も反映
+        // 銃アイテムの場合はimgの回転とスケールも反映
         if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('gun')) {
             const img = itemElement.querySelector('img.item-image');
             if (img && itemElement.dataset.rotation) {
-                img.style.transform = `rotate(${itemElement.dataset.rotation}deg)`;
+                const rotation = itemElement.dataset.rotation;
+                const scale = itemElement.dataset.scale || '1.0';
+                let transform = `rotate(${rotation}deg)`;
+                if (scale !== '1.0') {
+                    transform += ` scale(${scale})`;
+                }
+                img.style.transform = transform;
             }
         }
     }
@@ -706,7 +751,8 @@ class InventorySystem {
         // 銃アイテムの場合はimgタグを必ず入れる
         if (item.id === 'gun') {
             const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
-            setGunImage(dragElem, rotation);
+            const scale = parseFloat(item.scale) || this.calculateScaleForRotation(size, rotation);
+            setGunImage(dragElem, rotation, scale);
         } else {
             dragElem.textContent = item.content;
         }
@@ -786,13 +832,31 @@ class InventorySystem {
     }
 }
 
-// 銃画像をセットし、回転も適用する共通関数（0か90のみ）
-function setGunImage(element, rotation) {
+// 銃画像をセットし、回転とスケールも適用する共通関数
+function setGunImage(element, rotation, scale = 1.0) {
     element.innerHTML = '';
     const img = document.createElement('img');
     img.src = 'images/Gun.png';
     img.className = 'item-image';
-    img.style.transform = (rotation === 90) ? 'rotate(90deg)' : 'rotate(0deg)';
+
+    // 回転とスケールを組み合わせたtransform
+    let transform = '';
+    if (rotation === 90) {
+        transform = 'rotate(90deg)';
+    }
+    if (scale !== 1.0) {
+        transform += ` scale(${scale})`;
+    }
+    img.style.transform = transform;
+
+    // 回転時にサイズを明示的に設定
+    if (rotation === 90) {
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.minWidth = '100%';
+        img.style.minHeight = '100%';
+    }
+
     element.appendChild(img);
 }
 
