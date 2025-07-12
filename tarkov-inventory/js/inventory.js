@@ -122,7 +122,7 @@ class InventorySystem {
     }
 
     rotateCurrentItem() {
-        if (!this.currentDragItem) return;
+        if (!this.currentDragItem || !this.currentDragElement) return;
 
         // サイズを回転（幅と高さを入れ替え）
         const currentSize = this.parseSize(this.currentDragItem.size);
@@ -139,24 +139,27 @@ class InventorySystem {
         const gridRect = grid.getBoundingClientRect();
         const x = (typeof this.lastMouseX !== 'undefined') ? this.lastMouseX : gridRect.width / 2;
         const y = (typeof this.lastMouseY !== 'undefined') ? this.lastMouseY : gridRect.height / 2;
+
         // 新しいサイズで中心を合わせる
         const col = Math.floor(x / this.cellSize - (rotatedSize.width / 2) + 0.5);
         const row = Math.floor(y / this.cellSize - (rotatedSize.height / 2) + 0.5);
         const left = col * (this.cellSize + this.gridGap);
         const top = row * (this.cellSize + this.gridGap);
+
+        // DOM要素のサイズと位置を更新
         this.currentDragElement.style.width = `${rotatedSize.width * this.cellSize + (rotatedSize.width - 1) * this.gridGap}px`;
         this.currentDragElement.style.height = `${rotatedSize.height * this.cellSize + (rotatedSize.height - 1) * this.gridGap}px`;
         this.currentDragElement.style.left = `${left}px`;
         this.currentDragElement.style.top = `${top}px`;
 
         // 銃アイテムの場合は画像の回転も更新
-        // itemIdから元のアイテムタイプを抽出（例：gun_1234567890 → gun）
         const itemType = this.currentDragItem.id.split('_')[0];
         if (itemType === 'gun') {
             const currentRotation = parseInt(this.currentDragElement.dataset.rotation || '0');
             const newRotation = (currentRotation === 0) ? 90 : 0;
+
+            // データ属性を更新
             this.currentDragElement.dataset.rotation = newRotation.toString();
-            // currentDragItemにも回転状態を保存
             this.currentDragItem.rotation = newRotation.toString();
 
             // スケール値を自動計算（回転時のみ）
@@ -164,6 +167,7 @@ class InventorySystem {
             this.currentDragElement.dataset.scale = scale.toString();
             this.currentDragItem.scale = scale.toString();
 
+            // 画像を再設定
             setGunImage(this.currentDragElement, newRotation, scale);
 
             // 回転後に画像サイズを強制的に再設定
@@ -458,7 +462,9 @@ class InventorySystem {
             row: row,
             col: col,
             size: item.size,
-            content: item.content
+            content: item.content,
+            rotation: item.rotation || '0',
+            scale: item.scale || '1.0'
         });
     }
 
@@ -505,6 +511,16 @@ class InventorySystem {
             x: rect.width / 2,
             y: rect.height / 2
         };
+
+        // ドラッグ開始前の元の状態を保存
+        this.originalItemState = {
+            row: parseInt(itemElement.dataset.row),
+            col: parseInt(itemElement.dataset.col),
+            size: itemElement.dataset.size,
+            rotation: itemElement.dataset.rotation || '0',
+            scale: itemElement.dataset.scale || '1.0'
+        };
+
         itemElement.style.zIndex = '1000';
         itemElement.style.opacity = '0.8';
         const size = this.parseSize(itemElement.dataset.size);
@@ -512,7 +528,9 @@ class InventorySystem {
         this.currentDragItem = {
             id: itemId,
             size: itemElement.dataset.size,
-            content: itemElement.textContent
+            content: itemElement.textContent,
+            rotation: itemElement.dataset.rotation || '0',
+            scale: itemElement.dataset.scale || '1.0'
         };
         this.isDragging = true;
         this.currentDragElement = itemElement;
@@ -571,6 +589,8 @@ class InventorySystem {
             this.isDragging = false;
             this.currentDragItem = null;
             this.currentDragElement = null;
+            // 元の状態をクリア
+            this.originalItemState = null;
         };
         document.addEventListener('mousemove', moveHandler);
         document.addEventListener('mouseup', upHandler);
@@ -645,33 +665,74 @@ class InventorySystem {
             itemInfo.row = newRow;
             itemInfo.col = newCol;
             itemInfo.size = `${newSize.width}x${newSize.height}`;
-            // 回転状態も保存
+            // 回転状態とスケールも保存
             if (itemElement.dataset.rotation) {
                 itemInfo.rotation = itemElement.dataset.rotation;
             }
-        }
-        // 銃アイテムの場合はimgの回転とスケールも反映
-        if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('gun')) {
-            const img = itemElement.querySelector('img.item-image');
-            if (img && itemElement.dataset.rotation) {
-                const rotation = itemElement.dataset.rotation;
-                const scale = itemElement.dataset.scale || '1.0';
-                let transform = `rotate(${rotation}deg)`;
-                if (scale !== '1.0') {
-                    transform += ` scale(${scale})`;
-                }
-                img.style.transform = transform;
+            if (itemElement.dataset.scale) {
+                itemInfo.scale = itemElement.dataset.scale;
             }
+        }
+
+        // 銃アイテムの場合は画像を再設定して確実に反映
+        if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('gun')) {
+            const rotation = parseInt(itemElement.dataset.rotation || '0');
+            const scale = parseFloat(itemElement.dataset.scale || '1.0');
+            setGunImage(itemElement, rotation, scale);
         }
     }
 
     resetItemPosition(itemElement) {
-        const row = parseInt(itemElement.dataset.row);
-        const col = parseInt(itemElement.dataset.col);
-        const size = this.parseSize(itemElement.dataset.size);
+        // 保存された元の状態を使用
+        if (this.originalItemState) {
+            const originalState = this.originalItemState;
+            const size = this.parseSize(originalState.size);
 
-        itemElement.style.left = `${col * (this.cellSize + this.gridGap)}px`;
-        itemElement.style.top = `${row * (this.cellSize + this.gridGap)}px`;
+            // データ属性を元の状態に復元
+            itemElement.dataset.row = originalState.row;
+            itemElement.dataset.col = originalState.col;
+            itemElement.dataset.size = originalState.size;
+            itemElement.dataset.rotation = originalState.rotation;
+            itemElement.dataset.scale = originalState.scale;
+
+            // 位置を復元
+            itemElement.style.left = `${originalState.col * (this.cellSize + this.gridGap)}px`;
+            itemElement.style.top = `${originalState.row * (this.cellSize + this.gridGap)}px`;
+
+            // サイズを復元
+            itemElement.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+            itemElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+
+            // 銃アイテムの場合は回転状態も復元
+            if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('gun')) {
+                const rotation = parseInt(originalState.rotation);
+                const scale = parseFloat(originalState.scale);
+                setGunImage(itemElement, rotation, scale);
+            }
+
+            // 元の状態をクリア
+            this.originalItemState = null;
+        } else {
+            // フォールバック: 現在のデータ属性を使用
+            const row = parseInt(itemElement.dataset.row);
+            const col = parseInt(itemElement.dataset.col);
+            const size = this.parseSize(itemElement.dataset.size);
+
+            // 位置を復元
+            itemElement.style.left = `${col * (this.cellSize + this.gridGap)}px`;
+            itemElement.style.top = `${row * (this.cellSize + this.gridGap)}px`;
+
+            // サイズを復元
+            itemElement.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
+            itemElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
+
+            // 銃アイテムの場合は回転状態も復元
+            if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('gun')) {
+                const rotation = parseInt(itemElement.dataset.rotation || '0');
+                const scale = parseFloat(itemElement.dataset.scale || '1.0');
+                setGunImage(itemElement, rotation, scale);
+            }
+        }
     }
 
     loadInitialItems() {
@@ -762,7 +823,8 @@ class InventorySystem {
         this.isDragging = true;
         this.currentDragItem = {
             ...item,
-            rotation: '0' // 初期回転状態を設定
+            rotation: '0', // 初期回転状態を設定
+            scale: '1.0'   // 初期スケールを設定
         };
         this.currentDragElement = dragElem;
 
@@ -849,15 +911,17 @@ function setGunImage(element, rotation, scale = 1.0) {
     }
     img.style.transform = transform;
 
-    // 回転時にサイズを明示的に設定
-    if (rotation === 90) {
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.minWidth = '100%';
-        img.style.minHeight = '100%';
-    }
+    // 画像サイズを明示的に設定
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.minWidth = '100%';
+    img.style.minHeight = '100%';
 
     element.appendChild(img);
+
+    // データ属性も更新
+    element.dataset.rotation = rotation.toString();
+    element.dataset.scale = scale.toString();
 }
 
 // ページ読み込み時にインベントリシステムを初期化
