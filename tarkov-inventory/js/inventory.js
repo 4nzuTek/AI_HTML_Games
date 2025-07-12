@@ -21,6 +21,7 @@ class InventorySystem {
         this.loadInitialItems();
         this.setupPaletteDrag(); // 追加
         this.setupRotationHandler(); // 回転機能を追加
+        this.setupContextMenu(); // コンテキストメニュー機能を追加
     }
 
     setupRotationHandler() {
@@ -31,6 +32,93 @@ class InventorySystem {
                 this.rotateCurrentItem();
             }
         });
+    }
+
+    setupContextMenu() {
+        // コンテキストメニューの要素を取得
+        this.contextMenu = document.getElementById('contextMenu');
+        this.contextMenuTarget = null;
+
+        // 配置されたアイテムに右クリックイベントを追加
+        document.addEventListener('contextmenu', (e) => {
+            const placedItem = e.target.closest('.placed-item');
+            if (placedItem) {
+                e.preventDefault();
+                this.showContextMenu(e, placedItem);
+            }
+        });
+
+        // コンテキストメニューのクリックイベント
+        this.contextMenu.addEventListener('click', (e) => {
+            const action = e.target.dataset.action;
+            if (action === 'delete' && this.contextMenuTarget) {
+                this.deleteItem(this.contextMenuTarget);
+            }
+            this.hideContextMenu();
+        });
+
+        // 他の場所をクリックしたらメニューを隠す
+        document.addEventListener('click', (e) => {
+            if (!this.contextMenu.contains(e.target)) {
+                this.hideContextMenu();
+            }
+        });
+    }
+
+    showContextMenu(e, itemElement) {
+        this.contextMenuTarget = itemElement;
+        this.contextMenu.style.display = 'block';
+
+        // メニューの位置を設定
+        const x = e.clientX;
+        const y = e.clientY;
+
+        // 画面の端に当たらないように調整
+        let menuX = x;
+        let menuY = y;
+
+        // メニューを一時的に表示してサイズを取得
+        this.contextMenu.style.left = '0px';
+        this.contextMenu.style.top = '0px';
+        const rect = this.contextMenu.getBoundingClientRect();
+
+        if (x + rect.width > window.innerWidth) {
+            menuX = x - rect.width;
+        }
+
+        if (y + rect.height > window.innerHeight) {
+            menuY = y - rect.height;
+        }
+
+        this.contextMenu.style.left = menuX + 'px';
+        this.contextMenu.style.top = menuY + 'px';
+    }
+
+    hideContextMenu() {
+        this.contextMenu.style.display = 'none';
+        this.contextMenuTarget = null;
+    }
+
+    deleteItem(itemElement) {
+        const itemId = itemElement.dataset.itemId;
+        const row = parseInt(itemElement.dataset.row);
+        const col = parseInt(itemElement.dataset.col);
+        const size = this.parseSize(itemElement.dataset.size);
+
+        // セルの占有状態を解除
+        for (let r = row; r < row + size.height; r++) {
+            for (let c = col; c < col + size.width; c++) {
+                this.setCellOccupied(r, c, false);
+            }
+        }
+
+        // アイテム情報を削除
+        this.placedItems.delete(itemId);
+
+        // DOM要素を削除
+        if (itemElement.parentNode) {
+            itemElement.parentNode.removeChild(itemElement);
+        }
     }
 
     rotateCurrentItem() {
@@ -303,6 +391,18 @@ class InventorySystem {
         itemElement.style.top = `${row * (this.cellSize + this.gridGap)}px`;
         itemElement.textContent = item.content;
 
+        // ドラッグ移動のためのマウスイベントを追加
+        itemElement.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // 左クリックのみ
+                this.startItemDrag(e, itemElement);
+            } else if (e.button === 2) { // 右クリックの場合は何もしない
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+
+
+
         document.getElementById('inventoryGrid').appendChild(itemElement);
 
         // アイテム情報を保存
@@ -315,8 +415,44 @@ class InventorySystem {
         });
     }
 
-    startItemMove(e, itemElement) {
+    startItemDrag(e, itemElement) {
+        // 右クリックの場合は何もしない
+        if (e.button !== 0) {
+            return;
+        }
+
         e.preventDefault();
+
+        // ドラッグ開始位置を記録
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let hasMoved = false;
+        const moveThreshold = 3; // 3px以上移動したらドラッグとみなす
+
+        const moveHandler = (e) => {
+            const deltaX = Math.abs(e.clientX - startX);
+            const deltaY = Math.abs(e.clientY - startY);
+
+            // 一定距離以上移動したらドラッグ開始
+            if (!hasMoved && (deltaX > moveThreshold || deltaY > moveThreshold)) {
+                hasMoved = true;
+                this.startItemMove(e, itemElement);
+                document.removeEventListener('mousemove', moveHandler);
+                document.removeEventListener('mouseup', upHandler);
+            }
+        };
+
+        const upHandler = (e) => {
+            document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('mouseup', upHandler);
+            // 移動していない場合は何もしない（単発クリック）
+        };
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+    }
+
+    startItemMove(e, itemElement) {
         const rect = itemElement.getBoundingClientRect();
         this.dragOffset = {
             x: rect.width / 2,
