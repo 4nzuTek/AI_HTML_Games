@@ -134,29 +134,29 @@ class InventorySystem {
         // 新しいサイズ文字列を作成
         this.currentDragItem.size = `${rotatedSize.width}x${rotatedSize.height}`;
 
-        // ドラッグ中の要素のサイズと位置を更新（中心を維持）
-        if (this.isDragging && this.currentDragElement) {
-            // 既存アイテム移動時は直近のマウス座標を使う
-            let x = 0, y = 0;
-            if (typeof lastMouseX !== 'undefined' && typeof lastMouseY !== 'undefined') {
-                x = lastMouseX;
-                y = lastMouseY;
-            } else {
-                // fallback: 要素の中心
-                x = parseFloat(this.currentDragElement.style.left) + parseFloat(this.currentDragElement.style.width) / 2;
-                y = parseFloat(this.currentDragElement.style.top) + parseFloat(this.currentDragElement.style.height) / 2;
-            }
-            const size = this.parseSize(this.currentDragItem.size);
-            const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-            const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-            const left = col * (this.cellSize + this.gridGap);
-            const top = row * (this.cellSize + this.gridGap);
-            this.currentDragElement.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
-            this.currentDragElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
-            this.currentDragElement.style.left = `${left}px`;
-            this.currentDragElement.style.top = `${top}px`;
-            this.showShadowItem(row, col, size);
+        // 直近のマウス座標を取得
+        const grid = document.getElementById('inventoryGrid');
+        const gridRect = grid.getBoundingClientRect();
+        const x = (typeof this.lastMouseX !== 'undefined') ? this.lastMouseX : gridRect.width / 2;
+        const y = (typeof this.lastMouseY !== 'undefined') ? this.lastMouseY : gridRect.height / 2;
+        // 新しいサイズで中心を合わせる
+        const col = Math.floor(x / this.cellSize - (rotatedSize.width / 2) + 0.5);
+        const row = Math.floor(y / this.cellSize - (rotatedSize.height / 2) + 0.5);
+        const left = col * (this.cellSize + this.gridGap);
+        const top = row * (this.cellSize + this.gridGap);
+        this.currentDragElement.style.width = `${rotatedSize.width * this.cellSize + (rotatedSize.width - 1) * this.gridGap}px`;
+        this.currentDragElement.style.height = `${rotatedSize.height * this.cellSize + (rotatedSize.height - 1) * this.gridGap}px`;
+        this.currentDragElement.style.left = `${left}px`;
+        this.currentDragElement.style.top = `${top}px`;
+
+        // 銃アイテムの場合は画像の回転も更新
+        if (this.currentDragItem.id === 'gun') {
+            const currentRotation = parseInt(this.currentDragElement.dataset.rotation || '0');
+            const newRotation = (currentRotation === 0) ? 90 : 0;
+            this.currentDragElement.dataset.rotation = newRotation.toString();
+            setGunImage(this.currentDragElement, newRotation);
         }
+
         // シャドウアイテムも更新
         if (this.shadowItem) {
             this.updateShadowItemSize(rotatedSize);
@@ -275,12 +275,10 @@ class InventorySystem {
             // 中央を持つ方式
             const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
             const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-            this.showShadowItem(row, col);
         });
 
         grid.addEventListener('dragleave', () => {
             this.clearDropZoneHighlight();
-            this.removeShadowItem();
         });
 
         grid.addEventListener('drop', (e) => {
@@ -301,7 +299,6 @@ class InventorySystem {
             }
 
             this.clearDropZoneHighlight();
-            this.removeShadowItem();
         });
 
         // 配置されたアイテムの移動
@@ -389,7 +386,15 @@ class InventorySystem {
         itemElement.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
         itemElement.style.left = `${col * (this.cellSize + this.gridGap)}px`;
         itemElement.style.top = `${row * (this.cellSize + this.gridGap)}px`;
-        itemElement.textContent = item.content;
+
+        // 銃アイテムの場合は画像をセット
+        if (item.id === 'gun') {
+            const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
+            itemElement.dataset.rotation = rotation;
+            setGunImage(itemElement, rotation);
+        } else {
+            itemElement.textContent = item.content;
+        }
 
         // ドラッグ移動のためのマウスイベントを追加
         itemElement.addEventListener('mousedown', (e) => {
@@ -469,16 +474,21 @@ class InventorySystem {
         };
         this.isDragging = true;
         this.currentDragElement = itemElement;
+        // 銃アイテムの場合はimgタグを必ず入れる
+        if (itemId && itemId.includes('gun')) {
+            const rotation = (parseInt(itemElement.dataset.rotation) === 90) ? 90 : 0;
+            setGunImage(itemElement, rotation);
+        }
         // 直近のマウス座標を保存
-        let lastMouseX = 0;
-        let lastMouseY = 0;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
         const moveHandler = (e) => {
             const grid = document.getElementById('inventoryGrid');
             const gridRect = grid.getBoundingClientRect();
             const x = e.clientX - gridRect.left;
             const y = e.clientY - gridRect.top;
-            lastMouseX = x;
-            lastMouseY = y;
+            this.lastMouseX = x;
+            this.lastMouseY = y;
             const currentSize = this.parseSize(this.currentDragItem.size);
             // グリッド座標
             const col = Math.floor(x / this.cellSize - (currentSize.width / 2) + 0.5);
@@ -496,12 +506,10 @@ class InventorySystem {
             } else {
                 itemElement.classList.add('cannot-place');
             }
-            this.showShadowItem(row, col, currentSize, itemId);
         };
         const upHandler = (e) => {
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('mouseup', upHandler);
-            this.removeShadowItem();
             const grid = document.getElementById('inventoryGrid');
             const gridRect = grid.getBoundingClientRect();
             const x = e.clientX - gridRect.left;
@@ -594,6 +602,17 @@ class InventorySystem {
             itemInfo.row = newRow;
             itemInfo.col = newCol;
             itemInfo.size = `${newSize.width}x${newSize.height}`;
+            // 回転状態も保存
+            if (itemElement.dataset.rotation) {
+                itemInfo.rotation = itemElement.dataset.rotation;
+            }
+        }
+        // 銃アイテムの場合はimgの回転も反映
+        if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('gun')) {
+            const img = itemElement.querySelector('img.item-image');
+            if (img && itemElement.dataset.rotation) {
+                img.style.transform = `rotate(${itemElement.dataset.rotation}deg)`;
+            }
         }
     }
 
@@ -611,7 +630,8 @@ class InventorySystem {
         const initialItems = [
             { id: 'medkit', row: 0, col: 0, size: '2x2', content: '医療キット' },
             { id: 'ammo', row: 2, col: 2, size: '1x1', content: '弾薬' },
-            { id: 'food', row: 0, col: 3, size: '1x2', content: '食料' }
+            { id: 'food', row: 0, col: 3, size: '1x2', content: '食料' },
+            { id: 'gun', row: 3, col: 0, size: '2x1', content: '銃' }
         ];
 
         initialItems.forEach(item => {
@@ -619,7 +639,8 @@ class InventorySystem {
                 this.placeItem(item.row, item.col, {
                     id: item.id,
                     size: item.size,
-                    content: item.content
+                    content: item.content,
+                    rotation: item.rotation || '0'
                 });
             }
         });
@@ -650,37 +671,9 @@ class InventorySystem {
         }
     }
 
-    showShadowItem(row, col, sizeOverride = null, ignoreItemId = null) {
-        this.removeShadowItem();
-        let size, canPlace;
-        if (sizeOverride) {
-            size = sizeOverride;
-        } else if (this.draggedItem) {
-            size = this.parseSize(this.draggedItem.size);
-        } else {
-            return;
-        }
-        if (ignoreItemId) {
-            canPlace = this.canPlaceItem(row, col, size.width + 'x' + size.height, ignoreItemId);
-        } else {
-            canPlace = this.canPlaceItem(row, col, size.width + 'x' + size.height);
-        }
-        const grid = document.getElementById('inventoryGrid');
-        const shadow = document.createElement('div');
-        shadow.className = 'shadow-item ' + (canPlace ? 'can-place' : 'cannot-place');
-        shadow.style.width = `${size.width * this.cellSize + (size.width - 1) * this.gridGap}px`;
-        shadow.style.height = `${size.height * this.cellSize + (size.height - 1) * this.gridGap}px`;
-        shadow.style.left = `${col * (this.cellSize + this.gridGap)}px`;
-        shadow.style.top = `${row * (this.cellSize + this.gridGap)}px`;
-        grid.appendChild(shadow);
-        this.shadowItem = shadow;
-    }
-    removeShadowItem() {
-        if (this.shadowItem && this.shadowItem.parentNode) {
-            this.shadowItem.parentNode.removeChild(this.shadowItem);
-        }
-        this.shadowItem = null;
-    }
+    // --- Remove shadow item (placement preview) feature ---
+    // Delete showShadowItem, removeShadowItem, and all their calls
+    // --- Remove shadow item (placement preview) feature ---
 
     setupPaletteDrag() {
         // パレットアイテムも自前ドラッグに
@@ -706,7 +699,13 @@ class InventorySystem {
         dragElem.className = 'placed-item';
         dragElem.style.position = 'absolute';
         dragElem.style.pointerEvents = 'none';
-        dragElem.textContent = item.content;
+        // 銃アイテムの場合はimgタグを必ず入れる
+        if (item.id === 'gun') {
+            const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
+            setGunImage(dragElem, rotation);
+        } else {
+            dragElem.textContent = item.content;
+        }
         grid.appendChild(dragElem);
 
         // ドラッグ状態を設定
@@ -716,7 +715,11 @@ class InventorySystem {
 
         // ドラッグ開始時のオフセット
         const gridRect = grid.getBoundingClientRect();
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
         const updateDragElem = (x, y) => {
+            this.lastMouseX = x;
+            this.lastMouseY = y;
             const currentSize = this.parseSize(this.currentDragItem.size);
             // グリッド座標
             const col = Math.floor(x / this.cellSize - (currentSize.width / 2) + 0.5);
@@ -736,7 +739,7 @@ class InventorySystem {
                 dragElem.classList.add('cannot-place');
             }
             // シャドウも更新
-            this.showShadowItem(row, col, currentSize);
+            // this.showShadowItem(row, col, currentSize); // REMOVE
         };
         const moveHandler = (e2) => {
             const x = e2.clientX - gridRect.left;
@@ -746,7 +749,7 @@ class InventorySystem {
         const upHandler = (e2) => {
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('mouseup', upHandler);
-            this.removeShadowItem();
+            // this.removeShadowItem(); // REMOVE
             // ドロップ位置を計算
             const currentSize = this.parseSize(this.currentDragItem.size);
             const x = e2.clientX - gridRect.left;
@@ -773,6 +776,16 @@ class InventorySystem {
         // 最初の位置を即時反映
         updateDragElem(e.clientX - gridRect.left, e.clientY - gridRect.top);
     }
+}
+
+// 銃画像をセットし、回転も適用する共通関数（0か90のみ）
+function setGunImage(element, rotation) {
+    element.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = 'images/Gun.png';
+    img.className = 'item-image';
+    img.style.transform = (rotation === 90) ? 'rotate(90deg)' : 'rotate(0deg)';
+    element.appendChild(img);
 }
 
 // ページ読み込み時にインベントリシステムを初期化
