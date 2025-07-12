@@ -58,13 +58,13 @@ h1 {
 }
 
 .grid-cell.occupied {
-    background-color: #2a5a2a;
-    border-color: #4a7a4a;
+    background-color: #666666;
+    border-color: #888888;
 }
 
 .grid-cell.drag-over {
-    background-color: #4a7a4a;
-    border-color: #6a9a6a;
+    background-color: #888888;
+    border-color: #aaaaaa;
 }
 
 .item-palette {
