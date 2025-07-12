@@ -180,6 +180,33 @@ class InventorySystem {
                     img.style.minHeight = '100%';
                 }
             }, 10);
+        } else if (itemType === 'medkit') {
+            // 医療キットの場合は画像の回転も更新
+            const currentRotation = parseInt(this.currentDragElement.dataset.rotation || '0');
+            const newRotation = (currentRotation === 0) ? 90 : 0;
+
+            // データ属性を更新
+            this.currentDragElement.dataset.rotation = newRotation.toString();
+            this.currentDragItem.rotation = newRotation.toString();
+
+            // スケール値を設定（2x2なので1.0）
+            const scale = 1.0;
+            this.currentDragElement.dataset.scale = scale.toString();
+            this.currentDragItem.scale = scale.toString();
+
+            // 画像を再設定
+            setMedkitImage(this.currentDragElement, newRotation, scale);
+
+            // 回転後に画像サイズを強制的に再設定
+            setTimeout(() => {
+                const img = this.currentDragElement.querySelector('.item-image');
+                if (img) {
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.minWidth = '100%';
+                    img.style.minHeight = '100%';
+                }
+            }, 10);
         }
 
         // シャドウアイテムも更新
@@ -438,6 +465,13 @@ class InventorySystem {
             itemElement.dataset.rotation = rotation;
             itemElement.dataset.scale = scale;
             setGunImage(itemElement, rotation, scale);
+        } else if (item.id === 'medkit') {
+            // 医療キットの場合は画像をセット
+            const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
+            const scale = parseFloat(item.scale) || 1.0;
+            itemElement.dataset.rotation = rotation;
+            itemElement.dataset.scale = scale;
+            setMedkitImage(itemElement, rotation, scale);
         } else {
             itemElement.textContent = item.content;
         }
@@ -539,6 +573,12 @@ class InventorySystem {
             const rotation = (parseInt(itemElement.dataset.rotation) === 90) ? 90 : 0;
             const scale = parseFloat(itemElement.dataset.scale) || this.calculateScaleForRotation(this.parseSize(itemElement.dataset.size), rotation);
             setGunImage(itemElement, rotation, scale);
+        }
+        // 医療キットアイテムの場合はimgタグを必ず入れる
+        if (itemId && itemId.includes('medkit')) {
+            const rotation = (parseInt(itemElement.dataset.rotation) === 90) ? 90 : 0;
+            const scale = parseFloat(itemElement.dataset.scale) || 1.0;
+            setMedkitImage(itemElement, rotation, scale);
         }
         // 直近のマウス座標を保存
         this.lastMouseX = 0;
@@ -680,6 +720,12 @@ class InventorySystem {
             const scale = parseFloat(itemElement.dataset.scale || '1.0');
             setGunImage(itemElement, rotation, scale);
         }
+        // 医療キットアイテムの場合は画像を再設定して確実に反映
+        if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('medkit')) {
+            const rotation = parseInt(itemElement.dataset.rotation || '0');
+            const scale = parseFloat(itemElement.dataset.scale || '1.0');
+            setMedkitImage(itemElement, rotation, scale);
+        }
     }
 
     resetItemPosition(itemElement) {
@@ -709,6 +755,12 @@ class InventorySystem {
                 const scale = parseFloat(originalState.scale);
                 setGunImage(itemElement, rotation, scale);
             }
+            // 医療キットアイテムの場合は回転状態も復元
+            if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('medkit')) {
+                const rotation = parseInt(originalState.rotation);
+                const scale = parseFloat(originalState.scale);
+                setMedkitImage(itemElement, rotation, scale);
+            }
 
             // 元の状態をクリア
             this.originalItemState = null;
@@ -731,6 +783,12 @@ class InventorySystem {
                 const rotation = parseInt(itemElement.dataset.rotation || '0');
                 const scale = parseFloat(itemElement.dataset.scale || '1.0');
                 setGunImage(itemElement, rotation, scale);
+            }
+            // 医療キットアイテムの場合は回転状態も復元
+            if (itemElement.dataset.itemId && itemElement.dataset.itemId.includes('medkit')) {
+                const rotation = parseInt(itemElement.dataset.rotation || '0');
+                const scale = parseFloat(itemElement.dataset.scale || '1.0');
+                setMedkitImage(itemElement, rotation, scale);
             }
         }
     }
@@ -814,6 +872,11 @@ class InventorySystem {
             const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
             const scale = parseFloat(item.scale) || this.calculateScaleForRotation(size, rotation);
             setGunImage(dragElem, rotation, scale);
+        } else if (item.id === 'medkit') {
+            // 医療キットの場合はimgタグを必ず入れる
+            const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
+            const scale = parseFloat(item.scale) || 1.0;
+            setMedkitImage(dragElem, rotation, scale);
         } else {
             dragElem.textContent = item.content;
         }
@@ -899,6 +962,36 @@ function setGunImage(element, rotation, scale = 1.0) {
     element.innerHTML = '';
     const img = document.createElement('img');
     img.src = 'images/Gun.png';
+    img.className = 'item-image';
+
+    // 回転とスケールを組み合わせたtransform
+    let transform = '';
+    if (rotation === 90) {
+        transform = 'rotate(90deg)';
+    }
+    if (scale !== 1.0) {
+        transform += ` scale(${scale})`;
+    }
+    img.style.transform = transform;
+
+    // 画像サイズを明示的に設定
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.minWidth = '100%';
+    img.style.minHeight = '100%';
+
+    element.appendChild(img);
+
+    // データ属性も更新
+    element.dataset.rotation = rotation.toString();
+    element.dataset.scale = scale.toString();
+}
+
+// 医療キット画像をセットし、回転とスケールも適用する共通関数
+function setMedkitImage(element, rotation, scale = 1.0) {
+    element.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = 'images/medical_kit.png';
     img.className = 'item-image';
 
     // 回転とスケールを組み合わせたtransform
