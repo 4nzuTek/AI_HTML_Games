@@ -24,7 +24,7 @@ var INITIAL_ITEMS = [
     { id: 'medkit', row: 0, col: 0, size: '2x2', content: '医療キット' },
     { id: 'ammo', row: 2, col: 2, size: '1x1', content: '弾薬' },
     { id: 'food', row: 0, col: 3, size: '1x2', content: '食料' },
-    { id: 'gun', row: 3, col: 0, size: '2x1', content: '銃' }
+    { id: 'gun', row: 3, col: 0, size: '4x2', content: '銃' }
 ];
 
 window.ITEM_CONFIGS = ITEM_CONFIGS;
