@@ -51,7 +51,7 @@ DragHandler.prototype.rotateCurrentItem = function () {
         var newRotation = (currentRotation === 0) ? 90 : 0;
         this.currentDragElement.dataset.rotation = newRotation.toString();
         this.currentDragItem.rotation = newRotation.toString();
-        var scale = window.calculateScaleForRotation(rotatedSize, newRotation);
+        var scale = 1.0; // スケールを常に1.0固定にする
         this.currentDragElement.dataset.scale = scale.toString();
         this.currentDragItem.scale = scale.toString();
         window.setItemImage(this.currentDragElement, itemType, newRotation, scale);
@@ -92,13 +92,14 @@ DragHandler.prototype.startNewItemDrag = function (e, item) {
     dragElem.className = 'placed-item';
     dragElem.style.position = 'absolute';
     dragElem.style.pointerEvents = 'none';
+    dragElem.dataset.size = item.size; // サイズ情報を設定
 
     // アイテムタイプを取得して画像を設定
     const itemType = window.getItemType(item.id);
     const config = window.getItemConfig(itemType);
     if (config) {
         const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
-        const scale = parseFloat(item.scale) || window.calculateScaleForRotation(size, rotation);
+        const scale = 1.0; // スケールを常に1.0固定にする
         window.setItemImage(dragElem, itemType, rotation, scale);
     } else {
         dragElem.textContent = item.content;
@@ -256,7 +257,7 @@ DragHandler.prototype.startItemMove = function (e, itemElement) {
     const config = window.getItemConfig(itemType);
     if (config) {
         const rotation = (parseInt(itemElement.dataset.rotation) === 90) ? 90 : 0;
-        const scale = parseFloat(itemElement.dataset.scale) || window.calculateScaleForRotation(window.parseSize(itemElement.dataset.size), rotation);
+        const scale = 1.0; // スケールを常に1.0固定にする
         window.setItemImage(itemElement, itemType, rotation, scale);
     }
 

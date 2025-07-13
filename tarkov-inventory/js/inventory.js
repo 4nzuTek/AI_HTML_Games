@@ -20,65 +20,11 @@ InventorySystem.prototype.init = function () {
 };
 
 InventorySystem.prototype.setupDragAndDrop = function () {
-    // アイテムパレットからのドラッグ開始
-    document.querySelectorAll('.item').forEach(item => {
-        item.addEventListener('dragstart', (e) => {
-            this.draggedItem = {
-                id: item.dataset.itemId,
-                size: item.dataset.size,
-                content: item.querySelector('.item-content').textContent
-            };
-            item.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-
-        item.addEventListener('dragend', () => {
-            item.classList.remove('dragging');
-            this.draggedItem = null;
-        });
-    });
-
-    // グリッドへのドロップ処理
-    const grid = document.getElementById('inventoryGrid');
-
-    grid.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (!this.draggedItem) return;
-        const rect = grid.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const size = window.parseSize(this.draggedItem.size);
-        // 中央を持つ方式
-        const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-        const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-    });
-
-    grid.addEventListener('dragleave', () => {
-        this.gridManager.clearDropZoneHighlight();
-    });
-
-    grid.addEventListener('drop', (e) => {
-        e.preventDefault();
-
-        if (!this.draggedItem) return;
-
-        const rect = grid.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        const size = window.parseSize(this.draggedItem.size);
-        const col = Math.floor(x / this.cellSize - (size.width / 2) + 0.5);
-        const row = Math.floor(y / this.cellSize - (size.height / 2) + 0.5);
-
-        if (this.gridManager.canPlaceItem(row, col, this.draggedItem.size)) {
-            this.placeItem(row, col, this.draggedItem);
-        }
-
-        this.gridManager.clearDropZoneHighlight();
-    });
+    // ドラッグハンドラーでパレットドラッグを設定
+    this.dragHandler.setupPaletteDrag();
 
     // 配置されたアイテムの移動
+    const grid = document.getElementById('inventoryGrid');
     grid.addEventListener('mousedown', (e) => {
         const placedItem = e.target.closest('.placed-item');
         if (placedItem) {
@@ -117,7 +63,7 @@ InventorySystem.prototype.placeItem = function (row, col, item) {
     if (config) {
         // 画像アイテムの場合
         const rotation = (parseInt(item.rotation) === 90) ? 90 : 0;
-        const scale = parseFloat(item.scale) || window.calculateScaleForRotation(size, rotation);
+        const scale = 1.0; // スケールを常に1.0固定にする
         itemElement.dataset.rotation = rotation;
         itemElement.dataset.scale = scale;
         window.setItemImage(itemElement, itemType, rotation, scale);
