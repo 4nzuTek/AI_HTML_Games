@@ -10,6 +10,7 @@ function InventorySystem() {
     this.gridManager = new window.GridManager();
     this.dragHandler = new window.DragHandler(this);
     this.contextMenu = new window.ContextMenu(this);
+    this.tooltipManager = new window.TooltipManager();
     this.init();
 }
 
@@ -264,5 +265,5 @@ InventorySystem.prototype.parseSize = function (sizeStr) {
 window.InventorySystem = InventorySystem;
 
 document.addEventListener('DOMContentLoaded', function () {
-    new window.InventorySystem();
+    window.inventorySystem = new window.InventorySystem();
 }); 

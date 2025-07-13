@@ -89,7 +89,7 @@ DragHandler.prototype.startNewItemDrag = function (e, item) {
     // ドラッグ用の仮アイテムを作成
     const size = window.parseSize(item.size);
     const dragElem = document.createElement('div');
-    dragElem.className = 'placed-item';
+    dragElem.className = 'placed-item dragging';
     dragElem.style.position = 'absolute';
     dragElem.style.pointerEvents = 'none';
     dragElem.dataset.size = item.size; // サイズ情報を設定
@@ -175,9 +175,15 @@ DragHandler.prototype.startNewItemDrag = function (e, item) {
         }
         if (dragElem.parentNode) dragElem.parentNode.removeChild(dragElem);
         dragElem.classList.remove('cannot-place'); // ここで必ず色を戻す
+        dragElem.classList.remove('dragging');
         this.isDragging = false;
         this.currentDragItem = null;
         this.currentDragElement = null;
+
+        // ツールチップマネージャーにドラッグ終了を通知
+        if (window.inventorySystem && window.inventorySystem.tooltipManager) {
+            window.inventorySystem.tooltipManager.resetTooltipState();
+        }
     };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
@@ -240,6 +246,7 @@ DragHandler.prototype.startItemMove = function (e, itemElement) {
 
     itemElement.style.zIndex = '1000';
     itemElement.style.opacity = '0.8';
+    itemElement.classList.add('dragging');
     const size = window.parseSize(itemElement.dataset.size);
     const itemId = itemElement.dataset.itemId;
     this.currentDragItem = {
@@ -316,11 +323,17 @@ DragHandler.prototype.startItemMove = function (e, itemElement) {
         itemElement.style.zIndex = '';
         itemElement.style.opacity = '';
         itemElement.classList.remove('cannot-place'); // ここで必ず色を戻す
+        itemElement.classList.remove('dragging');
         this.isDragging = false;
         this.currentDragItem = null;
         this.currentDragElement = null;
         // 元の状態をクリア
         this.originalItemState = null;
+
+        // ツールチップマネージャーにドラッグ終了を通知
+        if (window.inventorySystem && window.inventorySystem.tooltipManager) {
+            window.inventorySystem.tooltipManager.resetTooltipState();
+        }
     };
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
