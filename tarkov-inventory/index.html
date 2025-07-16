@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarkov風インベントリシステム</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>インベントリシステム</h1>
+
+        <div class="inventory-container">
+            <div class="inventory-grid" id="inventoryGrid">
+                <!-- 10x10のグリッドがJavaScriptで生成される -->
+            </div>
+
+            <div class="item-palette">
+                <h3>アイテム</h3>
+                <div class="item" data-item-id="medkit" data-size="2x2">
+                    <div class="item-content">医療キット</div>
+                    <div class="item-image-container" style="width: 80px; height: 80px;">
+                        <img class="item-image" src="images/medical_kit.png" alt="医療キット"
+                            style="object-fit: contain; object-position: center;">
+                    </div>
+                </div>
+                <div class="item" data-item-id="ammo" data-size="1x1">
+                    <div class="item-content">弾薬</div>
+                </div>
+                <div class="item" data-item-id="weapon" data-size="3x2">
+                    <div class="item-content">武器</div>
+                </div>
+                <div class="item" data-item-id="food" data-size="1x2">
+                    <div class="item-content">食料</div>
+                </div>
+                <div class="item" data-item-id="backpack" data-size="4x2">
+                    <div class="item-content">バックパック</div>
+                </div>
+                <div class="item" data-item-id="gun" data-size="2x1">
+                    <div class="item-content">銃</div>
+                    <div class="item-image-container" style="width: 80px; height: 80px;">
+                        <img class="item-image" src="images/Gun.png" alt="銃"
+                            style="object-fit: contain; object-position: center;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- コンテキストメニュー -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item delete" data-action="delete">捨てる</div>
+    </div>
+
+    <!-- ツールチップ -->
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-header">
+            <img class="tooltip-image" id="tooltipImage" src="" alt="">
+            <div class="tooltip-title" id="tooltipTitle"></div>
+        </div>
+        <div class="tooltip-description" id="tooltipDescription"></div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/grid-manager.js"></script>
+    <script src="js/context-menu.js"></script>
+    <script src="js/drag-handler.js"></script>
+    <script src="js/tooltip.js"></script>
+    <script src="js/inventory.js"></script>
+</body>
+
+</html>
