@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, initial-scale=1.0">
+    <title>お宝カード</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="game-canvas">
+        <div id="info-area" class="area">
+            <div class="area-title">Info</div>
+            <div>階層 : <span id="floor">B1F</span></div>
+            <div>HP : <span id="hp">100</span></div>
+            <div>エネルギー : <span id="energy">100</span></div>
+            <div>水分 : <span id="water">100</span></div>
+        </div>
+        <div id="log-area" class="area">
+            <div class="area-title">Log</div>
+            <hr>
+            <div id="log" class="log-scroll"></div>
+        </div>
+        <button id="next-floor-btn">次のフロアへ進む</button>
+        <div id="enemy-area" class="area">
+            <div class="area-title">Enemy</div>
+            <div id="enemies" class="card-row"></div>
+        </div>
+        <div id="loot-area" class="area">
+            <div class="area-title">Loot</div>
+            <div id="loot" class="card-row"></div>
+        </div>
+        <div id="inventory-area" class="area">
+            <div class="area-title">Inventory</div>
+            <div id="inventory" class="card-grid"></div>
+        </div>
+    </div>
+    <div id="tooltip" class="tooltip" style="display:none;"></div>
+    <div id="action-menu" class="action-menu" style="display:none;"></div>
+    <script src="main.js"></script>
+</body>
+
+</html>

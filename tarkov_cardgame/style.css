@@ -1,0 +1,213 @@
+body {
+    background: #fff;
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: auto;
+    font-family: 'Meiryo', 'Yu Gothic', 'sans-serif';
+}
+
+#game-canvas {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1280px;
+    height: 720px;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.area {
+    position: absolute;
+    background: #fff;
+    border: 3px solid #000;
+    border-radius: 0;
+    box-sizing: border-box;
+    padding: 12px 16px 12px 16px;
+}
+
+#info-area {
+    left: 20px;
+    top: 20px;
+    width: 560px;
+    height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+#enemy-area {
+    left: 660px;
+    top: 20px;
+    width: 690px;
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+#loot-area {
+    left: 660px;
+    top: 230px;
+    width: 690px;
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+#inventory-area {
+    left: 660px;
+    top: 440px;
+    width: 690px;
+    height: 240px;
+    display: flex;
+    flex-direction: column;
+}
+
+#log-area {
+    left: 20px;
+    top: 440px;
+    width: 560px;
+    height: 240px;
+    display: flex;
+    flex-direction: column;
+}
+
+.area-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 0px;
+    text-align: left;
+    margin-top: 0;
+}
+
+#log-area .area-title {
+    margin-bottom: 4px;
+}
+
+#log-area hr {
+    border: none;
+    border-top: 1px solid #000;
+    margin: 0 0 8px 0;
+}
+
+#log {
+    font-size: 0.95em;
+    line-height: 1.2;
+    background: #fff;
+    border: none;
+    height: 180px;
+    overflow-y: auto;
+    margin-top: 0;
+    white-space: pre-line;
+    padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: #000 #fff;
+}
+
+#log::-webkit-scrollbar {
+    width: 8px;
+}
+
+#log::-webkit-scrollbar-thumb {
+    background: #000;
+    border-radius: 4px;
+}
+
+#log::-webkit-scrollbar-track {
+    background: #fff;
+}
+
+.card-row {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 50px);
+    grid-template-rows: repeat(2, 80px);
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.card {
+    width: 50px;
+    height: 80px;
+    background: #ddd;
+    border: 1.5px solid #bbb;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    color: #444;
+    cursor: pointer;
+    user-select: none;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#next-floor-btn {
+    position: absolute;
+    left: 380px;
+    top: 200px;
+    width: 200px;
+    height: 50px;
+    font-size: 1.1em;
+    padding: 0;
+    border: 3px solid #000;
+    background: #fff;
+    cursor: pointer;
+    border-radius: 0;
+    margin: 0;
+    display: block;
+    z-index: 10;
+    text-align: center;
+    font-weight: normal;
+}
+
+.tooltip {
+    position: absolute;
+    background: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.95em;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 2px 8px #0008;
+}
+
+.action-menu {
+    position: absolute;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 6px;
+    min-width: 120px;
+    box-shadow: 0 2px 8px #0008;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.action-menu button {
+    background: none;
+    border: none;
+    color: #fff;
+    padding: 8px 16px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 1em;
+}
+
+.action-menu button:hover {
+    background: #444;
+}
