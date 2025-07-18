@@ -1,7 +1,7 @@
 // サンプルデータ
-const enemies = Array.from({ length: 10 }, (_, i) => ({ id: i + 1, name: '敵' + (i + 1), hp: 30, desc: '敵の説明' + (i + 1) }));
-const loot = Array.from({ length: 10 }, (_, i) => ({ id: 101 + i, name: 'アイテム' + (i + 1), type: 'item', desc: 'アイテムの説明' + (i + 1) }));
-const inventory = Array.from({ length: 20 }, (_, i) => ({ id: 201 + i, name: '所持' + (i + 1), type: 'item', desc: '所持品の説明' + (i + 1) }));
+const enemies = Array.from({ length: 10 }, (_, i) => ({ id: i + 1, name: '敵' + (i + 1), hp: 30, desc: '敵の説明' + (i + 1), img: `icon/icon-1_1_fixed_${String(i + 1).padStart(2, '0')}.png` }));
+const loot = Array.from({ length: 10 }, (_, i) => ({ id: 101 + i, name: 'アイテム' + (i + 1), type: 'item', desc: 'アイテムの説明' + (i + 1), img: `icon/icon-1_2_fixed_${String(i + 1).padStart(2, '0')}.png` }));
+const inventory = Array.from({ length: 20 }, (_, i) => ({ id: 201 + i, name: '所持' + (i + 1), type: 'item', desc: '所持品の説明' + (i + 1), img: `icon/icon-1_2_fixed_${String(i + 1).padStart(2, '0')}.png` }));
 
 function renderEnemies() {
     const area = document.getElementById('enemies');
@@ -9,7 +9,10 @@ function renderEnemies() {
     enemies.forEach(e => {
         const card = document.createElement('div');
         card.className = 'card enemy-card';
-        card.textContent = '';
+        const img = document.createElement('img');
+        img.src = e.img;
+        img.alt = e.name;
+        card.appendChild(img);
         card.dataset.id = e.id;
         card.dataset.type = 'enemy';
         card.addEventListener('mouseover', showTooltip.bind(null, e.desc));
@@ -24,7 +27,10 @@ function renderLoot() {
     loot.forEach(i => {
         const card = document.createElement('div');
         card.className = 'card loot-card';
-        card.textContent = '';
+        const img = document.createElement('img');
+        img.src = i.img;
+        img.alt = i.name;
+        card.appendChild(img);
         card.dataset.id = i.id;
         card.dataset.type = i.type;
         card.addEventListener('mouseover', showTooltip.bind(null, i.desc));
@@ -39,7 +45,10 @@ function renderInventory() {
     inventory.forEach(i => {
         const card = document.createElement('div');
         card.className = 'card inventory-card';
-        card.textContent = '';
+        const img = document.createElement('img');
+        img.src = i.img;
+        img.alt = i.name;
+        card.appendChild(img);
         card.dataset.id = i.id;
         card.dataset.type = i.type;
         card.addEventListener('mouseover', showTooltip.bind(null, i.desc));
@@ -90,7 +99,7 @@ function hideActionMenu() {
     document.getElementById('action-menu').style.display = 'none';
 }
 function addToInventory(card) {
-    inventory.push(card);
+    inventory.push({ ...card }); // imgなど全情報をコピー
     const idx = loot.findIndex(i => i.id === card.id);
     if (idx !== -1) loot.splice(idx, 1);
     renderLoot();
