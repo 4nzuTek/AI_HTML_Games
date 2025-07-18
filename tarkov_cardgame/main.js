@@ -7,6 +7,7 @@ let itemMaster = [];
 let loot = [];
 let inventory = [];
 let enemyMaster = [];
+let nextInvIndex = 0; // 追加: invIndex管理用
 
 // 敵画像ファイル一覧（初期化時に取得）
 const ENEMY_IMAGE_LIST = [
@@ -147,9 +148,9 @@ fetch('json/item.json')
     .then(data => {
         itemMaster = data;
         console.log('itemMaster:', itemMaster); // データ確認用
-        // loot/inventoryにcurrentDurabilityを持たせる
-        loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability }));
-        inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability }));
+        // loot/inventoryにcurrentDurabilityとinvIndexを持たせる
+        loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
+        inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
         renderLoot();
         renderInventory();
         updatePlayerStatus();
@@ -250,6 +251,7 @@ function renderLoot() {
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
+        card.dataset.index = i.invIndex; // 追加
         card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'loot', e, card); });
@@ -267,10 +269,10 @@ function renderLoot() {
             card.appendChild(dura);
         }
         // 枠線再付与
-        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID) {
+        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {
             card.classList.add('card-tooltip-focus');
             void card.offsetWidth;
-            // console.log(`[tooltip] 枠線再付与(renderLoot): cardID=${i.itemID}`);
+            // console.log(`[tooltip] 枠線再付与(renderLoot): cardID=${i.itemID}, invIndex=${i.invIndex}`);
         }
         area.appendChild(card);
     });
@@ -291,6 +293,7 @@ function renderInventory() {
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
+        card.dataset.index = i.invIndex; // 追加
         card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'inventory', e, card); });
@@ -308,10 +311,10 @@ function renderInventory() {
             card.appendChild(dura);
         }
         // 枠線再付与
-        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID) {
+        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {
             card.classList.add('card-tooltip-focus');
             void card.offsetWidth;
-            // console.log(`[tooltip] 枠線再付与(renderInventory): cardID=${i.itemID}`);
+            // console.log(`[tooltip] 枠線再付与(renderInventory): cardID=${i.itemID}, invIndex=${i.invIndex}`);
         }
         area.appendChild(card);
     });
@@ -331,11 +334,12 @@ function onCardMouseEnter(desc, card) {
         tooltipHideTimer = null;
     }
     // ターゲット情報セット＋枠線付与
-    if (card && card.dataset && card.dataset.id) {
+    if (card && card.dataset && card.dataset.id && card.dataset.index) {
         const id = Number(card.dataset.id);
-        currentTooltipTargetItem = inventory.find(i => i.itemID == id) || loot.find(i => i.itemID == id) || null;
+        const invIndex = Number(card.dataset.index);
+        currentTooltipTargetItem = inventory.find(i => i.itemID == id && i.invIndex == invIndex) || loot.find(i => i.itemID == id && i.invIndex == invIndex) || null;
         if (currentTooltipTargetItem) {
-            // console.log(`[tooltip] ターゲット設定: itemID=${currentTooltipTargetItem.itemID}`);
+            // console.log(`[tooltip] ターゲット設定: itemID=${currentTooltipTargetItem.itemID}, invIndex=${currentTooltipTargetItem.invIndex}`);
         } else {
             // console.log('[tooltip] ターゲット設定: null');
         }
@@ -510,7 +514,7 @@ function showActionMenu(card, area, e, cardElem) {
         btn.onclick = () => {
             // 「使用する」ボタンの場合は事前に耐久チェック
             if (act.label === '使用する' && !act.disabled) {
-                const idx = inventory.findIndex(i => i.itemID === card.itemID);
+                const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                 if (idx !== -1 && inventory[idx].currentDurability > 1) {
                     actionMenuForceOpen = true;
                     // console.log('[actionMenu] 耐久1以上でチップ閉じ禁止: 次フレームまで');
@@ -527,7 +531,7 @@ function showActionMenu(card, area, e, cardElem) {
                 // カード右上の耐久値表示
                 const duraDiv = Array.from(tooltipTargetCard.childNodes).find(n => n && n.textContent && n.textContent.match(/\d+\/\d+/));
                 if (duraDiv) {
-                    const idx = inventory.findIndex(i => i.itemID === card.itemID);
+                    const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                     if (idx !== -1) {
                         duraDiv.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
                     }
@@ -535,7 +539,7 @@ function showActionMenu(card, area, e, cardElem) {
                 // ツールチップ内の耐久値表示
                 const tooltipDura = document.querySelector('#tooltip .tooltip-durability');
                 if (tooltipDura) {
-                    const idx = inventory.findIndex(i => i.itemID === card.itemID);
+                    const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                     if (idx !== -1) {
                         tooltipDura.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
                     }
@@ -603,8 +607,10 @@ function hideActionMenu() {
 }
 function addToInventory(card) {
     if (inventory.length >= 20) return; // 21枚以上は追加しない
-    inventory.push({ ...card });
-    const idx = loot.findIndex(i => i.itemID === card.itemID);
+    const newCard = { ...card, invIndex: nextInvIndex++ };
+    inventory.push(newCard);
+    // lootからもinvIndexで削除
+    const idx = loot.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
     if (idx !== -1) loot.splice(idx, 1);
     renderLoot();
     renderInventory();
@@ -638,7 +644,7 @@ function useItem(card) {
         addLog('しかし、何も起こらなかった...', 'detail');
     }
     // 耐久値を減らす
-    const idx = inventory.findIndex(i => i.itemID === card.itemID);
+    const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
     let willRemain = false;
     if (idx !== -1) {
         if (inventory[idx].currentDurability > 1) {
@@ -669,7 +675,7 @@ function useWeapon(card) {
     menu.style.display = 'flex';
 }
 function dropItem(card) {
-    const idx = inventory.findIndex(i => i.itemID === card.itemID);
+    const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
     if (idx !== -1) inventory.splice(idx, 1);
     renderInventory();
     addLog(`${card.itemName}を捨てた。`, 'action');
@@ -789,7 +795,7 @@ function nextFloor() {
     loot = [];
     for (let i = 0; i < lootNum; i++) {
         const idx = Math.floor(Math.random() * itemMaster.length);
-        loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability });
+        loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
     }
     renderLoot();
     // 5. 敵は再生成しない（消さない）
@@ -845,8 +851,8 @@ function restartGame() {
     updateFloor();
     // 敵・アイテム再生成
     // itemMaster, enemyMasterはfetch済み前提
-    loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability }));
-    inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability }));
+    loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
+    inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
     const enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
     if (enemy1001) {
         enemies = [{
