@@ -138,21 +138,57 @@ let tooltipCardHover = false; // カード上にマウスがあるか
 let tooltipHideTimer = null; // チップ消去用タイマー
 let actionMenuTargetCard = null; // 現在アクションメニューを表示しているカード要素
 
+function getItemTooltip(item) {
+    let lines = [];
+    // アイテム名
+    lines.push(`<b>【${item.itemName}】</b>`);
+    // 説明文（将来拡張）
+    // if (item.desc) lines.push(item.desc);
+    // 回復量
+    if (item.hpRecov !== null && item.hpRecov !== undefined && item.hpRecov !== 0) lines.push(`HP回復: <b>${item.hpRecov > 0 ? '+' : ''}${item.hpRecov}</b>`);
+    if (item.eneRecov !== null && item.eneRecov !== undefined && item.eneRecov !== 0) lines.push(`エネルギー回復: <b>${item.eneRecov > 0 ? '+' : ''}${item.eneRecov}</b>`);
+    if (item.waterRecov !== null && item.waterRecov !== undefined && item.waterRecov !== 0) lines.push(`水分回復: <b>${item.waterRecov > 0 ? '+' : ''}${item.waterRecov}</b>`);
+    // 状態異常回復
+    if (item.paralysisCure) lines.push('麻痺回復');
+    if (item.poisonCure) lines.push('毒回復');
+    if (item.curseCure) lines.push('呪い回復');
+    // 耐久値
+    if (item.maxDurability > 0 && item.currentDurability !== undefined) {
+        lines.push(`耐久: <b>${item.currentDurability}/${item.maxDurability}</b>`);
+    }
+    // その他（将来：攻撃力、属性など）
+    // ...
+    return lines.join('<br>');
+}
 function renderLoot() {
     const area = document.getElementById('loot');
     area.innerHTML = '';
     loot.forEach(i => {
         const card = document.createElement('div');
         card.className = 'card loot-card';
+        card.style.position = 'relative'; // 耐久値表示用
         const img = document.createElement('img');
         img.src = 'icon/' + i.imageName;
         img.alt = i.itemName;
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
-        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(i.itemName, card); });
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'loot', e, card); });
+        // 耐久値表示（右上、シンプル表示）
+        if (i.maxDurability > 0 && i.currentDurability !== undefined) {
+            const dura = document.createElement('div');
+            dura.style.position = 'absolute';
+            dura.style.top = '0px';
+            dura.style.right = '2px';
+            dura.style.fontSize = '0.75em';
+            dura.style.color = '#222';
+            dura.style.background = 'none';
+            dura.style.padding = '0';
+            dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
+            card.appendChild(dura);
+        }
         area.appendChild(card);
     });
 }
@@ -169,7 +205,7 @@ function renderInventory() {
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
-        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(i.itemName + (i.currentDurability !== undefined ? `（耐久:${i.currentDurability}/${i.maxDurability}）` : ''), card); });
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'inventory', e, card); });
         // 耐久値表示（右上、ぎちぎち・シンプル表示）
