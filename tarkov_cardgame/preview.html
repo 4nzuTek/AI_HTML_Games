@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>画像プレビュー（アイテム・エネミー）</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 24px;
+            background: #f8f8f8;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 16px;
+        }
+
+        .tab {
+            padding: 8px 24px;
+            cursor: pointer;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            margin-right: 4px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .tab.active {
+            background: #fff;
+            color: #1976d2;
+            border-bottom: 2px solid #fff;
+        }
+
+        .tab-content {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 0 8px 8px 8px;
+            padding: 16px;
+        }
+
+        .img-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 12px;
+        }
+
+        .img-cell {
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .img-cell img {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            image-rendering: pixelated;
+        }
+
+        .img-cell .filename {
+            display: block;
+            font-size: 10px;
+            color: #555;
+            word-break: break-all;
+            line-height: 1.2;
+            margin: 0 auto;
+            max-width: 72px;
+            white-space: normal;
+        }
+
+        h2 {
+            font-size: 1.1em;
+            margin: 0 0 8px 0;
+        }
+    </style>
+    <link rel="icon" type="image/png" href="images/item/icon-1_1_fixed_05.png">
+</head>
+
+<body>
+    <div class="tabs">
+        <div class="tab active" id="tab-item">アイテム</div>
+        <div class="tab" id="tab-enemy">エネミー</div>
+    </div>
+    <div class="tab-content">
+        <div id="content-item">
+            <h2>アイテム画像一覧</h2>
+            <div class="img-grid" id="item-grid"></div>
+        </div>
+        <div id="content-enemy" style="display:none;">
+            <h2>エネミー画像一覧</h2>
+            <div class="img-grid" id="enemy-grid"></div>
+        </div>
+    </div>
+    <div id="tooltip"
+        style="display:none; position:absolute; z-index:1000; background:#fff; border:1px solid #888; border-radius:6px; box-shadow:0 2px 8px #0002; padding:8px; font-size:12px; color:#222; pointer-events:none; max-width:320px; word-break:break-all;">
+    </div>
+    <script>
+        // エネミー画像ファイル名リスト
+        const enemyImages = Array.from({ length: 50 }, (_, i) => `mon_${String(i + 1).padStart(3, '0')}.bmp`);
+
+        // --- item_images.jsonとitem.jsonデータを取得 ---
+        let itemData = [];
+        let itemImages = [];
+        // item.jsonの取得
+        fetch('json/item.json')
+            .then(res => res.json())
+            .then(data => { itemData = data; })
+            .catch(() => { itemData = []; });
+        // item_images.jsonの取得＆画像一覧表示
+        fetch('item_images.json')
+            .then(res => res.json())
+            .then(files => { renderItemImages(files); })
+            .catch(() => { renderItemImages([]); });
+
+        // --- ツールチップ制御 ---
+        const tooltip = document.getElementById('tooltip');
+        function showTooltip(html, event) {
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            // マウス位置の少し右下に表示
+            const x = event.clientX + 12 + window.scrollX;
+            const y = event.clientY + 12 + window.scrollY;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+        }
+        function hideTooltip() {
+            tooltip.style.display = 'none';
+        }
+
+        // アイテム画像表示（item_images.jsonで取得した全画像）
+        function renderItemImages(imageList) {
+            const itemGrid = document.getElementById('item-grid');
+            itemGrid.innerHTML = '';
+            imageList.forEach(name => {
+                const cell = document.createElement('div');
+                cell.className = 'img-cell';
+                // itemDataから該当imageNameのアイテムを抽出
+                const items = itemData.filter(item => item.imageName === name);
+                if (items.length > 0) {
+                    cell.style.border = '2px solid #000';
+                }
+                const img = document.createElement('img');
+                img.src = `images/item/${name}`;
+                img.alt = name;
+                img.setAttribute('data-imgname', name);
+                // --- ツールチップ ---
+                img.addEventListener('mouseenter', function (e) {
+                    if (items.length > 0) {
+                        let html = `<b>この画像を使っているアイテム一覧</b><ul style='margin:4px 0 0 16px;padding:0;'>`;
+                        for (const it of items) {
+                            html += `<li>${it.itemName ? it.itemName : '(名称なし)'} <span style='color:#888;font-size:10px;'>[itemID:${it.itemID}]</span></li>`;
+                        }
+                        html += '</ul>';
+                        showTooltip(html, e);
+                    } else {
+                        showTooltip('この画像を使っているアイテムはありません', e);
+                    }
+                });
+                img.addEventListener('mousemove', function (e) {
+                    if (tooltip.style.display === 'block') showTooltip(tooltip.innerHTML, e);
+                });
+                img.addEventListener('mouseleave', hideTooltip);
+                cell.appendChild(img);
+                const filename = document.createElement('span');
+                filename.className = 'filename';
+                filename.textContent = name;
+                cell.appendChild(filename);
+                itemGrid.appendChild(cell);
+            });
+        }
+        // エネミー画像表示
+        const enemyGrid = document.getElementById('enemy-grid');
+        enemyImages.forEach(name => {
+            const cell = document.createElement('div');
+            cell.className = 'img-cell';
+            // --- canvasで1スケール＋背景色抜き ---
+            const img = new window.Image();
+            img.src = `images/enemy/${name}`;
+            img.onload = function () {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                canvas.style.width = img.width + 'px';
+                canvas.style.height = img.height + 'px';
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false; // 補間無効
+                ctx.drawImage(img, 0, 0);
+                // 背景色抜き
+                const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    if (
+                        data[i] === 129 && // R
+                        data[i + 1] === 121 && // G
+                        data[i + 2] === 125    // B
+                    ) {
+                        data[i + 3] = 0; // 透明化
+                    }
+                }
+                ctx.putImageData(imageData, 0, 0);
+                cell.appendChild(canvas);
+                const filename = document.createElement('span');
+                filename.className = 'filename';
+                filename.textContent = name;
+                cell.appendChild(filename);
+            };
+            img.onerror = function () {
+                // 読み込み失敗時は何も表示しない
+            };
+            enemyGrid.appendChild(cell);
+        });
+        // タブ切り替え
+        const tabItem = document.getElementById('tab-item');
+        const tabEnemy = document.getElementById('tab-enemy');
+        const contentItem = document.getElementById('content-item');
+        const contentEnemy = document.getElementById('content-enemy');
+        tabItem.onclick = function () {
+            tabItem.classList.add('active');
+            tabEnemy.classList.remove('active');
+            contentItem.style.display = '';
+            contentEnemy.style.display = 'none';
+        };
+        tabEnemy.onclick = function () {
+            tabEnemy.classList.add('active');
+            tabItem.classList.remove('active');
+            contentEnemy.style.display = '';
+            contentItem.style.display = 'none';
+        };
+    </script>
+</body>
+
+</html>

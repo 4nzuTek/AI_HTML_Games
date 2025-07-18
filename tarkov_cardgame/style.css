@@ -1,0 +1,535 @@
+body {
+    background: #fff;
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: auto;
+    font-family: 'Meiryo', 'Yu Gothic', 'sans-serif';
+}
+
+#game-canvas {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1280px;
+    height: 720px;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.area {
+    position: absolute;
+    background: #fff;
+    border: 3px solid #000;
+    border-radius: 0;
+    box-sizing: border-box;
+    padding: 12px 16px 12px 16px;
+}
+
+#info-area {
+    left: 20px;
+    top: 20px;
+    width: 560px;
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+/* #info-area > div のflex指定を削除 */
+/* HP/エネルギー/水分の行だけflexで両端配置 */
+.status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* 防御力表記を左詰めにする */
+#defense {
+    text-align: left;
+    font-size: 1em;
+    margin: 2px 0 0 0;
+    padding: 0;
+}
+
+#enemy-area {
+    left: 660px;
+    top: 20px;
+    width: 690px;
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+#loot-area {
+    left: 660px;
+    top: 230px;
+    width: 690px;
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+#inventory-area {
+    left: 660px;
+    top: 440px;
+    width: 690px;
+    height: 240px;
+    display: flex;
+    flex-direction: column;
+}
+
+#log-area {
+    left: 20px;
+    top: 440px;
+    width: 560px;
+    height: 240px;
+    display: flex;
+    flex-direction: column;
+}
+
+.area-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 0px;
+    text-align: left;
+    margin-top: 0;
+}
+
+#log-area .area-title {
+    margin-bottom: 4px;
+}
+
+#log-area hr {
+    border: none;
+    border-top: 1px solid #000;
+    margin: 0 0 8px 0;
+}
+
+#log {
+    font-size: 0.95em;
+    line-height: 1.2;
+    background: #fff;
+    border: none;
+    height: 180px;
+    overflow-y: auto;
+    margin-top: 0;
+    white-space: pre-line;
+    padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: #000 #fff;
+}
+
+#log::-webkit-scrollbar {
+    width: 8px;
+}
+
+#log::-webkit-scrollbar-thumb {
+    background: #000;
+    border-radius: 4px;
+}
+
+#log::-webkit-scrollbar-track {
+    background: #fff;
+}
+
+.card-row {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 50px);
+    grid-template-rows: repeat(2, 80px);
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.card {
+    width: 50px;
+    height: 80px;
+    background: #ddd;
+    border: 1.5px solid #bbb;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    color: #444;
+    cursor: pointer;
+    user-select: none;
+    box-sizing: border-box;
+    overflow: hidden;
+    outline: none;
+}
+
+.enemy-card {
+    outline: none;
+    position: relative;
+}
+
+.inventory-card {
+    outline: none;
+}
+
+.loot-card {
+    outline: none;
+}
+
+.card img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    display: block;
+}
+
+#next-floor-btn {
+    position: absolute;
+    left: 380px;
+    top: 260px;
+    width: 200px;
+    height: 50px;
+    font-size: 1.1em;
+    padding: 0;
+    border: 3px solid #000;
+    background: #fff;
+    cursor: pointer;
+    border-radius: 0;
+    margin: 0;
+    display: block;
+    z-index: 10;
+    text-align: center;
+    font-weight: normal;
+}
+
+#escape-btn {
+    position: absolute;
+    left: 380px;
+    top: 318px;
+    /* #next-floor-btnのtop260+高さ50+間隔8 */
+    width: 200px;
+    height: 50px;
+    font-size: 1.1em;
+    padding: 0;
+    border: 3px solid #000;
+    background: #fff;
+    cursor: pointer;
+    border-radius: 0;
+    margin: 0;
+    display: block;
+    z-index: 10;
+    text-align: center;
+    font-weight: normal;
+}
+
+#escape-btn:disabled {
+    color: #aaa;
+    border-color: #aaa;
+    background: #eee;
+    cursor: not-allowed;
+}
+
+#tooltip {
+    background: #fff;
+    color: #111;
+    border: 3px solid #111;
+    border-radius: 0;
+    padding: 4px 8px;
+    font-size: 0.92em;
+    z-index: 1000;
+    position: absolute;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    max-width: 320px;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+#tooltip .tooltip-itemname {
+    font-size: 1.18em;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 2px;
+}
+
+#tooltip .tooltip-cardbox {
+    width: 220px;
+    min-width: unset;
+    max-width: unset;
+    background: #fff;
+    padding: 0px;
+    box-sizing: border-box;
+    font-size: 1em;
+}
+
+#tooltip .tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #111;
+    padding-bottom: 2px;
+    margin-bottom: 2px;
+}
+
+#tooltip .tooltip-title {
+    font-weight: bold;
+    font-size: 1em;
+    margin: 0;
+    padding: 0;
+}
+
+#tooltip .tooltip-durability {
+    font-size: 0.95em;
+    color: #222;
+    font-weight: normal;
+    margin-left: 8px;
+}
+
+#tooltip .tooltip-type {
+    font-size: 0.95em;
+    color: #444;
+    margin-bottom: 4px;
+}
+
+#tooltip .tooltip-imgbox {
+    text-align: center;
+    margin: 8px 0 8px 0;
+}
+
+#tooltip .tooltip-img {
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+#tooltip .tooltip-paramtable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    margin-top: 6px;
+    font-size: 0.98em;
+    background: #fff;
+}
+
+#tooltip .tooltip-paramtable tr {
+    background: #e0e0e0;
+    border-radius: 6px;
+}
+
+#tooltip .tooltip-paramtable tr:first-child {
+    border-top: none;
+}
+
+#tooltip .tooltip-paramtable td {
+    padding: 0px 6px;
+    background: none;
+}
+
+#tooltip .tooltip-paramtable td:first-child {
+    text-align: left;
+    width: 70%;
+}
+
+#tooltip .tooltip-paramtable td:last-child {
+    text-align: right;
+    width: 30%;
+}
+
+#tooltip .tooltip-divider {
+    width: 100%;
+    height: 2px;
+    background: #111;
+    margin: 0 0 2px 0;
+    border: none;
+}
+
+#action-menu {
+    background: #fff;
+    color: #111;
+    border: 3px solid #111;
+    border-radius: 0;
+    padding: 4px 8px;
+    display: none;
+    position: absolute;
+    z-index: 1001;
+    flex-direction: column;
+    gap: 4px;
+    width: 167px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    min-height: 72px;
+    overflow: auto;
+}
+
+#action-menu button {
+    background: #f3f3f3;
+    border: 1.5px solid #bbb;
+    color: #111;
+    font-size: 12px;
+    padding: 0px 0;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: -1px;
+    transition: background 0.2s, border 0.2s;
+    font-weight: bold;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 20px;
+}
+
+#action-menu button:hover {
+    background: #e0e0e0;
+    border: 1.5px solid #888;
+}
+
+/* HP・エネルギー・水分バーの横幅を長くする */
+progress.status-bar {
+    width: 320px;
+    height: 20px;
+    background: #eee;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 10px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* HP・エネルギー・水分バーの色を個別に指定 */
+#hp-bar.status-bar {
+    accent-color: #6ee36e;
+    /* 明るい緑 */
+}
+
+#energy-bar.status-bar {
+    accent-color: #ffb347;
+    /* オレンジ */
+}
+
+#water-bar.status-bar {
+    accent-color: #4fc3f7;
+    /* 水色 */
+}
+
+/* HPバー */
+#hp-bar.status-bar::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+#hp-bar.status-bar::-webkit-progress-value {
+    background-color: #6ee36e;
+    /* 明るい緑 */
+    border-radius: 4px;
+}
+
+#hp-bar.status-bar::-moz-progress-bar {
+    background-color: #6ee36e;
+}
+
+/* エネルギーバー */
+#energy-bar.status-bar::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+#energy-bar.status-bar::-webkit-progress-value {
+    background-color: #ffb347;
+    /* オレンジ */
+    border-radius: 4px;
+}
+
+#energy-bar.status-bar::-moz-progress-bar {
+    background-color: #ffb347;
+}
+
+/* 水分バー */
+#water-bar.status-bar::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+#water-bar.status-bar::-webkit-progress-value {
+    background-color: #4fc3f7;
+    /* 水色 */
+    border-radius: 4px;
+}
+
+#water-bar.status-bar::-moz-progress-bar {
+    background-color: #4fc3f7;
+}
+
+.card-tooltip-focus {
+    outline: 3px solid #111 !important;
+    outline-offset: 0px;
+    z-index: 1002;
+}
+
+#debug-window {
+    font-family: inherit;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+#debug-window input[type="number"] {
+    font-size: 1em;
+    padding: 2px 4px;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    margin-right: 4px;
+}
+
+#debug-window button {
+    font-size: 1em;
+    padding: 2px 12px;
+    border: 1.5px solid #333;
+    border-radius: 3px;
+    background: #eee;
+    cursor: pointer;
+    margin-right: 4px;
+}
+
+#debug-window button:hover {
+    background: #ddd;
+}
+
+#gameover-dialog {
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+
+#gameover-mask {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1999;
+}
+
+#gameover-dialog button {
+    border: 2px solid #a00;
+    border-radius: 5px;
+    background: #fff;
+    color: #a00;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#gameover-dialog button:hover {
+    background: #fee;
+}

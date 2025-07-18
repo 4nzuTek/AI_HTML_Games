@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, initial-scale=1.0">
+    <title>お宝カード</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="images/item/icon-1_1_fixed_05.png">
+</head>
+
+<body>
+    <div id="game-canvas">
+        <div id="info-area" class="area">
+            <div class="area-title">Info</div>
+            <div>階層：<span id="floor">B1F</span></div>
+            <div class="status-row"><span style="display:inline-block; min-width:70px;">HP : <span
+                        id="hp">100</span></span><span style="float:right;"><progress id="hp-bar" value="100" max="100"
+                        class="status-bar"></progress></span></div>
+            <!-- 防御力表記をHPの下に左詰めで追加 -->
+            <div class="status-row"><span id="defense" style="min-width:200px;"></span></div>
+            <div class="status-row"><span style="display:inline-block; min-width:70px;">エネルギー : <span
+                        id="energy">100</span></span><span style="float:right;"><progress id="energy-bar" value="100"
+                        max="100" class="status-bar"></progress></span></div>
+            <div class="status-row"><span style="display:inline-block; min-width:70px;">水分 : <span
+                        id="water">100</span></span><span style="float:right;"><progress id="water-bar" value="100"
+                        max="100" class="status-bar"></progress></span></div>
+            <div>重量：<span id="weight">0/20</span></div>
+        </div>
+        <div id="log-area" class="area">
+            <div class="area-title">Log</div>
+            <hr>
+            <div id="log" class="log-scroll"></div>
+        </div>
+        <button id="next-floor-btn">次のフロアへ進む</button>
+        <button id="escape-btn" disabled>脱出</button>
+        <div id="enemy-area" class="area">
+            <div class="area-title">Enemy</div>
+            <div id="enemies" class="card-row"></div>
+        </div>
+        <div id="loot-area" class="area">
+            <div class="area-title">Loot</div>
+            <div id="loot" class="card-row"></div>
+        </div>
+        <div id="inventory-area" class="area">
+            <div class="area-title">Inventory</div>
+            <div id="inventory" class="card-grid"></div>
+        </div>
+    </div>
+    <div id="tooltip" class="tooltip" style="display:none;"></div>
+    <div id="action-menu" class="action-menu" style="display:none;"></div>
+    <!-- デバッグウィンドウ -->
+    <div id="debug-window"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1000; background:#fff; border:3px solid #333; padding:24px; min-width:340px; min-height:260px; box-shadow:0 0 24px #0008;">
+        <div style="font-weight:bold; font-size:1.2em; margin-bottom:12px;">デバッグウィンドウ</div>
+        <form id="debug-form">
+            <div style="margin-bottom:8px;">HP: <input type="number" id="debug-hp" min="0" max="100"
+                    style="width:60px;"> / 100</div>
+            <div style="margin-bottom:8px;">エネルギー: <input type="number" id="debug-energy" min="0" max="100"
+                    style="width:60px;"> / 100</div>
+            <div style="margin-bottom:8px;">水分: <input type="number" id="debug-water" min="0" max="100"
+                    style="width:60px;"> / 100</div>
+            <div style="margin-bottom:8px;">防御力:
+                炎 <input type="number" id="debug-def1" min="0" max="999" style="width:40px;">
+                水 <input type="number" id="debug-def2" min="0" max="999" style="width:40px;">
+                風 <input type="number" id="debug-def3" min="0" max="999" style="width:40px;">
+                地 <input type="number" id="debug-def4" min="0" max="999" style="width:40px;">
+            </div>
+            <button type="submit" style="margin-top:12px;">適用</button>
+            <button type="button" id="debug-cancel" style="margin-top:12px; margin-left:16px;">キャンセル</button>
+        </form>
+        <div style="margin-top:16px; font-size:0.9em; color:#888;">Dキーで閉じる/戻る</div>
+    </div>
+    <div id="gameover-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2000; background:#fff; border:3px solid #a00; padding:32px 40px; min-width:320px; min-height:180px; box-shadow:0 0 32px #a008; text-align:center;">
+        <div style="font-weight:bold; font-size:1.6em; color:#a00; margin-bottom:18px;">ゲームオーバー</div>
+        <div id="gameover-message" style="font-size:1.1em; margin-bottom:24px;">あなたは力尽きた…</div>
+        <button id="retry-btn" style="font-size:1.1em; padding:8px 32px;">リトライ</button>
+    </div>
+    <div id="gameover-mask"></div>
+    <script src="main.js"></script>
+</body>
+
+</html>
