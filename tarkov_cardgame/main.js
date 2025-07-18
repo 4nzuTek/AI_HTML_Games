@@ -77,6 +77,13 @@ fetch('json/item.json')
         console.error(err);
     });
 
+// --- 追加: ツールチップ制御用の変数 ---
+let tooltipTargetCard = null; // 現在ツールチップを表示しているカード要素
+let tooltipMenuOpen = false; // アクションメニュー上にマウスがあるか
+let tooltipCardHover = false; // カード上にマウスがあるか
+let tooltipHideTimer = null; // チップ消去用タイマー
+let actionMenuTargetCard = null; // 現在アクションメニューを表示しているカード要素
+
 function renderLoot() {
     const area = document.getElementById('loot');
     area.innerHTML = '';
@@ -89,9 +96,9 @@ function renderLoot() {
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
-        card.addEventListener('mouseover', showTooltip.bind(null, i.itemName));
-        card.addEventListener('mouseout', hideTooltip);
-        card.addEventListener('contextmenu', showActionMenu.bind(null, i, 'loot'));
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(i.itemName, card); });
+        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'loot', e, card); });
         area.appendChild(card);
     });
 }
@@ -108,9 +115,9 @@ function renderInventory() {
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
-        card.addEventListener('mouseover', showTooltip.bind(null, i.itemName + (i.currentDurability !== undefined ? `（耐久:${i.currentDurability}/${i.maxDurability}）` : '')));
-        card.addEventListener('mouseout', hideTooltip);
-        card.addEventListener('contextmenu', showActionMenu.bind(null, i, 'inventory'));
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(i.itemName + (i.currentDurability !== undefined ? `（耐久:${i.currentDurability}/${i.maxDurability}）` : ''), card); });
+        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'inventory', e, card); });
         // 耐久値表示（右上、ぎちぎち・シンプル表示）
         if (i.maxDurability > 0 && i.currentDurability !== undefined) {
             const dura = document.createElement('div');
@@ -128,20 +135,65 @@ function renderInventory() {
     });
     updateWeight();
 }
-function showTooltip(desc, e) {
+function onCardMouseEnter(desc, card) {
+    // 今表示中のカードと異なるカードに乗った場合のみアクションメニューを閉じる
+    if (actionMenuTargetCard && actionMenuTargetCard !== card) {
+        const menu = document.getElementById('action-menu');
+        if (menu) menu.style.display = 'none';
+        actionMenuTargetCard = null;
+    }
+    tooltipCardHover = true;
+    showTooltip(desc, card);
+    if (tooltipHideTimer) {
+        clearTimeout(tooltipHideTimer);
+        tooltipHideTimer = null;
+    }
+}
+function onCardMouseLeave() {
+    tooltipCardHover = false;
+    tryHideTooltipWithDelay();
+}
+function showTooltip(desc, card) {
     const tooltip = document.getElementById('tooltip');
     tooltip.textContent = desc;
     tooltip.style.display = 'block';
-    tooltip.style.left = (e.pageX + 12) + 'px';
-    tooltip.style.top = (e.pageY + 12) + 'px';
+    if (card && card.getBoundingClientRect) {
+        const rect = card.getBoundingClientRect();
+        // カードの左上座標
+        const left = rect.left;
+        const top = rect.top;
+        // スクロール量も加味
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        // ツールチップの左下をカードの左上に合わせる
+        tooltip.style.left = (left + scrollX) + 'px';
+        tooltip.style.top = (top + scrollY - tooltip.offsetHeight) + 'px';
+    } else {
+        tooltip.style.left = '0px';
+        tooltip.style.top = '0px';
+    }
+    tooltipTargetCard = card;
+}
+function tryHideTooltipWithDelay() {
+    if (tooltipHideTimer) clearTimeout(tooltipHideTimer);
+    tooltipHideTimer = setTimeout(function () {
+        if (!tooltipCardHover && !tooltipMenuOpen) {
+            hideTooltip();
+        }
+    }, 100); // 0.1秒の猶予
 }
 function hideTooltip() {
     const tooltip = document.getElementById('tooltip');
     tooltip.style.display = 'none';
+    tooltipTargetCard = null;
+    tooltipHideTimer = null;
+    // アクションメニューも同時に消す
+    const menu = document.getElementById('action-menu');
+    if (menu) menu.style.display = 'none';
+    actionMenuTargetCard = null;
 }
-function showActionMenu(card, area, e) {
+function showActionMenu(card, area, e, cardElem) {
     e.preventDefault();
-    hideTooltip();
     const menu = document.getElementById('action-menu');
     menu.innerHTML = '';
     let actions = [];
@@ -162,8 +214,32 @@ function showActionMenu(card, area, e) {
     });
     if (actions.length === 0) return;
     menu.style.display = 'flex';
-    menu.style.left = e.pageX + 'px';
-    menu.style.top = e.pageY + 'px';
+    if (cardElem && cardElem.getBoundingClientRect) {
+        const rect = cardElem.getBoundingClientRect();
+        const right = rect.right;
+        const top = rect.top;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        // アクションメニューの左上をカードの右上に合わせる
+        menu.style.left = (right + scrollX) + 'px';
+        menu.style.top = (top + scrollY) + 'px';
+    } else {
+        menu.style.left = e.pageX + 'px';
+        menu.style.top = e.pageY + 'px';
+    }
+    // --- アクションメニューのマウスイベント ---
+    menu.onmouseenter = function () {
+        tooltipMenuOpen = true;
+        if (tooltipHideTimer) {
+            clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = null;
+        }
+    };
+    menu.onmouseleave = function () {
+        tooltipMenuOpen = false;
+        tryHideTooltipWithDelay();
+    };
+    actionMenuTargetCard = cardElem;
     document.addEventListener('click', hideActionMenu, { once: true });
 }
 function hideActionMenu() {
