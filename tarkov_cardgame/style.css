@@ -46,6 +46,14 @@ body {
     justify-content: space-between;
 }
 
+/* 防御力表記を左詰めにする */
+#defense {
+    text-align: left;
+    font-size: 1em;
+    margin: 2px 0 0 0;
+    padding: 0;
+}
+
 #enemy-area {
     left: 660px;
     top: 20px;

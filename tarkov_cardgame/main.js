@@ -11,7 +11,14 @@ let inventory = [];
 let player = {
     hp: 100,
     energy: 100,
-    water: 100
+    water: 100,
+    // 属性ごとの防御力を追加
+    defense: {
+        1: 0, // 炎
+        2: 0, // 水
+        3: 0, // 風
+        4: 0  // 地
+    }
 };
 
 let floor = 1;
@@ -49,6 +56,10 @@ function updatePlayerStatus() {
     document.getElementById('hp-bar').value = player.hp;
     document.getElementById('energy-bar').value = player.energy;
     document.getElementById('water-bar').value = player.water;
+    // --- 防御力の表記を更新するだけに修正 ---
+    const defenseText = `防御力：炎:${player.defense[1]} 水:${player.defense[2]} 風:${player.defense[3]} 地:${player.defense[4]}`;
+    const defenseElem = document.getElementById('defense');
+    if (defenseElem) defenseElem.textContent = defenseText;
 }
 
 function updateWeight() {
