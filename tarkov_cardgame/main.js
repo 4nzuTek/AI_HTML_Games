@@ -197,26 +197,40 @@ let tooltipHideTimer = null; // チップ消去用タイマー
 let actionMenuTargetCard = null; // 現在アクションメニューを表示しているカード要素
 
 function getItemTooltip(item) {
-    let lines = [];
-    // アイテム名
-    lines.push(`<b>【${item.itemName}】</b>`);
-    // 説明文（将来拡張）
-    // if (item.desc) lines.push(item.desc);
-    // 回復量
-    if (item.hpRecov !== null && item.hpRecov !== undefined && item.hpRecov !== 0) lines.push(`HP回復: <b>${item.hpRecov > 0 ? '+' : ''}${item.hpRecov}</b>`);
-    if (item.eneRecov !== null && item.eneRecov !== undefined && item.eneRecov !== 0) lines.push(`エネルギー回復: <b>${item.eneRecov > 0 ? '+' : ''}${item.eneRecov}</b>`);
-    if (item.waterRecov !== null && item.waterRecov !== undefined && item.waterRecov !== 0) lines.push(`水分回復: <b>${item.waterRecov > 0 ? '+' : ''}${item.waterRecov}</b>`);
-    // 状態異常回復
-    if (item.paralysisCure) lines.push('麻痺回復');
-    if (item.poisonCure) lines.push('毒回復');
-    if (item.curseCure) lines.push('呪い回復');
-    // 耐久値
-    if (item.maxDurability > 0 && item.currentDurability !== undefined) {
-        lines.push(`耐久: <b>${item.currentDurability}/${item.maxDurability}</b>`);
+    // アイテム種別名を取得
+    let itemTypeName = '';
+    if (window.itemTypeMaster && item.itemTypeID) {
+        const t = window.itemTypeMaster.find(t => t.tileTypeID === item.itemTypeID);
+        if (t) itemTypeName = t.tileTypeName;
     }
-    // その他（将来：攻撃力、属性など）
-    // ...
-    return lines.join('<br>');
+    // 耐久値
+    let durability = '';
+    if (item.maxDurability > 0 && item.currentDurability !== undefined) {
+        durability = `<span class="tooltip-durability">${item.currentDurability}/${item.maxDurability}</span>`;
+    }
+    // パラメータ表
+    let paramRows = '';
+    if (item.eneRecov !== null && item.eneRecov !== undefined) paramRows += `<tr><td>エネルギー回復量</td><td>${item.eneRecov}</td></tr>`;
+    if (item.waterRecov !== null && item.waterRecov !== undefined) paramRows += `<tr><td>水分回復量</td><td>${item.waterRecov}</td></tr>`;
+    if (item.hpRecov !== null && item.hpRecov !== undefined) paramRows += `<tr><td>HP回復量</td><td>${item.hpRecov}</td></tr>`;
+    if (item.paralysisCure) paramRows += `<tr><td>麻痺回復</td><td>○</td></tr>`;
+    if (item.poisonCure) paramRows += `<tr><td>毒回復</td><td>○</td></tr>`;
+    if (item.curseCure) paramRows += `<tr><td>呪い回復</td><td>○</td></tr>`;
+    // 画像
+    const img = `<div class="tooltip-imgbox"><img src="images/item/${item.imageName}" alt="${item.itemName}" class="tooltip-img"></div>`;
+    // HTML組み立て
+    return `
+    <div class="tooltip-cardbox">
+      <div class="tooltip-header">
+        <b class="tooltip-title">${item.itemName}</b>
+        ${durability ? `<span class="tooltip-durability">${durability}</span>` : ''}
+      </div>
+      <div class="tooltip-type">${itemTypeName}</div>
+      ${img}
+      <div class="tooltip-divider"></div>
+      <table class="tooltip-paramtable">${paramRows}</table>
+    </div>
+    `;
 }
 function renderLoot() {
     const area = document.getElementById('loot');
