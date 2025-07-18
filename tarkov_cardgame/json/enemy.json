@@ -1,0 +1,16 @@
+[
+  {
+    "enemyID": 1001,
+    "enemyName": "テストエネミー",
+    "maxHp": 30,
+    "attack": 25,
+    "attackChance_attr01": 0.25,
+    "attackChance_attr02": 0.25,
+    "attackChance_attr03": 0.25,
+    "attackChance_attr04": 0.25,
+    "defence_attr01": 0,
+    "defence_attr02": 10,
+    "defence_attr03": 20,
+    "defence_attr04": 30
+  }
+]

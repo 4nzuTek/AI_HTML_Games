@@ -6,6 +6,7 @@
 let itemMaster = [];
 let loot = [];
 let inventory = [];
+let enemyMaster = [];
 
 // プレイヤーステータス
 let player = {
@@ -40,11 +41,23 @@ function renderEnemies() {
         card.className = 'card enemy-card';
         card.dataset.id = e.id;
         card.dataset.type = 'enemy';
+        // --- エネミー情報のツールチップ ---
+        card.addEventListener('mouseenter', function () {
+            // 情報を整形（HTML改行で見やすく）
+            const desc =
+                `<b>【${e.name}】</b><br>` +
+                `HP: <b>${e.hp}</b> / ${e.maxHp}<br>` +
+                `攻撃力: <b>${e.attack}</b><br>` +
+                `発生確率:<br>&emsp;炎: <b>${Math.round((e.attackChance[0] || 0) * 100)}%</b>　水: <b>${Math.round((e.attackChance[1] || 0) * 100)}%</b><br>&emsp;風: <b>${Math.round((e.attackChance[2] || 0) * 100)}%</b>　地: <b>${Math.round((e.attackChance[3] || 0) * 100)}%</b><br>` +
+                `防御力:<br>&emsp;炎: <b>${e.defence[0] || 0}</b>　水: <b>${e.defence[1] || 0}</b>　風: <b>${e.defence[2] || 0}</b>　地: <b>${e.defence[3] || 0}</b>`;
+            onCardMouseEnter(desc, card);
+        });
+        card.addEventListener('mouseleave', function () { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showActionMenu(e, 'enemy', e, card); });
         card.textContent = e.name;
         area.appendChild(card);
     });
 }
-
 function updatePlayerStatus() {
     // 0-100に制限
     player.hp = Math.max(0, Math.min(player.hp, 100));
@@ -85,6 +98,35 @@ fetch('json/item.json')
     })
     .catch(err => {
         alert('アイテムデータの読み込みに失敗しました: ' + err.message);
+        console.error(err);
+    });
+
+// --- 敵マスタを読み込む ---
+fetch('json/enemy.json')
+    .then(res => {
+        if (!res.ok) throw new Error('enemy.jsonの読み込みに失敗しました');
+        return res.json();
+    })
+    .then(data => {
+        enemyMaster = data;
+        console.log('enemyMaster:', enemyMaster); // データ確認用
+        // ゲーム開始時にID=1001の敵をスポーン
+        const enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
+        if (enemy1001) {
+            enemies = [{
+                id: enemy1001.enemyID,
+                name: enemy1001.enemyName,
+                hp: enemy1001.maxHp,
+                maxHp: enemy1001.maxHp,
+                attack: enemy1001.attack,
+                attackChance: [enemy1001.attackChance_attr01, enemy1001.attackChance_attr02, enemy1001.attackChance_attr03, enemy1001.attackChance_attr04],
+                defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04]
+            }];
+        }
+        renderEnemies();
+    })
+    .catch(err => {
+        alert('エネミーデータの読み込みに失敗しました: ' + err.message);
         console.error(err);
     });
 
@@ -166,7 +208,7 @@ function onCardMouseLeave() {
 }
 function showTooltip(desc, cardOrEvent) {
     const tooltip = document.getElementById('tooltip');
-    tooltip.textContent = desc;
+    tooltip.innerHTML = desc;
     tooltip.style.display = 'block';
     // 脱出ボタンの注意チップはボタン要素基準（左上と左下を合わせる）
     if (cardOrEvent && cardOrEvent instanceof HTMLElement && cardOrEvent.id === 'escape-btn') {
@@ -373,7 +415,14 @@ function dropItem(card) {
     addLog(`${card.itemName}を捨てた。`, 'action');
 }
 function attackEnemy(weapon, enemy) {
-    addLog(`${enemy.name}に${weapon.name}で攻撃した！`);
+    // 属性名をログに表示（例：風攻撃）
+    let attrName = '';
+    if (weapon.attrID === 1) attrName = '炎攻撃';
+    else if (weapon.attrID === 2) attrName = '水攻撃';
+    else if (weapon.attrID === 3) attrName = '風攻撃';
+    else if (weapon.attrID === 4) attrName = '地攻撃';
+    else attrName = '';
+    addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`);
 }
 function addLog(msg, type = 'action', isHtml = false) {
     const log = document.getElementById('log');
@@ -419,14 +468,26 @@ function nextFloor() {
         addLog(`荷物が重い...。エネルギー・水分が<span style="color:red; font-weight:bold;">${penalty}</span>減少した…`, 'detail', true);
         updatePlayerStatus();
     }
-    // 3. 敵ダメージ
+    // 3. 敵ダメージ（属性ごとにランダム決定＆ログ出力）
     if (enemies.length > 0) {
-        // 新フロアにも敵がいる場合（今回は毎回生成）
-        const totalAtk = enemies.reduce((sum, e) => sum + (e.attack || 0), 0);
+        let totalAtk = 0;
+        const attrNames = ['炎', '水', '風', '地'];
+        enemies.forEach(e => {
+            // 属性決定
+            const r = Math.random();
+            let sum = 0, attr = 0;
+            for (let i = 0; i < 4; i++) {
+                sum += e.attackChance[i] || 0;
+                if (r < sum) { attr = i; break; }
+            }
+            // ダメージ計算（現状は単純にattack値）
+            const dmg = e.attack;
+            totalAtk += dmg;
+            addLog(`${e.name}の${attrNames[attr]}攻撃！HPが<span style="color:red; font-weight:bold;">${dmg}</span>減少した…`, 'detail', true);
+        });
         player.hp -= totalAtk;
         // 0-100に制限
         player.hp = Math.max(0, Math.min(player.hp, 100));
-        addLog(`敵の攻撃！HPが<span style="color:red; font-weight:bold;">${totalAtk}</span>減少した…`, 'detail', true);
         updatePlayerStatus();
     }
     // 4. ルートアイテム再生成
@@ -437,14 +498,13 @@ function nextFloor() {
         loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability });
     }
     renderLoot();
-    // 5. 敵も再生成
-    randomEnemies();
+    // 5. 敵は再生成しない（消さない）
     renderEnemies();
 }
 window.onload = function () {
     updateFloor();
-    randomEnemies(); // 初期化時も敵なし
-    renderEnemies();
+    // randomEnemies(); // 初期化時も敵なし
+    // renderEnemies();
     renderLoot();
     renderInventory();
     updatePlayerStatus();
