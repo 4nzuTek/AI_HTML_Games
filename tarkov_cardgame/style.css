@@ -353,3 +353,31 @@ progress.status-bar {
     outline-offset: 0px;
     z-index: 1002;
 }
+
+#debug-window {
+    font-family: inherit;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+#debug-window input[type="number"] {
+    font-size: 1em;
+    padding: 2px 4px;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    margin-right: 4px;
+}
+
+#debug-window button {
+    font-size: 1em;
+    padding: 2px 12px;
+    border: 1.5px solid #333;
+    border-radius: 3px;
+    background: #eee;
+    cursor: pointer;
+    margin-right: 4px;
+}
+
+#debug-window button:hover {
+    background: #ddd;
+}

@@ -417,12 +417,30 @@ function dropItem(card) {
 function attackEnemy(weapon, enemy) {
     // 属性名をログに表示（例：風攻撃）
     let attrName = '';
-    if (weapon.attrID === 1) attrName = '炎攻撃';
-    else if (weapon.attrID === 2) attrName = '水攻撃';
-    else if (weapon.attrID === 3) attrName = '風攻撃';
-    else if (weapon.attrID === 4) attrName = '地攻撃';
+    let attr = weapon.attrID;
+    if (attr === 1) attrName = '炎攻撃';
+    else if (attr === 2) attrName = '水攻撃';
+    else if (attr === 3) attrName = '風攻撃';
+    else if (attr === 4) attrName = '地攻撃';
     else attrName = '';
-    addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`);
+    // 攻撃値（属性ごとに分かれていればそちらを優先）
+    let attackValue = 0;
+    if (weapon.attack_attr01 !== undefined && weapon.attack_attr02 !== undefined && weapon.attack_attr03 !== undefined && weapon.attack_attr04 !== undefined) {
+        attackValue = weapon[`attack_attr0${attr}`];
+    } else {
+        attackValue = weapon.attack;
+    }
+    // 敵の防御力
+    const defenseValue = enemy.defence[attr - 1] || 0;
+    // ダメージ計算
+    const dmg = Math.max(0, attackValue - defenseValue);
+    // HP減少
+    enemy.hp -= dmg;
+    if (enemy.hp < 0) enemy.hp = 0;
+    // ログ
+    addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`, 'action');
+    addLog(`→ ダメージ: <span style="color:red; font-weight:bold;">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
+    renderEnemies();
 }
 function addLog(msg, type = 'action', isHtml = false) {
     const log = document.getElementById('log');
@@ -480,10 +498,26 @@ function nextFloor() {
                 sum += e.attackChance[i] || 0;
                 if (r < sum) { attr = i; break; }
             }
-            // ダメージ計算（現状は単純にattack値）
-            const dmg = e.attack;
+            // 属性ごとの攻撃値を取得（なければe.attack）
+            let attackValue = 0;
+            if (e.attack_attr01 !== undefined && e.attack_attr02 !== undefined && e.attack_attr03 !== undefined && e.attack_attr04 !== undefined) {
+                attackValue = e[`attack_attr0${attr + 1}`];
+            } else {
+                attackValue = e.attack;
+            }
+            // プレイヤーの防御力
+            const defenseValue = player.defense[attr + 1] || 0;
+            // ダメージ計算
+            const dmg = Math.max(0, attackValue - defenseValue);
             totalAtk += dmg;
-            addLog(`${e.name}の${attrNames[attr]}攻撃！HPが<span style="color:red; font-weight:bold;">${dmg}</span>減少した…`, 'detail', true);
+            // アクションログ（攻撃宣言）
+            addLog(`${e.name}の${attrNames[attr]}攻撃！`, 'action');
+            // 詳細ログ（ダメージ or 完全防御）
+            let detailMsg = `HPが<span style=\"color:red; font-weight:bold;\">${dmg}</span>減少した…`;
+            if (dmg === 0) {
+                detailMsg = `<span style=\"color:green; font-weight:bold;\">ただし完全にダメージを防いだ！</span>`;
+            }
+            addLog(detailMsg, 'detail', true);
         });
         player.hp -= totalAtk;
         // 0-100に制限
@@ -563,4 +597,54 @@ window.onload = function () {
             e.preventDefault();
         });
     }
-}; 
+};
+// ===== デバッグウィンドウ制御 =====
+(function () {
+    let debugVisible = false;
+    const debugWindow = document.getElementById('debug-window');
+    const debugForm = document.getElementById('debug-form');
+    const debugCancel = document.getElementById('debug-cancel');
+    // フォームに現在値をセット
+    function setDebugFormValues() {
+        document.getElementById('debug-hp').value = player.hp;
+        document.getElementById('debug-energy').value = player.energy;
+        document.getElementById('debug-water').value = player.water;
+        document.getElementById('debug-def1').value = player.defense[1];
+        document.getElementById('debug-def2').value = player.defense[2];
+        document.getElementById('debug-def3').value = player.defense[3];
+        document.getElementById('debug-def4').value = player.defense[4];
+    }
+    // フォーム送信で値を反映
+    debugForm.onsubmit = function (e) {
+        e.preventDefault();
+        player.hp = Number(document.getElementById('debug-hp').value);
+        player.energy = Number(document.getElementById('debug-energy').value);
+        player.water = Number(document.getElementById('debug-water').value);
+        player.defense[1] = Number(document.getElementById('debug-def1').value);
+        player.defense[2] = Number(document.getElementById('debug-def2').value);
+        player.defense[3] = Number(document.getElementById('debug-def3').value);
+        player.defense[4] = Number(document.getElementById('debug-def4').value);
+        updatePlayerStatus();
+        toggleDebugWindow(false);
+    };
+    // キャンセルボタン
+    debugCancel.onclick = function () {
+        toggleDebugWindow(false);
+    };
+    // Dキーでトグル
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'd' || e.key === 'D') {
+            toggleDebugWindow();
+        }
+    });
+    function toggleDebugWindow(force) {
+        if (typeof force === 'boolean') debugVisible = force;
+        else debugVisible = !debugVisible;
+        if (debugVisible) {
+            setDebugFormValues();
+            debugWindow.style.display = 'block';
+        } else {
+            debugWindow.style.display = 'none';
+        }
+    }
+})(); 
