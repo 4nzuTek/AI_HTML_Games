@@ -20,6 +20,10 @@ function updatePlayerStatus() {
     document.getElementById('water').textContent = player.water;
 }
 
+function updateWeight() {
+    document.getElementById('weight').textContent = `${inventory.length}/20`;
+}
+
 // アイテムマスタを読み込む
 fetch('json/item.json')
     .then(res => {
@@ -35,6 +39,7 @@ fetch('json/item.json')
         renderLoot();
         renderInventory();
         updatePlayerStatus();
+        updateWeight();
     })
     .catch(err => {
         alert('アイテムデータの読み込みに失敗しました: ' + err.message);
@@ -108,6 +113,7 @@ function renderInventory() {
         }
         area.appendChild(card);
     });
+    updateWeight();
 }
 function showTooltip(desc, e) {
     const tooltip = document.getElementById('tooltip');
