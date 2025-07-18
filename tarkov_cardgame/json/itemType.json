@@ -1,0 +1,12 @@
+[
+  { "tileTypeID": 1, "tileTypeName": "杖", "memo": "攻撃に使用する。同属性のマナと耐久値を消費する。" },
+  { "tileTypeID": 2, "tileTypeName": "マナ", "memo": "杖で攻撃する際に消費される。" },
+  { "tileTypeID": 3, "tileTypeName": "服", "memo": "受けるダメージを減らす。攻撃を受けると耐久値を消費する。" },
+  { "tileTypeID": 4, "tileTypeName": "アクセサリー", "memo": "ポーチ内にあるだけで常時バフ効果を持つ。" },
+  { "tileTypeID": 11, "tileTypeName": "薬品", "memo": "体力回復、状態異常回復、バフなど。消費アイテム" },
+  { "tileTypeID": 12, "tileTypeName": "飲食物", "memo": "エネルギー回復、水分回復。消費アイテム" },
+  { "tileTypeID": 13, "tileTypeName": "鍵", "memo": "特定座標範囲内で探索アイテムのレアリティを上げる。消費アイテム" },
+  { "tileTypeID": 14, "tileTypeName": "貨幣", "memo": "レイド中に直接お金を拾うこともある" },
+  { "tileTypeID": 15, "tileTypeName": "地図", "memo": "アドレスの数値を大きく変化させる。消費アイテム" },
+  { "tileTypeID": 21, "tileTypeName": "雑品", "memo": "拠点拡張やタスク納品、売却などで使用。レイド中の使用用途は無い。" }
+] 
