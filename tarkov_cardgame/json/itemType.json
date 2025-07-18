@@ -1,5 +1,5 @@
 [
-  { "tileTypeID": 1, "tileTypeName": "杖", "memo": "攻撃に使用する。同属性のマナと耐久値を消費する。" },
+  { "tileTypeID": 1, "tileTypeName": "武器", "memo": "攻撃に使用する。同属性のマナと耐久値を消費する。" },
   { "tileTypeID": 2, "tileTypeName": "マナ", "memo": "杖で攻撃する際に消費される。" },
   { "tileTypeID": 3, "tileTypeName": "服", "memo": "受けるダメージを減らす。攻撃を受けると耐久値を消費する。" },
   { "tileTypeID": 4, "tileTypeName": "アクセサリー", "memo": "ポーチ内にあるだけで常時バフ効果を持つ。" },
