@@ -339,3 +339,9 @@ progress.status-bar {
 #water-bar.status-bar::-moz-progress-bar {
     background-color: #4fc3f7;
 }
+
+.card-tooltip-focus {
+    outline: 3px solid #111;
+    outline-offset: 0px;
+    z-index: 1002;
+}

@@ -172,7 +172,20 @@ function showTooltip(desc, cardOrEvent) {
     // 通常はカード基準
     if (cardOrEvent && cardOrEvent.getBoundingClientRect) {
         const rect = cardOrEvent.getBoundingClientRect();
-        const left = rect.left;
+        // 枠線クラス付与（先に付与してからスタイル取得）
+        if (tooltipTargetCard && tooltipTargetCard !== cardOrEvent) {
+            tooltipTargetCard.classList.remove('card-tooltip-focus');
+        }
+        if (cardOrEvent.classList) {
+            cardOrEvent.classList.add('card-tooltip-focus');
+        }
+        // outline幅をCSSから動的に取得
+        let outlineWidth = 0;
+        if (cardOrEvent.classList && cardOrEvent.classList.contains('card-tooltip-focus')) {
+            const style = window.getComputedStyle(cardOrEvent);
+            outlineWidth = parseInt(style.outlineWidth) || 0;
+        }
+        const left = rect.left - outlineWidth;
         const top = rect.top;
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
@@ -182,6 +195,9 @@ function showTooltip(desc, cardOrEvent) {
     } else {
         tooltip.style.left = '0px';
         tooltip.style.top = '0px';
+        if (tooltipTargetCard && tooltipTargetCard.classList) {
+            tooltipTargetCard.classList.remove('card-tooltip-focus');
+        }
         tooltipTargetCard = null;
     }
 }
@@ -196,6 +212,9 @@ function tryHideTooltipWithDelay() {
 function hideTooltip() {
     const tooltip = document.getElementById('tooltip');
     tooltip.style.display = 'none';
+    if (tooltipTargetCard && tooltipTargetCard.classList) {
+        tooltipTargetCard.classList.remove('card-tooltip-focus');
+    }
     tooltipTargetCard = null;
     tooltipHideTimer = null;
     // アクションメニューも同時に消す
@@ -211,7 +230,13 @@ function showActionMenu(card, area, e, cardElem) {
     if (area === 'enemy') {
         // 敵カードのアクション
     } else if (area === 'loot') {
-        actions.push({ label: '拾う', handler: () => addToInventory(card) });
+        // インベントリが20枚未満なら拾うボタン有効、20枚ならグレーアウト
+        const isFull = inventory.length >= 20;
+        actions.push({
+            label: '拾う',
+            handler: () => { if (!isFull) addToInventory(card); },
+            disabled: isFull
+        });
     } else if (area === 'inventory') {
         // 全てのアイテムで「使用する」ボタンを表示
         actions.push({ label: '使用する', handler: () => useItem(card) });
@@ -220,7 +245,12 @@ function showActionMenu(card, area, e, cardElem) {
     actions.forEach(act => {
         const btn = document.createElement('button');
         btn.textContent = act.label;
-        btn.onclick = () => { menu.style.display = 'none'; act.handler(); };
+        btn.onclick = () => { menu.style.display = 'none'; if (!act.disabled) act.handler(); };
+        if (act.disabled) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        }
         menu.appendChild(btn);
     });
     if (actions.length === 0) return;
@@ -228,10 +258,17 @@ function showActionMenu(card, area, e, cardElem) {
     if (cardElem && cardElem.getBoundingClientRect) {
         const rect = cardElem.getBoundingClientRect();
         const right = rect.right;
-        const top = rect.top;
+        let top = rect.top;
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
-        // アクションメニューの左上をカードの右上に合わせる
+        // outline幅をCSSから動的に取得
+        let outlineWidth = 0;
+        if (cardElem.classList && cardElem.classList.contains('card-tooltip-focus')) {
+            const style = window.getComputedStyle(cardElem);
+            outlineWidth = parseInt(style.outlineWidth) || 0;
+        }
+        top = top - outlineWidth;
+        // アクションメニューの左上をカードの右上に合わせる（上にオフセット）
         menu.style.left = (right + scrollX) + 'px';
         menu.style.top = (top + scrollY) + 'px';
     } else {
@@ -257,6 +294,7 @@ function hideActionMenu() {
     document.getElementById('action-menu').style.display = 'none';
 }
 function addToInventory(card) {
+    if (inventory.length >= 20) return; // 21枚以上は追加しない
     inventory.push({ ...card });
     const idx = loot.findIndex(i => i.itemID === card.itemID);
     if (idx !== -1) loot.splice(idx, 1);
