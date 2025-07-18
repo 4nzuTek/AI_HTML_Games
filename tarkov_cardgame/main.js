@@ -39,9 +39,16 @@ function renderEnemies() {
 }
 
 function updatePlayerStatus() {
+    // 0-100に制限
+    player.hp = Math.max(0, Math.min(player.hp, 100));
+    player.energy = Math.max(0, Math.min(player.energy, 100));
+    player.water = Math.max(0, Math.min(player.water, 100));
     document.getElementById('hp').textContent = player.hp;
     document.getElementById('energy').textContent = player.energy;
     document.getElementById('water').textContent = player.water;
+    document.getElementById('hp-bar').value = player.hp;
+    document.getElementById('energy-bar').value = player.energy;
+    document.getElementById('water-bar').value = player.water;
 }
 
 function updateWeight() {
@@ -179,10 +186,10 @@ function useItem(card) {
     if (typeof card.hpRecov === 'number') player.hp += card.hpRecov;
     if (typeof card.eneRecov === 'number') player.energy += card.eneRecov;
     if (typeof card.waterRecov === 'number') player.water += card.waterRecov;
-    // 0未満/最大値制限（必要なら）
-    player.hp = Math.max(0, Math.min(player.hp, 999));
-    player.energy = Math.max(0, Math.min(player.energy, 999));
-    player.water = Math.max(0, Math.min(player.water, 999));
+    // 0-100に制限
+    player.hp = Math.max(0, Math.min(player.hp, 100));
+    player.energy = Math.max(0, Math.min(player.energy, 100));
+    player.water = Math.max(0, Math.min(player.water, 100));
     updatePlayerStatus();
     // 増減ログ（詳細）
     const after = { hp: player.hp, energy: player.energy, water: player.water };
@@ -265,6 +272,9 @@ function nextFloor() {
     if (penalty > 0) {
         player.energy -= penalty;
         player.water -= penalty;
+        // 0-100に制限
+        player.energy = Math.max(0, Math.min(player.energy, 100));
+        player.water = Math.max(0, Math.min(player.water, 100));
         addLog(`荷物が重い...。エネルギー・水分が<span style="color:red; font-weight:bold;">${penalty}</span>減少した…`, 'detail', true);
         updatePlayerStatus();
     }
@@ -273,6 +283,8 @@ function nextFloor() {
         // 新フロアにも敵がいる場合（今回は毎回生成）
         const totalAtk = enemies.reduce((sum, e) => sum + (e.attack || 0), 0);
         player.hp -= totalAtk;
+        // 0-100に制限
+        player.hp = Math.max(0, Math.min(player.hp, 100));
         addLog(`敵の攻撃！HPが<span style="color:red; font-weight:bold;">${totalAtk}</span>減少した…`, 'detail', true);
         updatePlayerStatus();
     }
@@ -336,4 +348,18 @@ window.onload = function () {
     const log = document.getElementById('log');
     log.innerHTML = '';
     addLog('B1Fに到達した。', 'floor');
+    // 右クリックメニュー無効化
+    const gameCanvas = document.getElementById('game-canvas');
+    if (gameCanvas) {
+        gameCanvas.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+        });
+    }
+    // アクションメニュー上でも右クリックメニュー無効化
+    const actionMenu = document.getElementById('action-menu');
+    if (actionMenu) {
+        actionMenu.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+        });
+    }
 }; 

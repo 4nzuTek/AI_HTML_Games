@@ -12,11 +12,17 @@
     <div id="game-canvas">
         <div id="info-area" class="area">
             <div class="area-title">Info</div>
-            <div>階層 : <span id="floor">B1F</span></div>
-            <div>HP : <span id="hp">100</span></div>
-            <div>エネルギー : <span id="energy">100</span></div>
-            <div>水分 : <span id="water">100</span></div>
-            <div>重量 : <span id="weight">0/20</span></div>
+            <div>階層：<span id="floor">B1F</span></div>
+            <div class="status-row"><span style="display:inline-block; min-width:70px;">HP : <span
+                        id="hp">100</span></span><span style="float:right;"><progress id="hp-bar" value="100" max="100"
+                        class="status-bar"></progress></span></div>
+            <div class="status-row"><span style="display:inline-block; min-width:70px;">エネルギー : <span
+                        id="energy">100</span></span><span style="float:right;"><progress id="energy-bar" value="100"
+                        max="100" class="status-bar"></progress></span></div>
+            <div class="status-row"><span style="display:inline-block; min-width:70px;">水分 : <span
+                        id="water">100</span></span><span style="float:right;"><progress id="water-bar" value="100"
+                        max="100" class="status-bar"></progress></span></div>
+            <div>重量：<span id="weight">0/20</span></div>
         </div>
         <div id="log-area" class="area">
             <div class="area-title">Log</div>

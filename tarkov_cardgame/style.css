@@ -38,6 +38,14 @@ body {
     justify-content: flex-start;
 }
 
+/* #info-area > div のflex指定を削除 */
+/* HP/エネルギー/水分の行だけflexで両端配置 */
+.status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
 #enemy-area {
     left: 660px;
     top: 20px;
@@ -246,4 +254,81 @@ body {
 
 .action-menu button:hover {
     background: #444;
+}
+
+/* HP・エネルギー・水分バーの横幅を長くする */
+progress.status-bar {
+    width: 320px;
+    height: 20px;
+    background: #eee;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 10px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* HP・エネルギー・水分バーの色を個別に指定 */
+#hp-bar.status-bar {
+    accent-color: #6ee36e;
+    /* 明るい緑 */
+}
+
+#energy-bar.status-bar {
+    accent-color: #ffb347;
+    /* オレンジ */
+}
+
+#water-bar.status-bar {
+    accent-color: #4fc3f7;
+    /* 水色 */
+}
+
+/* HPバー */
+#hp-bar.status-bar::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+#hp-bar.status-bar::-webkit-progress-value {
+    background-color: #6ee36e;
+    /* 明るい緑 */
+    border-radius: 4px;
+}
+
+#hp-bar.status-bar::-moz-progress-bar {
+    background-color: #6ee36e;
+}
+
+/* エネルギーバー */
+#energy-bar.status-bar::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+#energy-bar.status-bar::-webkit-progress-value {
+    background-color: #ffb347;
+    /* オレンジ */
+    border-radius: 4px;
+}
+
+#energy-bar.status-bar::-moz-progress-bar {
+    background-color: #ffb347;
+}
+
+/* 水分バー */
+#water-bar.status-bar::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 4px;
+}
+
+#water-bar.status-bar::-webkit-progress-value {
+    background-color: #4fc3f7;
+    /* 水色 */
+    border-radius: 4px;
+}
+
+#water-bar.status-bar::-moz-progress-bar {
+    background-color: #4fc3f7;
 }
