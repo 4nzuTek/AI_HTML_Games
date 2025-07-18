@@ -473,6 +473,10 @@ function hideTooltip() {
         tooltipTargetCard.classList.remove('card-tooltip-focus');
         // console.log(`[tooltip] 枠線除去(hideTooltip): cardID=${cardId}`);
     }
+    // 追加: 全カードから枠線クラスを除去（耐久が残っている時の枠線残り対策）
+    document.querySelectorAll('.card-tooltip-focus').forEach(card => {
+        card.classList.remove('card-tooltip-focus');
+    });
     // ターゲット解除＋枠線除去
     if (currentTooltipTargetItem) {
         // console.log(`[tooltip] ターゲット解除: itemID=${currentTooltipTargetItem.itemID}`);
