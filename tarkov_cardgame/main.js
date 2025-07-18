@@ -195,6 +195,7 @@ let tooltipMenuOpen = false; // アクションメニュー上にマウスがあ
 let tooltipCardHover = false; // カード上にマウスがあるか
 let tooltipHideTimer = null; // チップ消去用タイマー
 let actionMenuTargetCard = null; // 現在アクションメニューを表示しているカード要素
+let actionMenuForceOpen = false; // チップ強制オープンフラグ
 
 function getItemTooltip(item) {
     // アイテム種別名を取得
@@ -419,6 +420,10 @@ function tryHideTooltipWithDelay() {
     }, 100); // 0.1秒の猶予
 }
 function hideTooltip() {
+    if (actionMenuForceOpen) {
+        console.log('[actionMenu] 強制オープン中のためhideTooltipを無視');
+        return;
+    }
     const tooltip = document.getElementById('tooltip');
     tooltip.style.display = 'none';
     if (tooltipTargetCard && tooltipTargetCard.classList) {
@@ -430,6 +435,7 @@ function hideTooltip() {
     const menu = document.getElementById('action-menu');
     if (menu) menu.style.display = 'none';
     actionMenuTargetCard = null;
+    console.log('[actionMenu] hideTooltip: チップを閉じた');
 }
 function showActionMenu(card, area, e, cardElem) {
     e.preventDefault();
@@ -454,7 +460,22 @@ function showActionMenu(card, area, e, cardElem) {
     actions.forEach(act => {
         const btn = document.createElement('button');
         btn.textContent = act.label;
-        btn.onclick = () => { menu.style.display = 'none'; if (!act.disabled) act.handler(); };
+        btn.onclick = () => {
+            // 「使用する」ボタンの場合は事前に耐久チェック
+            if (act.label === '使用する' && !act.disabled) {
+                const idx = inventory.findIndex(i => i.itemID === card.itemID);
+                if (idx !== -1 && inventory[idx].currentDurability > 1) {
+                    actionMenuForceOpen = true;
+                    console.log('[actionMenu] 耐久1以上でチップ閉じ禁止: 次フレームまで');
+                    setTimeout(() => {
+                        actionMenuForceOpen = false;
+                        console.log('[actionMenu] チップ閉じ禁止解除');
+                    }, 0);
+                }
+            }
+            hideActionMenu();
+            if (!act.disabled) act.handler();
+        };
         if (act.disabled) {
             btn.disabled = true;
             btn.style.opacity = '0.5';
@@ -500,7 +521,12 @@ function showActionMenu(card, area, e, cardElem) {
     document.addEventListener('click', hideActionMenu, { once: true });
 }
 function hideActionMenu() {
+    if (actionMenuForceOpen) {
+        console.log('[actionMenu] 強制オープン中のためhideActionMenuを無視');
+        return;
+    }
     document.getElementById('action-menu').style.display = 'none';
+    console.log('[actionMenu] hideActionMenu: チップを閉じた');
 }
 function addToInventory(card) {
     if (inventory.length >= 20) return; // 21枚以上は追加しない
@@ -540,14 +566,18 @@ function useItem(card) {
     }
     // 耐久値を減らす
     const idx = inventory.findIndex(i => i.itemID === card.itemID);
+    let willRemain = false;
     if (idx !== -1) {
         if (inventory[idx].currentDurability > 1) {
             inventory[idx].currentDurability--;
+            willRemain = true;
         } else {
             inventory.splice(idx, 1); // 0になったら削除
         }
         renderInventory();
     }
+    // --- チップ閉じ制御 ---
+    // （ここは削除）
     // checkGameOver(); // HP減少の直後にゲームオーバーチェック
 }
 function useWeapon(card) {

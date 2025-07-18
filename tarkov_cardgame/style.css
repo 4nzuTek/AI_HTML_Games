@@ -376,16 +376,17 @@ body {
     background: #f3f3f3;
     border: 1.5px solid #bbb;
     color: #111;
-    font-size: 1em;
-    padding: 8px 0;
+    font-size: 12px;
+    padding: 0px 0;
     text-align: center;
     cursor: pointer;
     border-radius: 6px;
-    margin: 4px 0;
+    margin: -1px;
     transition: background 0.2s, border 0.2s;
     font-weight: bold;
     width: 100%;
     box-sizing: border-box;
+    min-height: 20px;
 }
 
 #action-menu button:hover {
