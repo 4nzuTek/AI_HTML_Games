@@ -196,6 +196,7 @@ let tooltipCardHover = false; // カード上にマウスがあるか
 let tooltipHideTimer = null; // チップ消去用タイマー
 let actionMenuTargetCard = null; // 現在アクションメニューを表示しているカード要素
 let actionMenuForceOpen = false; // チップ強制オープンフラグ
+let currentTooltipTargetItem = null; // 現在ターゲット中のアイテム情報
 
 function getItemTooltip(item) {
     // アイテム種別名を取得
@@ -265,6 +266,12 @@ function renderLoot() {
             dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
             card.appendChild(dura);
         }
+        // 枠線再付与
+        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID) {
+            card.classList.add('card-tooltip-focus');
+            void card.offsetWidth;
+            // console.log(`[tooltip] 枠線再付与(renderLoot): cardID=${i.itemID}`);
+        }
         area.appendChild(card);
     });
 }
@@ -300,6 +307,12 @@ function renderInventory() {
             dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
             card.appendChild(dura);
         }
+        // 枠線再付与
+        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID) {
+            card.classList.add('card-tooltip-focus');
+            void card.offsetWidth;
+            // console.log(`[tooltip] 枠線再付与(renderInventory): cardID=${i.itemID}`);
+        }
         area.appendChild(card);
     });
     updateWeight();
@@ -317,6 +330,24 @@ function onCardMouseEnter(desc, card) {
         clearTimeout(tooltipHideTimer);
         tooltipHideTimer = null;
     }
+    // ターゲット情報セット＋枠線付与
+    if (card && card.dataset && card.dataset.id) {
+        const id = Number(card.dataset.id);
+        currentTooltipTargetItem = inventory.find(i => i.itemID == id) || loot.find(i => i.itemID == id) || null;
+        if (currentTooltipTargetItem) {
+            // console.log(`[tooltip] ターゲット設定: itemID=${currentTooltipTargetItem.itemID}`);
+        } else {
+            // console.log('[tooltip] ターゲット設定: null');
+        }
+        if (card.classList && !card.classList.contains('card-tooltip-focus')) {
+            card.classList.add('card-tooltip-focus');
+            void card.offsetWidth;
+            // console.log('[tooltip] 枠線付与');
+        }
+    } else {
+        currentTooltipTargetItem = null;
+        // console.log('[tooltip] ターゲット設定: null（カード情報なし）');
+    }
 }
 function onCardMouseLeave() {
     tooltipCardHover = false;
@@ -326,6 +357,12 @@ function showTooltip(desc, cardOrEvent) {
     const tooltip = document.getElementById('tooltip');
     tooltip.innerHTML = desc;
     tooltip.style.display = 'block';
+    // 枠線制御: 情報チップ表示時は必ず枠線を付与
+    if (cardOrEvent && cardOrEvent.classList && !cardOrEvent.classList.contains('card-tooltip-focus')) {
+        cardOrEvent.classList.add('card-tooltip-focus');
+        void cardOrEvent.offsetWidth;
+        // console.log('[tooltip] 枠線付与(showTooltip)');
+    }
     // 脱出ボタンの注意チップはボタン要素基準（左上と左下を合わせる）
     if (cardOrEvent && cardOrEvent instanceof HTMLElement && cardOrEvent.id === 'escape-btn') {
         const rect = cardOrEvent.getBoundingClientRect();
@@ -421,21 +458,31 @@ function tryHideTooltipWithDelay() {
 }
 function hideTooltip() {
     if (actionMenuForceOpen) {
-        console.log('[actionMenu] 強制オープン中のためhideTooltipを無視');
+        // console.log('[actionMenu] 強制オープン中のためhideTooltipを無視');
         return;
     }
     const tooltip = document.getElementById('tooltip');
     tooltip.style.display = 'none';
-    if (tooltipTargetCard && tooltipTargetCard.classList) {
+    // 枠線制御: 情報チップ非表示時は必ず枠線を除去
+    if (tooltipTargetCard && tooltipTargetCard.classList && tooltipTargetCard.classList.contains('card-tooltip-focus')) {
+        const cardId = tooltipTargetCard.dataset && tooltipTargetCard.dataset.id ? tooltipTargetCard.dataset.id : 'unknown';
         tooltipTargetCard.classList.remove('card-tooltip-focus');
+        // console.log(`[tooltip] 枠線除去(hideTooltip): cardID=${cardId}`);
     }
+    // ターゲット解除＋枠線除去
+    if (currentTooltipTargetItem) {
+        // console.log(`[tooltip] ターゲット解除: itemID=${currentTooltipTargetItem.itemID}`);
+    } else {
+        // console.log('[tooltip] ターゲット解除: null');
+    }
+    currentTooltipTargetItem = null;
     tooltipTargetCard = null;
     tooltipHideTimer = null;
     // アクションメニューも同時に消す
     const menu = document.getElementById('action-menu');
     if (menu) menu.style.display = 'none';
     actionMenuTargetCard = null;
-    console.log('[actionMenu] hideTooltip: チップを閉じた');
+    // console.log('[actionMenu] hideTooltip: チップを閉じた');
 }
 function showActionMenu(card, area, e, cardElem) {
     e.preventDefault();
@@ -466,15 +513,41 @@ function showActionMenu(card, area, e, cardElem) {
                 const idx = inventory.findIndex(i => i.itemID === card.itemID);
                 if (idx !== -1 && inventory[idx].currentDurability > 1) {
                     actionMenuForceOpen = true;
-                    console.log('[actionMenu] 耐久1以上でチップ閉じ禁止: 次フレームまで');
+                    // console.log('[actionMenu] 耐久1以上でチップ閉じ禁止: 次フレームまで');
                     setTimeout(() => {
                         actionMenuForceOpen = false;
-                        console.log('[actionMenu] チップ閉じ禁止解除');
+                        // console.log('[actionMenu] チップ閉じ禁止解除');
                     }, 0);
                 }
             }
             hideActionMenu();
             if (!act.disabled) act.handler();
+            // --- 情報チップの耐久値だけを直接更新 ---
+            if (act.label === '使用する' && tooltipTargetCard) {
+                // カード右上の耐久値表示
+                const duraDiv = Array.from(tooltipTargetCard.childNodes).find(n => n && n.textContent && n.textContent.match(/\d+\/\d+/));
+                if (duraDiv) {
+                    const idx = inventory.findIndex(i => i.itemID === card.itemID);
+                    if (idx !== -1) {
+                        duraDiv.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
+                    }
+                }
+                // ツールチップ内の耐久値表示
+                const tooltipDura = document.querySelector('#tooltip .tooltip-durability');
+                if (tooltipDura) {
+                    const idx = inventory.findIndex(i => i.itemID === card.itemID);
+                    if (idx !== -1) {
+                        tooltipDura.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
+                    }
+                }
+                // console.log('[actionMenu] ツールチップ耐久値のみ更新');
+                // 枠線が消えていたら再付与
+                if (tooltipTargetCard.classList && !tooltipTargetCard.classList.contains('card-tooltip-focus')) {
+                    tooltipTargetCard.classList.add('card-tooltip-focus');
+                    void tooltipTargetCard.offsetWidth;
+                    // console.log('[actionMenu] 枠線再付与');
+                }
+            }
         };
         if (act.disabled) {
             btn.disabled = true;
@@ -522,11 +595,11 @@ function showActionMenu(card, area, e, cardElem) {
 }
 function hideActionMenu() {
     if (actionMenuForceOpen) {
-        console.log('[actionMenu] 強制オープン中のためhideActionMenuを無視');
+        // console.log('[actionMenu] 強制オープン中のためhideActionMenuを無視');
         return;
     }
     document.getElementById('action-menu').style.display = 'none';
-    console.log('[actionMenu] hideActionMenu: チップを閉じた');
+    // console.log('[actionMenu] hideActionMenu: チップを閉じた');
 }
 function addToInventory(card) {
     if (inventory.length >= 20) return; // 21枚以上は追加しない
