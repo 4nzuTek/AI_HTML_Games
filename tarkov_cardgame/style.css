@@ -167,6 +167,19 @@ body {
     user-select: none;
     box-sizing: border-box;
     overflow: hidden;
+    outline: none;
+}
+
+.enemy-card {
+    outline: none;
+}
+
+.inventory-card {
+    outline: none;
+}
+
+.loot-card {
+    outline: none;
 }
 
 .card img {
@@ -349,7 +362,7 @@ progress.status-bar {
 }
 
 .card-tooltip-focus {
-    outline: 3px solid #111;
+    outline: 3px solid #111 !important;
     outline-offset: 0px;
     z-index: 1002;
 }

@@ -8,6 +8,11 @@ let loot = [];
 let inventory = [];
 let enemyMaster = [];
 
+// 敵画像ファイル一覧（初期化時に取得）
+const ENEMY_IMAGE_LIST = [
+    'mon_001.bmp', 'mon_002.bmp', 'mon_003.bmp', 'mon_004.bmp', 'mon_005.bmp', 'mon_006.bmp', 'mon_007.bmp', 'mon_008.bmp', 'mon_009.bmp', 'mon_010.bmp', 'mon_011.bmp', 'mon_012.bmp', 'mon_013.bmp', 'mon_014.bmp', 'mon_015.bmp', 'mon_016.bmp', 'mon_017.bmp', 'mon_018.bmp', 'mon_019.bmp', 'mon_020.bmp', 'mon_021.bmp', 'mon_022.bmp', 'mon_023.bmp', 'mon_024.bmp', 'mon_025.bmp', 'mon_026.bmp', 'mon_027.bmp', 'mon_028.bmp', 'mon_029.bmp', 'mon_030.bmp', 'mon_031.bmp', 'mon_032.bmp', 'mon_033.bmp', 'mon_034.bmp', 'mon_035.bmp', 'mon_036.bmp', 'mon_037.bmp', 'mon_038.bmp', 'mon_039.bmp', 'mon_040.bmp', 'mon_041.bmp', 'mon_042.bmp', 'mon_043.bmp', 'mon_044.bmp', 'mon_045.bmp', 'mon_046.bmp', 'mon_047.bmp', 'mon_048.bmp', 'mon_049.bmp', 'mon_050.bmp'
+];
+
 // プレイヤーステータス
 let player = {
     hp: 100,
@@ -41,9 +46,51 @@ function renderEnemies() {
         card.className = 'card enemy-card';
         card.dataset.id = e.id;
         card.dataset.type = 'enemy';
+        // --- エネミー画像（Canvasで抜き色処理） ---
+        const randImg = ENEMY_IMAGE_LIST[Math.floor(Math.random() * ENEMY_IMAGE_LIST.length)];
+        const img = new window.Image();
+        img.src = 'images/enemy/' + randImg;
+        img.onload = function () {
+            const cardW = Math.max(50, img.width);
+            const cardH = Math.max(80, img.height);
+            const canvas = document.createElement('canvas');
+            canvas.width = cardW;
+            canvas.height = cardH;
+            canvas.style.width = cardW + 'px';
+            canvas.style.height = cardH + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false; // 補間無効
+            // まず一旦元サイズでdrawImage（左上配置、scale=1）
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = img.width;
+            tmpCanvas.height = img.height;
+            const tmpCtx = tmpCanvas.getContext('2d');
+            tmpCtx.drawImage(img, 0, 0);
+            const imageData = tmpCtx.getImageData(0, 0, img.width, img.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (
+                    data[i] === 129 && // R
+                    data[i + 1] === 121 && // G
+                    data[i + 2] === 125    // B
+                ) {
+                    data[i + 3] = 0; // 透明化
+                }
+            }
+            tmpCtx.putImageData(imageData, 0, 0);
+            // カード中央に描画
+            const offsetX = Math.floor((cardW - img.width) / 2);
+            const offsetY = Math.floor((cardH - img.height) / 2);
+            ctx.drawImage(tmpCanvas, offsetX, offsetY);
+            card.appendChild(canvas);
+            card.style.width = cardW + 'px';
+            card.style.height = cardH + 'px';
+        };
+        img.onerror = function () {
+            // 読み込み失敗時は何も表示しない
+        };
         // --- エネミー情報のツールチップ ---
         card.addEventListener('mouseenter', function () {
-            // 情報を整形（HTML改行で見やすく）
             const desc =
                 `<b>【${e.name}】</b><br>` +
                 `HP: <b>${e.hp}</b> / ${e.maxHp}<br>` +
@@ -54,7 +101,6 @@ function renderEnemies() {
         });
         card.addEventListener('mouseleave', function () { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(e, 'enemy', e, card); });
-        card.textContent = e.name;
         area.appendChild(card);
     });
 }
@@ -168,8 +214,11 @@ function renderLoot() {
         card.className = 'card loot-card';
         card.style.position = 'relative'; // 耐久値表示用
         const img = document.createElement('img');
-        img.src = 'icon/' + i.imageName;
+        img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
@@ -200,8 +249,11 @@ function renderInventory() {
         card.className = 'card inventory-card';
         card.style.position = 'relative'; // 耐久値表示用
         const img = document.createElement('img');
-        img.src = 'icon/' + i.imageName;
+        img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
         card.appendChild(img);
         card.dataset.id = i.itemID;
         card.dataset.type = i.itemTypeID;
@@ -259,6 +311,49 @@ function showTooltip(desc, cardOrEvent) {
         tooltipTargetCard = null;
         return;
     }
+    // --- エネミーカードの場合は右上基準 ---
+    if (cardOrEvent && cardOrEvent.classList && cardOrEvent.classList.contains('enemy-card')) {
+        const rect = cardOrEvent.getBoundingClientRect();
+        // 枠線・outline幅をCSSから取得
+        let borderW = 0, outlineW = 0;
+        const style = window.getComputedStyle(cardOrEvent);
+        borderW = parseInt(style.borderRightWidth) || 0;
+        outlineW = parseInt(style.outlineWidth) || 0;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        // アイテムアクションメニューと同じロジックで補正
+        // console.log('enemy-card outlineW:', outlineW);
+        const left = rect.right + scrollX;
+        const top = rect.top - outlineW + scrollY;
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+        // 枠線クラス付与（注目中）
+        if (tooltipTargetCard && tooltipTargetCard !== cardOrEvent) {
+            tooltipTargetCard.classList.remove('card-tooltip-focus');
+        }
+        if (cardOrEvent.classList) {
+            cardOrEvent.classList.add('card-tooltip-focus');
+            void cardOrEvent.offsetWidth;
+        }
+        setTimeout(() => {
+            const style = window.getComputedStyle(cardOrEvent);
+            borderW = parseInt(style.borderRightWidth) || 0;
+            outlineW = parseInt(style.outlineWidth) || 0;
+            const scrollX = window.scrollX || window.pageXOffset;
+            const scrollY = window.pageYOffset || window.scrollY;
+            // console.log('enemy-card outlineW:', outlineW);
+            const left = rect.right + scrollX;
+            const top = rect.top - outlineW + scrollY;
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            // 枠線クラス付与（注目中）
+            if (tooltipTargetCard && tooltipTargetCard !== cardOrEvent) {
+                tooltipTargetCard.classList.remove('card-tooltip-focus');
+            }
+            tooltipTargetCard = cardOrEvent;
+        }, 0);
+        return;
+    }
     // 通常はカード基準
     if (cardOrEvent && cardOrEvent.getBoundingClientRect) {
         const rect = cardOrEvent.getBoundingClientRect();
@@ -268,14 +363,12 @@ function showTooltip(desc, cardOrEvent) {
         }
         if (cardOrEvent.classList) {
             cardOrEvent.classList.add('card-tooltip-focus');
+            void cardOrEvent.offsetWidth; // 強制リフロー
         }
-        // outline幅をCSSから動的に取得
-        let outlineWidth = 0;
-        if (cardOrEvent.classList && cardOrEvent.classList.contains('card-tooltip-focus')) {
-            const style = window.getComputedStyle(cardOrEvent);
-            outlineWidth = parseInt(style.outlineWidth) || 0;
-        }
-        const left = rect.left - outlineWidth;
+        const style = window.getComputedStyle(cardOrEvent);
+        outlineW = parseInt(style.outlineWidth) || 0;
+        // console.log('item-card outlineW:', outlineW);
+        const left = rect.left - outlineW;
         const top = rect.top;
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
