@@ -181,6 +181,33 @@ body {
     font-weight: normal;
 }
 
+#escape-btn {
+    position: absolute;
+    left: 380px;
+    top: 318px;
+    /* #next-floor-btnのtop260+高さ50+間隔8 */
+    width: 200px;
+    height: 50px;
+    font-size: 1.1em;
+    padding: 0;
+    border: 3px solid #000;
+    background: #fff;
+    cursor: pointer;
+    border-radius: 0;
+    margin: 0;
+    display: block;
+    z-index: 10;
+    text-align: center;
+    font-weight: normal;
+}
+
+#escape-btn:disabled {
+    color: #aaa;
+    border-color: #aaa;
+    background: #eee;
+    cursor: not-allowed;
+}
+
 .tooltip {
     position: absolute;
     background: #333;

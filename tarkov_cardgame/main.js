@@ -297,6 +297,41 @@ window.onload = function () {
     updatePlayerStatus();
     updateWeight();
     document.getElementById('next-floor-btn').onclick = nextFloor;
+    // 脱出ボタン制御
+    const escapeBtn = document.getElementById('escape-btn');
+    function updateEscapeBtn() {
+        if (enemies.length === 0 && floor % 5 === 0) {
+            escapeBtn.disabled = false;
+        } else {
+            escapeBtn.disabled = true;
+        }
+    }
+    // 初期化時・フロア移動時・敵再生成時に呼ぶ
+    const origRenderEnemies = renderEnemies;
+    renderEnemies = function () {
+        origRenderEnemies();
+        updateEscapeBtn();
+    };
+    const origNextFloor = nextFloor;
+    nextFloor = function () {
+        origNextFloor();
+        updateEscapeBtn();
+    };
+    updateEscapeBtn();
+    // マウスオーバーで条件説明
+    escapeBtn.addEventListener('mouseover', function (e) {
+        if (escapeBtn.disabled) {
+            showTooltip('脱出するには敵がいない状態で5の倍数の階層にいる必要があります。', e);
+        }
+    });
+    escapeBtn.addEventListener('mouseout', hideTooltip);
+    // 脱出ボタン押下時
+    escapeBtn.onclick = function () {
+        if (!escapeBtn.disabled) {
+            addLog('脱出に成功した！ゲームクリア！', 'action');
+            // ここでゲームクリア処理等を追加可能
+        }
+    };
     // 初期ログに「B1Fに到達」だけ表示
     const log = document.getElementById('log');
     log.innerHTML = '';
