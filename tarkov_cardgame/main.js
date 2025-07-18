@@ -85,6 +85,18 @@ function renderEnemies() {
             card.appendChild(canvas);
             card.style.width = cardW + 'px';
             card.style.height = cardH + 'px';
+            // --- ここからHP表示 ---
+            const hpDiv = document.createElement('div');
+            hpDiv.style.position = 'absolute';
+            hpDiv.style.top = '0px';
+            hpDiv.style.right = '2px';
+            hpDiv.style.fontSize = '0.75em';
+            hpDiv.style.color = '#222';
+            hpDiv.style.background = 'none';
+            hpDiv.style.padding = '0';
+            hpDiv.textContent = `${e.hp}/${e.maxHp}`;
+            card.appendChild(hpDiv);
+            // --- ここまでHP表示 ---
         };
         img.onerror = function () {
             // 読み込み失敗時は何も表示しない

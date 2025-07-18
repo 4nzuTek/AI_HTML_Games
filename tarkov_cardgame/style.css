@@ -172,6 +172,7 @@ body {
 
 .enemy-card {
     outline: none;
+    position: relative;
 }
 
 .inventory-card {
