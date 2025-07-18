@@ -70,6 +70,13 @@
         </form>
         <div style="margin-top:16px; font-size:0.9em; color:#888;">Dキーで閉じる/戻る</div>
     </div>
+    <div id="gameover-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2000; background:#fff; border:3px solid #a00; padding:32px 40px; min-width:320px; min-height:180px; box-shadow:0 0 32px #a008; text-align:center;">
+        <div style="font-weight:bold; font-size:1.6em; color:#a00; margin-bottom:18px;">ゲームオーバー</div>
+        <div id="gameover-message" style="font-size:1.1em; margin-bottom:24px;">あなたは力尽きた…</div>
+        <button id="retry-btn" style="font-size:1.1em; padding:8px 32px;">リトライ</button>
+    </div>
+    <div id="gameover-mask"></div>
     <script src="main.js"></script>
 </body>
 

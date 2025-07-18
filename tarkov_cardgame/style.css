@@ -381,3 +381,32 @@ progress.status-bar {
 #debug-window button:hover {
     background: #ddd;
 }
+
+#gameover-dialog {
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+
+#gameover-mask {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1999;
+}
+
+#gameover-dialog button {
+    border: 2px solid #a00;
+    border-radius: 5px;
+    background: #fff;
+    color: #a00;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#gameover-dialog button:hover {
+    background: #fee;
+}

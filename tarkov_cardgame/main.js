@@ -73,6 +73,7 @@ function updatePlayerStatus() {
     const defenseText = `防御力：炎:${player.defense[1]} 水:${player.defense[2]} 風:${player.defense[3]} 地:${player.defense[4]}`;
     const defenseElem = document.getElementById('defense');
     if (defenseElem) defenseElem.textContent = defenseText;
+    checkGameOver();
 }
 
 function updateWeight() {
@@ -392,6 +393,7 @@ function useItem(card) {
         }
         renderInventory();
     }
+    // checkGameOver(); // HP減少の直後にゲームオーバーチェック
 }
 function useWeapon(card) {
     // エネミー選択メニューを表示
@@ -534,6 +536,89 @@ function nextFloor() {
     renderLoot();
     // 5. 敵は再生成しない（消さない）
     renderEnemies();
+}
+// ===== ゲームオーバー制御 =====
+let isGameOver = false;
+function showGameOver() {
+    isGameOver = true;
+    // ログにゲームオーバー
+    addLog('<span style="color:#a00; font-weight:bold; font-size:1.2em;">=== ゲームオーバー ===</span>', 'action', true);
+    // ダイアログとマスク表示
+    document.getElementById('gameover-dialog').style.display = 'block';
+    document.getElementById('gameover-mask').style.display = 'block';
+    // すべてのボタン・入力を無効化
+    Array.from(document.querySelectorAll('button')).forEach(btn => {
+        if (btn.id !== 'retry-btn') btn.disabled = true;
+    });
+    // キー入力も無効化
+    document.addEventListener('keydown', blockAllKey, true);
+}
+function hideGameOver() {
+    isGameOver = false;
+    document.getElementById('gameover-dialog').style.display = 'none';
+    document.getElementById('gameover-mask').style.display = 'none';
+    // ボタン再有効化
+    Array.from(document.querySelectorAll('button')).forEach(btn => {
+        btn.disabled = false;
+    });
+    document.removeEventListener('keydown', blockAllKey, true);
+}
+function blockAllKey(e) {
+    if (!isGameOver) return;
+    if (e.target.id === 'retry-btn') return;
+    e.stopPropagation();
+    e.preventDefault();
+}
+// リトライボタン
+window.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('retry-btn').onclick = function () {
+        hideGameOver();
+        restartGame();
+    };
+});
+function restartGame() {
+    // プレイヤー初期化
+    player.hp = 100;
+    player.energy = 100;
+    player.water = 100;
+    player.defense = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    // フロア初期化
+    floor = 1;
+    updateFloor();
+    // 敵・アイテム再生成
+    // itemMaster, enemyMasterはfetch済み前提
+    loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability }));
+    inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability }));
+    const enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
+    if (enemy1001) {
+        enemies = [{
+            id: enemy1001.enemyID,
+            name: enemy1001.enemyName,
+            hp: enemy1001.maxHp,
+            maxHp: enemy1001.maxHp,
+            attack: enemy1001.attack,
+            attackChance: [enemy1001.attackChance_attr01, enemy1001.attackChance_attr02, enemy1001.attackChance_attr03, enemy1001.attackChance_attr04],
+            defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04]
+        }];
+    } else {
+        enemies = [];
+    }
+    renderLoot();
+    renderInventory();
+    renderEnemies();
+    updatePlayerStatus();
+    updateWeight();
+    // ログ初期化
+    const log = document.getElementById('log');
+    log.innerHTML = '';
+    addLog('B1Fに到達した。', 'floor');
+}
+// HPが0になったらゲームオーバー
+function checkGameOver() {
+    if (!isGameOver && player.hp <= 0) {
+        player.hp = 0;
+        showGameOver();
+    }
 }
 window.onload = function () {
     updateFloor();
