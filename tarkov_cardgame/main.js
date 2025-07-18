@@ -14,6 +14,30 @@ let player = {
     water: 100
 };
 
+let floor = 1;
+function updateFloor() {
+    document.getElementById('floor').textContent = `B${floor}F`;
+}
+
+// 敵データ仮（本来はitemMaster等から生成）
+let enemies = [];
+function randomEnemies() {
+    // 今は敵を出さない（空配列）
+    enemies = [];
+}
+function renderEnemies() {
+    const area = document.getElementById('enemies');
+    area.innerHTML = '';
+    enemies.forEach(e => {
+        const card = document.createElement('div');
+        card.className = 'card enemy-card';
+        card.dataset.id = e.id;
+        card.dataset.type = 'enemy';
+        card.textContent = e.name;
+        area.appendChild(card);
+    });
+}
+
 function updatePlayerStatus() {
     document.getElementById('hp').textContent = player.hp;
     document.getElementById('energy').textContent = player.energy;
@@ -46,24 +70,6 @@ fetch('json/item.json')
         console.error(err);
     });
 
-function renderEnemies() {
-    const area = document.getElementById('enemies');
-    area.innerHTML = '';
-    enemies.forEach(e => {
-        const card = document.createElement('div');
-        card.className = 'card enemy-card';
-        const img = document.createElement('img');
-        img.src = e.img;
-        img.alt = e.name;
-        card.appendChild(img);
-        card.dataset.id = e.id;
-        card.dataset.type = 'enemy';
-        card.addEventListener('mouseover', showTooltip.bind(null, e.desc));
-        card.addEventListener('mouseout', hideTooltip);
-        card.addEventListener('contextmenu', showActionMenu.bind(null, e, 'enemy'));
-        area.appendChild(card);
-    });
-}
 function renderLoot() {
     const area = document.getElementById('loot');
     area.innerHTML = '';
@@ -226,11 +232,18 @@ function addLog(msg, type = 'action', isHtml = false) {
     const div = document.createElement('div');
     if (type === 'detail') {
         if (isHtml) {
-            div.innerHTML = '　' + msg;
+            div.innerHTML = '　　' + '　' + msg; // 全角3つ
         } else {
-            div.textContent = '　' + msg;
+            div.textContent = '　　' + '　' + msg;
+        }
+    } else if (type === 'action') {
+        if (isHtml) {
+            div.innerHTML = '　　' + msg; // 全角2つ
+        } else {
+            div.textContent = '　　' + msg;
         }
     } else {
+        // 仕切り線やフロア到達などは空白なし
         if (isHtml) {
             div.innerHTML = msg;
         } else {
@@ -240,11 +253,52 @@ function addLog(msg, type = 'action', isHtml = false) {
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
 }
+function nextFloor() {
+    // 仕切り線
+    addLog('----------------------', 'floor');
+    // 1. フロア番号を進める
+    floor++;
+    updateFloor();
+    addLog(`B${floor}Fに到達した。`, 'floor');
+    // 2. 重量ペナルティ
+    const penalty = inventory.length - 10;
+    if (penalty > 0) {
+        player.energy -= penalty;
+        player.water -= penalty;
+        addLog(`荷物が重い...。エネルギー・水分が<span style="color:red; font-weight:bold;">${penalty}</span>減少した…`, 'detail', true);
+        updatePlayerStatus();
+    }
+    // 3. 敵ダメージ
+    if (enemies.length > 0) {
+        // 新フロアにも敵がいる場合（今回は毎回生成）
+        const totalAtk = enemies.reduce((sum, e) => sum + (e.attack || 0), 0);
+        player.hp -= totalAtk;
+        addLog(`敵の攻撃！HPが<span style="color:red; font-weight:bold;">${totalAtk}</span>減少した…`, 'detail', true);
+        updatePlayerStatus();
+    }
+    // 4. ルートアイテム再生成
+    const lootNum = Math.floor(Math.random() * 10) + 1;
+    loot = [];
+    for (let i = 0; i < lootNum; i++) {
+        const idx = Math.floor(Math.random() * itemMaster.length);
+        loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability });
+    }
+    renderLoot();
+    // 5. 敵も再生成
+    randomEnemies();
+    renderEnemies();
+}
 window.onload = function () {
+    updateFloor();
+    randomEnemies(); // 初期化時も敵なし
     renderEnemies();
     renderLoot();
     renderInventory();
-    // ログのサンプル表示
+    updatePlayerStatus();
+    updateWeight();
+    document.getElementById('next-floor-btn').onclick = nextFloor;
+    // 初期ログに「B1Fに到達」だけ表示
     const log = document.getElementById('log');
-    log.innerHTML = '------------------------------\nB1Fに到達\nパンを使用した。\nパンを捨てた。\n回復薬を拾った。\nナイフを拾った。\n回復薬を使用した。\nナイフを捨てた。\n回復薬を捨てた。';
+    log.innerHTML = '';
+    addLog('B1Fに到達した。', 'floor');
 }; 
