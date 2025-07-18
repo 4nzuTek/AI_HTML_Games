@@ -153,26 +153,37 @@ function onCardMouseLeave() {
     tooltipCardHover = false;
     tryHideTooltipWithDelay();
 }
-function showTooltip(desc, card) {
+function showTooltip(desc, cardOrEvent) {
     const tooltip = document.getElementById('tooltip');
     tooltip.textContent = desc;
     tooltip.style.display = 'block';
-    if (card && card.getBoundingClientRect) {
-        const rect = card.getBoundingClientRect();
-        // カードの左上座標
+    // 脱出ボタンの注意チップはボタン要素基準（左上と左下を合わせる）
+    if (cardOrEvent && cardOrEvent instanceof HTMLElement && cardOrEvent.id === 'escape-btn') {
+        const rect = cardOrEvent.getBoundingClientRect();
         const left = rect.left;
         const top = rect.top;
-        // スクロール量も加味
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
-        // ツールチップの左下をカードの左上に合わせる
         tooltip.style.left = (left + scrollX) + 'px';
         tooltip.style.top = (top + scrollY - tooltip.offsetHeight) + 'px';
+        tooltipTargetCard = null;
+        return;
+    }
+    // 通常はカード基準
+    if (cardOrEvent && cardOrEvent.getBoundingClientRect) {
+        const rect = cardOrEvent.getBoundingClientRect();
+        const left = rect.left;
+        const top = rect.top;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        tooltip.style.left = (left + scrollX) + 'px';
+        tooltip.style.top = (top + scrollY - tooltip.offsetHeight) + 'px';
+        tooltipTargetCard = cardOrEvent;
     } else {
         tooltip.style.left = '0px';
         tooltip.style.top = '0px';
+        tooltipTargetCard = null;
     }
-    tooltipTargetCard = card;
 }
 function tryHideTooltipWithDelay() {
     if (tooltipHideTimer) clearTimeout(tooltipHideTimer);
@@ -269,12 +280,17 @@ function useItem(card) {
     updatePlayerStatus();
     // 増減ログ（詳細）
     const after = { hp: player.hp, energy: player.energy, water: player.water };
-    if (after.hp > before.hp) addLog(`HPが<span style="color:green; font-weight:bold;">${after.hp - before.hp}</span>回復した！`, 'detail', true);
-    if (after.hp < before.hp) addLog(`HPが<span style="color:red; font-weight:bold;">${before.hp - after.hp}</span>減少した…`, 'detail', true);
-    if (after.energy > before.energy) addLog(`エネルギーが<span style="color:green; font-weight:bold;">${after.energy - before.energy}</span>回復した！`, 'detail', true);
-    if (after.energy < before.energy) addLog(`エネルギーが<span style="color:red; font-weight:bold;">${before.energy - after.energy}</span>減少した…`, 'detail', true);
-    if (after.water > before.water) addLog(`水分が<span style="color:green; font-weight:bold;">${after.water - before.water}</span>回復した！`, 'detail', true);
-    if (after.water < before.water) addLog(`水分が<span style="color:red; font-weight:bold;">${before.water - after.water}</span>減少した…`, 'detail', true);
+    let changed = false;
+    if (after.hp > before.hp) { addLog(`HPが<span style="color:green; font-weight:bold;">${after.hp - before.hp}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.hp < before.hp) { addLog(`HPが<span style="color:red; font-weight:bold;">${before.hp - after.hp}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.energy > before.energy) { addLog(`エネルギーが<span style="color:green; font-weight:bold;">${after.energy - before.energy}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.energy < before.energy) { addLog(`エネルギーが<span style="color:red; font-weight:bold;">${before.energy - after.energy}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.water > before.water) { addLog(`水分が<span style="color:green; font-weight:bold;">${after.water - before.water}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.water < before.water) { addLog(`水分が<span style="color:red; font-weight:bold;">${before.water - after.water}</span>減少した…`, 'detail', true); changed = true; }
+    // 何も変動しなかった場合
+    if (!changed) {
+        addLog('しかし、何も起こらなかった...', 'detail');
+    }
     // 耐久値を減らす
     const idx = inventory.findIndex(i => i.itemID === card.itemID);
     if (idx !== -1) {
@@ -406,10 +422,10 @@ window.onload = function () {
         updateEscapeBtn();
     };
     updateEscapeBtn();
-    // マウスオーバーで条件説明
+    // 脱出ボタンのマウスオーバー時のイベントを修正
     escapeBtn.addEventListener('mouseover', function (e) {
         if (escapeBtn.disabled) {
-            showTooltip('脱出するには敵がいない状態で5の倍数の階層にいる必要があります。', e);
+            showTooltip('脱出するには敵がいない状態で5の倍数の階層にいる必要があります。', escapeBtn);
         }
     });
     escapeBtn.addEventListener('mouseout', hideTooltip);
