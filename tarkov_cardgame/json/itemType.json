@@ -3,7 +3,7 @@
     "tileTypeID": 1,
     "tileTypeName": "武器",
     "メモ": "攻撃に使用する。同属性のマナと耐久値を消費する。",
-    "color": "ffb9f7",
+    "color": "ffb9b9",
     "action": "マナ装填,攻撃,捨てる"
   },
   {
@@ -31,7 +31,7 @@
     "tileTypeID": 11,
     "tileTypeName": "薬品",
     "メモ": "体力回復、状態異常回復、バフなど。消費アイテム",
-    "color": "FFD6D6",
+    "color": "D9EDD9",
     "action": "使用,捨てる"
   },
   {

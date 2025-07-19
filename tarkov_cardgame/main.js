@@ -219,9 +219,13 @@ let currentTooltipTargetItem = null; // 現在ターゲット中のアイテム�
 function getItemTooltip(item) {
     // アイテム種別名を取得
     let itemTypeName = '';
+    let typeColor = '';
     if (window.itemTypeMaster && item.itemTypeID) {
         const t = window.itemTypeMaster.find(t => t.tileTypeID === item.itemTypeID);
-        if (t) itemTypeName = t.tileTypeName;
+        if (t) {
+            itemTypeName = t.tileTypeName;
+            if (t.color) typeColor = `#${t.color}`;
+        }
     }
     // 耐久値
     let durability = '';
@@ -240,7 +244,7 @@ function getItemTooltip(item) {
     const img = `<div class="tooltip-imgbox"><img src="images/item/${item.imageName}" alt="${item.itemName}" class="tooltip-img"></div>`;
     // HTML組み立て
     return `
-    <div class="tooltip-cardbox">
+    <div class="tooltip-cardbox"${typeColor ? ` style=\"background:${typeColor};\"` : ''}>
       <div class="tooltip-header">
         <b class="tooltip-title">${item.itemName}</b>
         ${durability ? `<span class="tooltip-durability">${durability}</span>` : ''}
@@ -528,6 +532,14 @@ function showActionMenu(card, area, e, cardElem) {
     const menu = document.getElementById('action-menu');
     menu.innerHTML = '';
     let actions = [];
+    // === ここから背景色設定 ===
+    let typeColor = '';
+    if ((area === 'loot' || area === 'inventory') && window.itemTypeMaster && card.itemTypeID) {
+        const t = window.itemTypeMaster.find(t => t.tileTypeID == card.itemTypeID);
+        if (t && t.color) typeColor = `#${t.color}`;
+    }
+    menu.style.background = typeColor ? typeColor : '#fff';
+    // === ここまで背景色設定 ===
     if (area === 'enemy') {
         // 敵カードのアクション
     } else if (area === 'loot') {
