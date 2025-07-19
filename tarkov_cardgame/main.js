@@ -139,8 +139,17 @@ function updateWeight() {
     document.getElementById('weight').textContent = `${inventory.length}/20`;
 }
 
-// アイテムマスタを読み込む
-fetch('json/item.json')
+// アイテムタイプマスタを先に読み込む
+fetch('json/itemType.json')
+    .then(res => {
+        if (!res.ok) throw new Error('itemType.jsonの読み込みに失敗しました');
+        return res.json();
+    })
+    .then(data => {
+        window.itemTypeMaster = data;
+        // itemTypeMasterのロード後にitemMasterをロード
+        return fetch('json/item.json');
+    })
     .then(res => {
         if (!res.ok) throw new Error('item.jsonの読み込みに失敗しました');
         return res.json();
@@ -148,16 +157,24 @@ fetch('json/item.json')
     .then(data => {
         itemMaster = data;
         console.log('itemMaster:', itemMaster); // データ確認用
-        // loot/inventoryにcurrentDurabilityとinvIndexを持たせる
-        loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
-        inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
+        // loot/inventoryにcurrentDurabilityとinvIndexを持たせてランダムに10個ずつ生成
+        function getRandomItems(arr, n) {
+            const result = [];
+            for (let i = 0; i < n; i++) {
+                const idx = Math.floor(Math.random() * arr.length);
+                result.push({ ...arr[idx], currentDurability: arr[idx].maxDurability, invIndex: nextInvIndex++ });
+            }
+            return result;
+        }
+        loot = getRandomItems(itemMaster, 10);
+        inventory = getRandomItems(itemMaster, 10);
         renderLoot();
         renderInventory();
         updatePlayerStatus();
         updateWeight();
     })
     .catch(err => {
-        alert('アイテムデータの読み込みに失敗しました: ' + err.message);
+        alert('アイテムデータまたはタイプデータの読み込みに失敗しました: ' + err.message);
         console.error(err);
     });
 
@@ -242,6 +259,13 @@ function renderLoot() {
         const card = document.createElement('div');
         card.className = 'card loot-card';
         card.style.position = 'relative'; // 耐久値表示用
+        // === タイプごとの背景色 ===
+        let bgColor = '';
+        if (window.itemTypeMaster && i.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+            if (t && t.color) bgColor = t.color;
+        }
+        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
         const img = document.createElement('img');
         img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
@@ -284,6 +308,13 @@ function renderInventory() {
         const card = document.createElement('div');
         card.className = 'card inventory-card';
         card.style.position = 'relative'; // 耐久値表示用
+        // === タイプごとの背景色 ===
+        let bgColor = '';
+        if (window.itemTypeMaster && i.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+            if (t && t.color) bgColor = t.color;
+        }
+        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
         const img = document.createElement('img');
         img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
@@ -855,8 +886,16 @@ function restartGame() {
     updateFloor();
     // 敵・アイテム再生成
     // itemMaster, enemyMasterはfetch済み前提
-    loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
-    inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
+    function getRandomItems(arr, n) {
+        const result = [];
+        for (let i = 0; i < n; i++) {
+            const idx = Math.floor(Math.random() * arr.length);
+            result.push({ ...arr[idx], currentDurability: arr[idx].maxDurability, invIndex: nextInvIndex++ });
+        }
+        return result;
+    }
+    loot = getRandomItems(itemMaster, 10);
+    inventory = getRandomItems(itemMaster, 10);
     const enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
     if (enemy1001) {
         enemies = [{
