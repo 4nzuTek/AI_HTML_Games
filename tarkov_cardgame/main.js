@@ -25,7 +25,8 @@ let player = {
         2: 0, // 水
         3: 0, // 風
         4: 0  // 地
-    }
+    },
+    statuses: [] // 状態異常配列を追加
 };
 
 let floor = 1;
@@ -132,6 +133,15 @@ function updatePlayerStatus() {
     const defenseText = `防御力：炎:${player.defense[1]} 水:${player.defense[2]} 風:${player.defense[3]} 地:${player.defense[4]}`;
     const defenseElem = document.getElementById('defense');
     if (defenseElem) defenseElem.textContent = defenseText;
+    // --- 状態表示を追加 ---
+    const statusElem = document.getElementById('status');
+    if (statusElem) {
+        if (player.statuses && player.statuses.length > 0) {
+            statusElem.textContent = player.statuses.join(' / ');
+        } else {
+            statusElem.textContent = '-';
+        }
+    }
     checkGameOver();
 }
 
@@ -722,8 +732,14 @@ function useItem(card) {
     const before = { hp: player.hp, energy: player.energy, water: player.water };
     // 先に使用ログ（アクション）
     addLog(`${card.itemName}を使用した。`, 'action');
+    // --- 呪い: HP回復無効 ---
+    let hpRecov = (typeof card.hpRecov === 'number') ? card.hpRecov : 0;
+    if (player.statuses.includes('呪い') && hpRecov > 0) {
+        hpRecov = 0;
+        addLog('<span style="color:#800; font-weight:bold;">呪いのためHPは回復しなかった！</span>', 'detail', true);
+    }
     // HP,エネルギー,水分をitemデータに従い増減
-    if (typeof card.hpRecov === 'number') player.hp += card.hpRecov;
+    if (typeof card.hpRecov === 'number') player.hp += hpRecov;
     if (typeof card.eneRecov === 'number') player.energy += card.eneRecov;
     if (typeof card.waterRecov === 'number') player.water += card.waterRecov;
     // 0-100に制限
@@ -797,16 +813,40 @@ function attackEnemy(weapon, enemy) {
     } else {
         attackValue = weapon.attack;
     }
+    // --- 痺れ: 命中率-25% ---
+    let accuracy = (typeof weapon.accuracy === 'number') ? weapon.accuracy : 1.0;
+    if (player.statuses.includes('痺れ')) {
+        accuracy -= 0.25;
+        if (accuracy < 0) accuracy = 0;
+    }
+    // 命中判定
+    let hit = true;
+    if (accuracy < 1.0) {
+        hit = Math.random() < accuracy;
+    }
     // 敵の防御力
     const defenseValue = enemy.defence[attr - 1] || 0;
     // ダメージ計算
-    const dmg = Math.max(0, attackValue - defenseValue);
+    let dmg = hit ? Math.max(0, attackValue - defenseValue) : 0;
     // HP減少
-    enemy.hp -= dmg;
-    if (enemy.hp < 0) enemy.hp = 0;
+    if (hit) {
+        enemy.hp -= dmg;
+        if (enemy.hp < 0) enemy.hp = 0;
+    }
     // ログ
     addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`, 'action');
-    addLog(`→ ダメージ: <span style="color:red; font-weight:bold;">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
+    if (!hit) {
+        addLog(`<span style=\"color:#888; font-weight:bold;\">攻撃は外れた！</span>（命中率${Math.round(accuracy * 100)}%）`, 'detail', true);
+    } else {
+        addLog(`→ ダメージ: <span style=\"color:red; font-weight:bold;\">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
+    }
+    // --- 毒: 攻撃時10ダメージ ---
+    if (player.statuses.includes('毒')) {
+        player.hp -= 10;
+        addLog('<span style="color:#090; font-weight:bold;">毒のダメージで10失った！</span>', 'detail', true);
+        if (player.hp < 0) player.hp = 0;
+        updatePlayerStatus();
+    }
     renderEnemies();
     // 武器の耐久値を減らす＆未装填に戻す
     const widx = inventory.findIndex(i => i.itemID === weapon.itemID && i.invIndex === weapon.invIndex);
@@ -896,6 +936,22 @@ function nextFloor() {
                 detailMsg = `<span style=\"color:green; font-weight:bold;\">ただし完全にダメージを防いだ！</span>`;
             }
             addLog(detailMsg, 'detail', true);
+            // --- 状態異常付与判定 ---
+            // 10% 痺れ
+            if (Math.random() < 0.10 && !player.statuses.includes('痺れ')) {
+                player.statuses.push('痺れ');
+                addLog('<span style="color:#00c; font-weight:bold;">痺れ状態になった！</span>', 'detail', true);
+            }
+            // 7% 毒
+            if (Math.random() < 0.07 && !player.statuses.includes('毒')) {
+                player.statuses.push('毒');
+                addLog('<span style="color:#090; font-weight:bold;">毒状態になった！</span>', 'detail', true);
+            }
+            // 5% 呪い
+            if (Math.random() < 0.05 && !player.statuses.includes('呪い')) {
+                player.statuses.push('呪い');
+                addLog('<span style="color:#800; font-weight:bold;">呪い状態になった！</span>', 'detail', true);
+            }
         });
         player.hp -= totalAtk;
         // 0-100に制限
@@ -958,6 +1014,7 @@ function restartGame() {
     player.energy = 100;
     player.water = 100;
     player.defense = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    player.statuses = []; // 状態異常リセット
     // フロア初期化
     floor = 1;
     updateFloor();
