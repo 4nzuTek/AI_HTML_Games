@@ -25,7 +25,8 @@ let player = {
         2: 0, // 水
         3: 0, // 風
         4: 0  // 地
-    }
+    },
+    statuses: [] // 状態異常配列を追加
 };
 
 let floor = 1;
@@ -128,10 +129,19 @@ function updatePlayerStatus() {
     document.getElementById('hp-bar').value = player.hp;
     document.getElementById('energy-bar').value = player.energy;
     document.getElementById('water-bar').value = player.water;
-    // --- 防御力の表記を更新するだけに修正 ---
-    const defenseText = `防御力：炎:${player.defense[1]} 水:${player.defense[2]} 風:${player.defense[3]} 地:${player.defense[4]}`;
+    // --- 防御力の表記をgetTotalDefenseで更新 ---
+    const defenseText = `防御力：炎:${getTotalDefense(1)} 水:${getTotalDefense(2)} 風:${getTotalDefense(3)} 地:${getTotalDefense(4)}`;
     const defenseElem = document.getElementById('defense');
     if (defenseElem) defenseElem.textContent = defenseText;
+    // --- 状態表示を追加 ---
+    const statusElem = document.getElementById('status');
+    if (statusElem) {
+        if (player.statuses && player.statuses.length > 0) {
+            statusElem.textContent = player.statuses.join(' / ');
+        } else {
+            statusElem.textContent = '-';
+        }
+    }
     checkGameOver();
 }
 
@@ -139,8 +149,17 @@ function updateWeight() {
     document.getElementById('weight').textContent = `${inventory.length}/20`;
 }
 
-// アイテムマスタを読み込む
-fetch('json/item.json')
+// アイテムタイプマスタを先に読み込む
+fetch('json/itemType.json')
+    .then(res => {
+        if (!res.ok) throw new Error('itemType.jsonの読み込みに失敗しました');
+        return res.json();
+    })
+    .then(data => {
+        window.itemTypeMaster = data;
+        // itemTypeMasterのロード後にitemMasterをロード
+        return fetch('json/item.json');
+    })
     .then(res => {
         if (!res.ok) throw new Error('item.jsonの読み込みに失敗しました');
         return res.json();
@@ -148,16 +167,28 @@ fetch('json/item.json')
     .then(data => {
         itemMaster = data;
         console.log('itemMaster:', itemMaster); // データ確認用
-        // loot/inventoryにcurrentDurabilityとinvIndexを持たせる
-        loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
-        inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
+        // loot/inventoryにcurrentDurabilityとinvIndexを持たせてランダムに10個ずつ生成
+        function getRandomItems(arr, n) {
+            const result = [];
+            for (let i = 0; i < n; i++) {
+                const idx = Math.floor(Math.random() * arr.length);
+                const base = arr[idx];
+                // 武器ならisLoaded初期化
+                let extra = {};
+                if (base.itemTypeID === 1) extra.isLoaded = false;
+                result.push({ ...base, currentDurability: base.maxDurability, invIndex: nextInvIndex++, ...extra });
+            }
+            return result;
+        }
+        loot = getRandomItems(itemMaster, 10);
+        inventory = getRandomItems(itemMaster, 10);
         renderLoot();
         renderInventory();
         updatePlayerStatus();
         updateWeight();
     })
     .catch(err => {
-        alert('アイテムデータの読み込みに失敗しました: ' + err.message);
+        alert('アイテムデータまたはタイプデータの読み込みに失敗しました: ' + err.message);
         console.error(err);
     });
 
@@ -202,9 +233,21 @@ let currentTooltipTargetItem = null; // 現在ターゲット中のアイテム�
 function getItemTooltip(item) {
     // アイテム種別名を取得
     let itemTypeName = '';
+    let typeColor = '';
     if (window.itemTypeMaster && item.itemTypeID) {
         const t = window.itemTypeMaster.find(t => t.tileTypeID === item.itemTypeID);
-        if (t) itemTypeName = t.tileTypeName;
+        if (t) {
+            itemTypeName = t.tileTypeName;
+            if (t.color) typeColor = `#${t.color}`;
+        }
+    }
+    // 属性名を取得
+    let attrName = '';
+    if (item.attrID !== null && item.attrID !== undefined) {
+        if (item.attrID === 1) attrName = '炎';
+        else if (item.attrID === 2) attrName = '水';
+        else if (item.attrID === 3) attrName = '風';
+        else if (item.attrID === 4) attrName = '地';
     }
     // 耐久値
     let durability = '';
@@ -213,22 +256,31 @@ function getItemTooltip(item) {
     }
     // パラメータ表
     let paramRows = '';
-    if (item.eneRecov !== null && item.eneRecov !== undefined) paramRows += `<tr><td>エネルギー回復量</td><td>${item.eneRecov}</td></tr>`;
-    if (item.waterRecov !== null && item.waterRecov !== undefined) paramRows += `<tr><td>水分回復量</td><td>${item.waterRecov}</td></tr>`;
-    if (item.hpRecov !== null && item.hpRecov !== undefined) paramRows += `<tr><td>HP回復量</td><td>${item.hpRecov}</td></tr>`;
+    if (item.eneRecov !== null && item.eneRecov !== undefined && item.eneRecov !== 0) paramRows += `<tr><td>エネルギー回復量</td><td>${item.eneRecov}</td></tr>`;
+    if (item.waterRecov !== null && item.waterRecov !== undefined && item.waterRecov !== 0) paramRows += `<tr><td>水分回復量</td><td>${item.waterRecov}</td></tr>`;
+    if (item.hpRecov !== null && item.hpRecov !== undefined && item.hpRecov !== 0) paramRows += `<tr><td>HP回復量</td><td>${item.hpRecov}</td></tr>`;
+    // 攻撃力
+    if (item.attack !== null && item.attack !== undefined && item.attack !== 0) paramRows += `<tr><td>攻撃力</td><td>${item.attack}</td></tr>`;
+    // 防御力
+    if (item.defence !== null && item.defence !== undefined && item.defence !== 0) paramRows += `<tr><td>防御力</td><td>${item.defence}</td></tr>`;
+    // 命中率
+    if (item.accuracy !== null && item.accuracy !== undefined && item.accuracy !== 0) paramRows += `<tr><td>命中率</td><td>${Math.round(item.accuracy * 100)}%</td></tr>`;
+    // クリティカル率
+    if (item.critical !== null && item.critical !== undefined && item.critical !== 0) paramRows += `<tr><td>クリティカル率</td><td>${Math.round(item.critical * 100)}%</td></tr>`;
     if (item.paralysisCure) paramRows += `<tr><td>麻痺回復</td><td>○</td></tr>`;
     if (item.poisonCure) paramRows += `<tr><td>毒回復</td><td>○</td></tr>`;
     if (item.curseCure) paramRows += `<tr><td>呪い回復</td><td>○</td></tr>`;
+    if (item.blessing) paramRows += `<tr><td>加護付与</td><td>○</td></tr>`;
     // 画像
     const img = `<div class="tooltip-imgbox"><img src="images/item/${item.imageName}" alt="${item.itemName}" class="tooltip-img"></div>`;
     // HTML組み立て
     return `
-    <div class="tooltip-cardbox">
+    <div class="tooltip-cardbox"${typeColor ? ` style=\"background:${typeColor};\"` : ''}>
       <div class="tooltip-header">
         <b class="tooltip-title">${item.itemName}</b>
         ${durability ? `<span class="tooltip-durability">${durability}</span>` : ''}
       </div>
-      <div class="tooltip-type">${itemTypeName}</div>
+      <div class="tooltip-type">${itemTypeName}${attrName ? `（${attrName}）` : ''}</div>
       ${img}
       <div class="tooltip-divider"></div>
       <table class="tooltip-paramtable">${paramRows}</table>
@@ -242,6 +294,13 @@ function renderLoot() {
         const card = document.createElement('div');
         card.className = 'card loot-card';
         card.style.position = 'relative'; // 耐久値表示用
+        // === タイプごとの背景色 ===
+        let bgColor = '';
+        if (window.itemTypeMaster && i.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+            if (t && t.color) bgColor = t.color;
+        }
+        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
         const img = document.createElement('img');
         img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
@@ -284,6 +343,13 @@ function renderInventory() {
         const card = document.createElement('div');
         card.className = 'card inventory-card';
         card.style.position = 'relative'; // 耐久値表示用
+        // === タイプごとの背景色 ===
+        let bgColor = '';
+        if (window.itemTypeMaster && i.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+            if (t && t.color) bgColor = t.color;
+        }
+        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
         const img = document.createElement('img');
         img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
@@ -319,6 +385,7 @@ function renderInventory() {
         area.appendChild(card);
     });
     updateWeight();
+    updatePlayerStatus(); // ここで必ず呼ぶ
 }
 function onCardMouseEnter(desc, card) {
     // 今表示中のカードと異なるカードに乗った場合のみアクションメニューを閉じる
@@ -473,6 +540,10 @@ function hideTooltip() {
         tooltipTargetCard.classList.remove('card-tooltip-focus');
         // console.log(`[tooltip] 枠線除去(hideTooltip): cardID=${cardId}`);
     }
+    // 追加: 全カードから枠線クラスを除去（耐久が残っている時の枠線残り対策）
+    document.querySelectorAll('.card-tooltip-focus').forEach(card => {
+        card.classList.remove('card-tooltip-focus');
+    });
     // ターゲット解除＋枠線除去
     if (currentTooltipTargetItem) {
         // console.log(`[tooltip] ターゲット解除: itemID=${currentTooltipTargetItem.itemID}`);
@@ -493,10 +564,17 @@ function showActionMenu(card, area, e, cardElem) {
     const menu = document.getElementById('action-menu');
     menu.innerHTML = '';
     let actions = [];
-    if (area === 'enemy') {
-        // 敵カードのアクション
-    } else if (area === 'loot') {
-        // インベントリが20枚未満なら拾うボタン有効、20枚ならグレーアウト
+    // === ここから背景色設定 ===
+    let typeColor = '';
+    if ((area === 'loot' || area === 'inventory') && window.itemTypeMaster && card.itemTypeID) {
+        const t = window.itemTypeMaster.find(t => t.tileTypeID == card.itemTypeID);
+        if (t && t.color) typeColor = `#${t.color}`;
+    }
+    menu.style.background = typeColor ? typeColor : '#fff';
+    // === ここまで背景色設定 ===
+    // --- ここからアクション生成 ---
+    if (area === 'loot') {
+        // ルートエリアは「拾う」だけ
         const isFull = inventory.length >= 20;
         actions.push({
             label: '拾う',
@@ -504,9 +582,54 @@ function showActionMenu(card, area, e, cardElem) {
             disabled: isFull
         });
     } else if (area === 'inventory') {
-        // 全てのアイテムで「使用する」ボタンを表示
-        actions.push({ label: '使用する', handler: () => useItem(card) });
-        actions.push({ label: '捨てる', handler: () => dropItem(card) });
+        let actionList = [];
+        if (window.itemTypeMaster && card.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == card.itemTypeID);
+            if (t && t.action) {
+                actionList = t.action.split(',').map(s => s.trim());
+            }
+        }
+        actionList.forEach(act => {
+            if (act === '使用' || act === '使用する') {
+                actions.push({ label: '使用する', handler: () => useItem(card) });
+            } else if (act === '捨てる') {
+                actions.push({ label: '捨てる', handler: () => dropItem(card) });
+            } else if (act === '攻撃') {
+                // 装填済みでない場合はグレーアウト
+                const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
+                const isLoaded = (widx !== -1 && inventory[widx].isLoaded);
+                actions.push({
+                    label: '攻撃',
+                    handler: () => {
+                        if (isLoaded) {
+                            actionMenuForceOpen = true;
+                            setTimeout(() => { actionMenuForceOpen = false; }, 0);
+                            showWeaponAttackMenu(card);
+                        }
+                    },
+                    disabled: !isLoaded
+                });
+            } else if (act === 'マナ装填') {
+                // 装填済みならグレーアウト
+                const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
+                const isLoaded = (widx !== -1 && inventory[widx].isLoaded);
+                actions.push({
+                    label: 'マナ装填', handler: () => {
+                        if (!isLoaded) {
+                            actionMenuForceOpen = true;
+                            setTimeout(() => { actionMenuForceOpen = false; }, 0);
+                            showManaLoadMenu(card);
+                        }
+                    }, disabled: isLoaded
+                });
+            } else if (act === '装備') {
+                actions.push({ label: '装備', handler: () => alert('装備は未実装です') });
+            } else {
+                actions.push({ label: act, handler: () => alert(`${act}は未実装です`) });
+            }
+        });
+    } else if (area === 'enemy') {
+        // 敵カードのアクション（現状なし）
     }
     actions.forEach(act => {
         const btn = document.createElement('button');
@@ -517,10 +640,8 @@ function showActionMenu(card, area, e, cardElem) {
                 const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                 if (idx !== -1 && inventory[idx].currentDurability > 1) {
                     actionMenuForceOpen = true;
-                    // console.log('[actionMenu] 耐久1以上でチップ閉じ禁止: 次フレームまで');
                     setTimeout(() => {
                         actionMenuForceOpen = false;
-                        // console.log('[actionMenu] チップ閉じ禁止解除');
                     }, 0);
                 }
             }
@@ -528,7 +649,6 @@ function showActionMenu(card, area, e, cardElem) {
             if (!act.disabled) act.handler();
             // --- 情報チップの耐久値だけを直接更新 ---
             if (act.label === '使用する' && tooltipTargetCard) {
-                // カード右上の耐久値表示
                 const duraDiv = Array.from(tooltipTargetCard.childNodes).find(n => n && n.textContent && n.textContent.match(/\d+\/\d+/));
                 if (duraDiv) {
                     const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
@@ -536,7 +656,6 @@ function showActionMenu(card, area, e, cardElem) {
                         duraDiv.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
                     }
                 }
-                // ツールチップ内の耐久値表示
                 const tooltipDura = document.querySelector('#tooltip .tooltip-durability');
                 if (tooltipDura) {
                     const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
@@ -544,12 +663,9 @@ function showActionMenu(card, area, e, cardElem) {
                         tooltipDura.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
                     }
                 }
-                // console.log('[actionMenu] ツールチップ耐久値のみ更新');
-                // 枠線が消えていたら再付与
                 if (tooltipTargetCard.classList && !tooltipTargetCard.classList.contains('card-tooltip-focus')) {
                     tooltipTargetCard.classList.add('card-tooltip-focus');
                     void tooltipTargetCard.offsetWidth;
-                    // console.log('[actionMenu] 枠線再付与');
                 }
             }
         };
@@ -568,21 +684,18 @@ function showActionMenu(card, area, e, cardElem) {
         let top = rect.top;
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
-        // outline幅をCSSから動的に取得
         let outlineWidth = 0;
         if (cardElem.classList && cardElem.classList.contains('card-tooltip-focus')) {
             const style = window.getComputedStyle(cardElem);
             outlineWidth = parseInt(style.outlineWidth) || 0;
         }
         top = top - outlineWidth;
-        // アクションメニューの左上をカードの右上に合わせる（上にオフセット）
         menu.style.left = (right + scrollX) + 'px';
         menu.style.top = (top + scrollY) + 'px';
     } else {
         menu.style.left = e.pageX + 'px';
         menu.style.top = e.pageY + 'px';
     }
-    // --- アクションメニューのマウスイベント ---
     menu.onmouseenter = function () {
         tooltipMenuOpen = true;
         if (tooltipHideTimer) {
@@ -621,8 +734,38 @@ function useItem(card) {
     const before = { hp: player.hp, energy: player.energy, water: player.water };
     // 先に使用ログ（アクション）
     addLog(`${card.itemName}を使用した。`, 'action');
+    // --- 状態異常回復 ---
+    let cured = [];
+    if (card.paralysisCure && player.statuses.includes('痺れ')) {
+        player.statuses = player.statuses.filter(s => s !== '痺れ');
+        cured.push('痺れ');
+    }
+    if (card.poisonCure && player.statuses.includes('毒')) {
+        player.statuses = player.statuses.filter(s => s !== '毒');
+        cured.push('毒');
+    }
+    if (card.curseCure && player.statuses.includes('呪い')) {
+        player.statuses = player.statuses.filter(s => s !== '呪い');
+        cured.push('呪い');
+    }
+    if (cured.length > 0) {
+        addLog(`<span style=\"color:#06c; font-weight:bold;\">${cured.join('・')}が回復した！</span>`, 'detail', true);
+        updatePlayerStatus();
+    }
+    // --- 加護付与 ---
+    if (card.blessing && !player.statuses.includes('加護')) {
+        player.statuses.push('加護');
+        addLog('<span style="color:#06c; font-weight:bold;">加護状態になった！</span>', 'detail', true);
+        updatePlayerStatus();
+    }
+    // --- 呪い: HP回復無効 ---
+    let hpRecov = (typeof card.hpRecov === 'number') ? card.hpRecov : 0;
+    if (player.statuses.includes('呪い') && !player.statuses.includes('加護') && hpRecov > 0) {
+        hpRecov = 0;
+        addLog('<span style="color:#800; font-weight:bold;">呪いのためHPは回復しなかった！</span>', 'detail', true);
+    }
     // HP,エネルギー,水分をitemデータに従い増減
-    if (typeof card.hpRecov === 'number') player.hp += card.hpRecov;
+    if (typeof card.hpRecov === 'number') player.hp += hpRecov;
     if (typeof card.eneRecov === 'number') player.energy += card.eneRecov;
     if (typeof card.waterRecov === 'number') player.water += card.waterRecov;
     // 0-100に制限
@@ -633,12 +776,12 @@ function useItem(card) {
     // 増減ログ（詳細）
     const after = { hp: player.hp, energy: player.energy, water: player.water };
     let changed = false;
-    if (after.hp > before.hp) { addLog(`HPが<span style="color:green; font-weight:bold;">${after.hp - before.hp}</span>回復した！`, 'detail', true); changed = true; }
-    if (after.hp < before.hp) { addLog(`HPが<span style="color:red; font-weight:bold;">${before.hp - after.hp}</span>減少した…`, 'detail', true); changed = true; }
-    if (after.energy > before.energy) { addLog(`エネルギーが<span style="color:green; font-weight:bold;">${after.energy - before.energy}</span>回復した！`, 'detail', true); changed = true; }
-    if (after.energy < before.energy) { addLog(`エネルギーが<span style="color:red; font-weight:bold;">${before.energy - after.energy}</span>減少した…`, 'detail', true); changed = true; }
-    if (after.water > before.water) { addLog(`水分が<span style="color:green; font-weight:bold;">${after.water - before.water}</span>回復した！`, 'detail', true); changed = true; }
-    if (after.water < before.water) { addLog(`水分が<span style="color:red; font-weight:bold;">${before.water - after.water}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.hp > before.hp) { addLog(`HPが<span style=\"color:green; font-weight:bold;\">${after.hp - before.hp}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.hp < before.hp) { addLog(`HPが<span style=\"color:red; font-weight:bold;\">${before.hp - after.hp}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.energy > before.energy) { addLog(`エネルギーが<span style=\"color:green; font-weight:bold;\">${after.energy - before.energy}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.energy < before.energy) { addLog(`エネルギーが<span style=\"color:red; font-weight:bold;\">${before.energy - after.energy}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.water > before.water) { addLog(`水分が<span style=\"color:green; font-weight:bold;\">${after.water - before.water}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.water < before.water) { addLog(`水分が<span style=\"color:red; font-weight:bold;\">${before.water - after.water}</span>減少した…`, 'detail', true); changed = true; }
     // 何も変動しなかった場合
     if (!changed) {
         addLog('しかし、何も起こらなかった...', 'detail');
@@ -696,17 +839,56 @@ function attackEnemy(weapon, enemy) {
     } else {
         attackValue = weapon.attack;
     }
+    // --- 痺れ: 命中率-25% ---
+    let accuracy = (typeof weapon.accuracy === 'number') ? weapon.accuracy : 1.0;
+    if (player.statuses.includes('痺れ') && !player.statuses.includes('加護')) {
+        accuracy -= 0.25;
+        if (accuracy < 0) accuracy = 0;
+    }
+    // 命中判定
+    let hit = true;
+    if (accuracy < 1.0) {
+        hit = Math.random() < accuracy;
+    }
     // 敵の防御力
     const defenseValue = enemy.defence[attr - 1] || 0;
     // ダメージ計算
-    const dmg = Math.max(0, attackValue - defenseValue);
+    let dmg = hit ? Math.max(0, attackValue - defenseValue) : 0;
     // HP減少
-    enemy.hp -= dmg;
-    if (enemy.hp < 0) enemy.hp = 0;
+    if (hit) {
+        enemy.hp -= dmg;
+        if (enemy.hp < 0) enemy.hp = 0;
+    }
     // ログ
     addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`, 'action');
-    addLog(`→ ダメージ: <span style="color:red; font-weight:bold;">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
+    if (!hit) {
+        addLog(`<span style=\"color:#888; font-weight:bold;\">攻撃は外れた！</span>（命中率${Math.round(accuracy * 100)}%）`, 'detail', true);
+    } else {
+        addLog(`→ ダメージ: <span style=\"color:red; font-weight:bold;\">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
+    }
+    // --- 毒: 攻撃時10ダメージ ---
+    if (player.statuses.includes('毒') && !player.statuses.includes('加護')) {
+        player.hp -= 10;
+        addLog('<span style="color:#090; font-weight:bold;">毒のダメージで10失った！</span>', 'detail', true);
+        if (player.hp < 0) player.hp = 0;
+        updatePlayerStatus();
+    }
     renderEnemies();
+    // 武器の耐久値を減らす＆未装填に戻す
+    const widx = inventory.findIndex(i => i.itemID === weapon.itemID && i.invIndex === weapon.invIndex);
+    if (widx !== -1) {
+        if (inventory[widx].currentDurability > 1) {
+            inventory[widx].currentDurability--;
+            inventory[widx].isLoaded = false;
+        } else {
+            inventory[widx].currentDurability--;
+            if (inventory[widx].currentDurability < 0) inventory[widx].currentDurability = 0;
+            addLog(`<span style=\"color:#a00; font-weight:bold;\">${inventory[widx].itemName}が壊れた！</span>`, 'detail', true);
+            // 削除せず残す
+            inventory[widx].isLoaded = false;
+        }
+        renderInventory();
+    }
 }
 function addLog(msg, type = 'action', isHtml = false) {
     const log = document.getElementById('log');
@@ -772,7 +954,7 @@ function nextFloor() {
                 attackValue = e.attack;
             }
             // プレイヤーの防御力
-            const defenseValue = player.defense[attr + 1] || 0;
+            const defenseValue = getTotalDefense(attr + 1);
             // ダメージ計算
             const dmg = Math.max(0, attackValue - defenseValue);
             totalAtk += dmg;
@@ -784,6 +966,44 @@ function nextFloor() {
                 detailMsg = `<span style=\"color:green; font-weight:bold;\">ただし完全にダメージを防いだ！</span>`;
             }
             addLog(detailMsg, 'detail', true);
+            // --- 防具の耐久値減少 ---
+            if (attackValue > 0) {
+                const loss = Math.ceil(attackValue / 10);
+                let durabilityChanged = false;
+                inventory.forEach(item => {
+                    if (item.itemTypeID === 3 && item.attrID === (attr + 1) && item.currentDurability > 0) {
+                        item.currentDurability -= loss;
+                        if (item.currentDurability < 0) item.currentDurability = 0;
+                        addLog(`<span style=\"color:#a60;\">${item.itemName}の耐久値が${loss}減少（残り${item.currentDurability}）</span>`, 'detail', true);
+                        if (item.currentDurability === 0) {
+                            addLog(`<span style=\"color:#a00; font-weight:bold;\">${item.itemName}が壊れた！</span>`, 'detail', true);
+                        }
+                        durabilityChanged = true;
+                    }
+                });
+                if (durabilityChanged) {
+                    renderInventory();
+                    renderLoot();
+                }
+            }
+            // --- 状態異常付与判定 ---
+            if (!player.statuses.includes('加護')) {
+                // 10% 痺れ
+                if (Math.random() < 0.10 && !player.statuses.includes('痺れ')) {
+                    player.statuses.push('痺れ');
+                    addLog('<span style="color:#00c; font-weight:bold;">痺れ状態になった！</span>', 'detail', true);
+                }
+                // 7% 毒
+                if (Math.random() < 0.07 && !player.statuses.includes('毒')) {
+                    player.statuses.push('毒');
+                    addLog('<span style="color:#090; font-weight:bold;">毒状態になった！</span>', 'detail', true);
+                }
+                // 5% 呪い
+                if (Math.random() < 0.05 && !player.statuses.includes('呪い')) {
+                    player.statuses.push('呪い');
+                    addLog('<span style="color:#800; font-weight:bold;">呪い状態になった！</span>', 'detail', true);
+                }
+            }
         });
         player.hp -= totalAtk;
         // 0-100に制限
@@ -846,13 +1066,26 @@ function restartGame() {
     player.energy = 100;
     player.water = 100;
     player.defense = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    player.statuses = []; // 状態異常リセット
     // フロア初期化
     floor = 1;
     updateFloor();
     // 敵・アイテム再生成
     // itemMaster, enemyMasterはfetch済み前提
-    loot = itemMaster.slice(0, 10).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
-    inventory = itemMaster.slice(10, 20).map(item => ({ ...item, currentDurability: item.maxDurability, invIndex: nextInvIndex++ }));
+    function getRandomItems(arr, n) {
+        const result = [];
+        for (let i = 0; i < n; i++) {
+            const idx = Math.floor(Math.random() * arr.length);
+            const base = arr[idx];
+            // 武器ならisLoaded初期化
+            let extra = {};
+            if (base.itemTypeID === 1) extra.isLoaded = false;
+            result.push({ ...base, currentDurability: base.maxDurability, invIndex: nextInvIndex++, ...extra });
+        }
+        return result;
+    }
+    loot = getRandomItems(itemMaster, 10);
+    inventory = getRandomItems(itemMaster, 10);
     const enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
     if (enemy1001) {
         enemies = [{
@@ -962,6 +1195,11 @@ window.onload = function () {
         document.getElementById('debug-def2').value = player.defense[2];
         document.getElementById('debug-def3').value = player.defense[3];
         document.getElementById('debug-def4').value = player.defense[4];
+        // 状態異常チェックボックス
+        document.getElementById('debug-status-paralysis').checked = player.statuses.includes('痺れ');
+        document.getElementById('debug-status-poison').checked = player.statuses.includes('毒');
+        document.getElementById('debug-status-curse').checked = player.statuses.includes('呪い');
+        document.getElementById('debug-status-bless').checked = player.statuses.includes('加護');
     }
     // フォーム送信で値を反映
     debugForm.onsubmit = function (e) {
@@ -973,6 +1211,13 @@ window.onload = function () {
         player.defense[2] = Number(document.getElementById('debug-def2').value);
         player.defense[3] = Number(document.getElementById('debug-def3').value);
         player.defense[4] = Number(document.getElementById('debug-def4').value);
+        // 状態異常チェックボックス
+        const statuses = [];
+        if (document.getElementById('debug-status-paralysis').checked) statuses.push('痺れ');
+        if (document.getElementById('debug-status-poison').checked) statuses.push('毒');
+        if (document.getElementById('debug-status-curse').checked) statuses.push('呪い');
+        if (document.getElementById('debug-status-bless').checked) statuses.push('加護');
+        player.statuses = statuses;
         updatePlayerStatus();
         toggleDebugWindow(false);
     };
@@ -996,4 +1241,105 @@ window.onload = function () {
             debugWindow.style.display = 'none';
         }
     }
-})(); 
+    const debugLootGen = document.getElementById('debug-lootgen');
+    if (debugLootGen) {
+        debugLootGen.onclick = function () {
+            // ルートアイテムをランダム生成（10個）
+            if (itemMaster && itemMaster.length > 0) {
+                loot = [];
+                for (let i = 0; i < 10; i++) {
+                    const idx = Math.floor(Math.random() * itemMaster.length);
+                    loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
+                }
+                renderLoot();
+            }
+        };
+    }
+})();
+// ===== 武器のマナ装填メニュー =====
+function showManaLoadMenu(weaponCard) {
+    console.log('[マナ装填] showManaLoadMenu呼び出し', weaponCard);
+    const menu = document.getElementById('action-menu');
+    menu.innerHTML = '<div class="mana-select-title">装填するマナを選択</div>';
+    // 武器属性
+    const attrID = weaponCard.attrID;
+    console.log('[マナ装填] 武器attrID:', attrID);
+    // インベントリから同じ属性のマナを抽出
+    const manaList = inventory.filter(i => i.itemTypeID === 2 && i.attrID === attrID);
+    console.log('[マナ装填] 候補マナ:', manaList);
+    if (manaList.length === 0) {
+        const div = document.createElement('div');
+        div.textContent = '同属性マナ無し';
+        div.className = 'mana-select-noitem';
+        menu.appendChild(div);
+    } else {
+        manaList.forEach(mana => {
+            const btn = document.createElement('button');
+            btn.textContent = `${mana.itemName} (${mana.currentDurability}/${mana.maxDurability})`;
+            // インラインスタイル削除。CSSで統一。
+            btn.onclick = () => {
+                console.log('[マナ装填] 選択マナ:', mana);
+                // マナの耐久値を1減らす
+                const idx = inventory.findIndex(i => i.itemID === mana.itemID && i.invIndex === mana.invIndex);
+                if (idx !== -1) {
+                    inventory[idx].currentDurability--;
+                    console.log('[マナ装填] マナ耐久値減少:', inventory[idx]);
+                    if (inventory[idx].currentDurability <= 0) {
+                        console.log('[マナ装填] マナ削除:', inventory[idx]);
+                        inventory.splice(idx, 1);
+                    }
+                }
+                // 武器を装填済みに
+                const widx = inventory.findIndex(i => i.itemID === weaponCard.itemID && i.invIndex === weaponCard.invIndex);
+                if (widx !== -1) {
+                    inventory[widx].isLoaded = true;
+                    console.log('[マナ装填] 武器を装填済みに:', inventory[widx]);
+                }
+                renderInventory();
+                hideActionMenu();
+                addLog(`${weaponCard.itemName}に${mana.itemName}を装填した。`, 'action');
+            };
+            menu.appendChild(btn);
+        });
+    }
+    menu.style.display = 'flex';
+    menu.style.flexDirection = 'column';
+    menu.style.gap = '4px';
+    console.log('[マナ装填] メニュー表示完了');
+}
+function showWeaponAttackMenu(weaponCard) {
+    const menu = document.getElementById('action-menu');
+    menu.innerHTML = '<div class="mana-select-title">攻撃対象を選択</div>';
+    if (enemies.length === 0) {
+        const div = document.createElement('div');
+        div.textContent = '敵がいません';
+        div.className = 'mana-select-noitem';
+        menu.appendChild(div);
+    } else {
+        enemies.forEach(e => {
+            const btn = document.createElement('button');
+            btn.textContent = `${e.name} (HP:${e.hp})`;
+            btn.onclick = () => {
+                menu.style.display = 'none';
+                attackEnemy(weaponCard, e);
+            };
+            menu.appendChild(btn);
+        });
+    }
+    menu.style.display = 'flex';
+    menu.style.flexDirection = 'column';
+    menu.style.gap = '4px';
+}
+// プレイヤーの素の防御力＋所持防具の合計防御力を返す関数
+function getTotalDefense(attr) {
+    let base = player.defense[attr] || 0;
+    let armor = 0;
+    inventory.forEach(item => {
+        if (item.itemTypeID === 3) { // 防具タイプID=3と仮定
+            if (item.attrID === attr && item.defence !== undefined && item.defence !== null && item.currentDurability > 0) {
+                armor += item.defence;
+            }
+        }
+    });
+    return base + armor;
+} 

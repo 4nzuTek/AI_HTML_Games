@@ -58,16 +58,16 @@ body {
     left: 660px;
     top: 20px;
     width: 690px;
-    height: 180px;
+    height: 220px;
     display: flex;
     flex-direction: column;
 }
 
 #loot-area {
     left: 660px;
-    top: 230px;
+    top: 270px;
     width: 690px;
-    height: 180px;
+    height: 150px;
     display: flex;
     flex-direction: column;
 }
@@ -139,7 +139,7 @@ body {
     display: flex;
     flex-direction: row;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 0px;
     justify-content: center;
 }
 
@@ -148,7 +148,7 @@ body {
     grid-template-columns: repeat(10, 50px);
     grid-template-rows: repeat(2, 80px);
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 0px;
     justify-content: center;
 }
 
@@ -243,7 +243,7 @@ body {
     color: #111;
     border: 3px solid #111;
     border-radius: 0;
-    padding: 4px 8px;
+    padding: 4px 4px;
     font-size: 0.92em;
     z-index: 1000;
     position: absolute;
@@ -360,7 +360,7 @@ body {
     color: #111;
     border: 3px solid #111;
     border-radius: 0;
-    padding: 4px 8px;
+    padding: 4px 4px;
     display: none;
     position: absolute;
     z-index: 1001;
@@ -392,6 +392,21 @@ body {
 #action-menu button:hover {
     background: #e0e0e0;
     border: 1.5px solid #888;
+}
+
+#action-menu .mana-select-title {
+    padding: 0px;
+    font-size: 12px;
+    margin-bottom: 0px;
+    font-weight: bold;
+    text-align: left;
+}
+
+/* マナ装填メニュー：同属性マナ無し表示用 */
+.mana-select-noitem {
+    padding: 0px;
+    font-size: 12px;
+    margin: 0px 0;
 }
 
 /* HP・エネルギー・水分バーの横幅を長くする */
