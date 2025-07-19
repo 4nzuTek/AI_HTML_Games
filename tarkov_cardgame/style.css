@@ -394,6 +394,21 @@ body {
     border: 1.5px solid #888;
 }
 
+#action-menu .mana-select-title {
+    padding: 0px;
+    font-size: 12px;
+    margin-bottom: 0px;
+    font-weight: bold;
+    text-align: left;
+}
+
+/* マナ装填メニュー：同属性マナ無し表示用 */
+.mana-select-noitem {
+    padding: 0px;
+    font-size: 12px;
+    margin: 0px 0;
+}
+
 /* HP・エネルギー・水分バーの横幅を長くする */
 progress.status-bar {
     width: 320px;

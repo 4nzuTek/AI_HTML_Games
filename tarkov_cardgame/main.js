@@ -162,7 +162,11 @@ fetch('json/itemType.json')
             const result = [];
             for (let i = 0; i < n; i++) {
                 const idx = Math.floor(Math.random() * arr.length);
-                result.push({ ...arr[idx], currentDurability: arr[idx].maxDurability, invIndex: nextInvIndex++ });
+                const base = arr[idx];
+                // 武器ならisLoaded初期化
+                let extra = {};
+                if (base.itemTypeID === 1) extra.isLoaded = false;
+                result.push({ ...base, currentDurability: base.maxDurability, invIndex: nextInvIndex++, ...extra });
             }
             return result;
         }
@@ -540,10 +544,9 @@ function showActionMenu(card, area, e, cardElem) {
     }
     menu.style.background = typeColor ? typeColor : '#fff';
     // === ここまで背景色設定 ===
-    if (area === 'enemy') {
-        // 敵カードのアクション
-    } else if (area === 'loot') {
-        // インベントリが20枚未満なら拾うボタン有効、20枚ならグレーアウト
+    // --- ここからアクション生成 ---
+    if (area === 'loot') {
+        // ルートエリアは「拾う」だけ
         const isFull = inventory.length >= 20;
         actions.push({
             label: '拾う',
@@ -551,9 +554,54 @@ function showActionMenu(card, area, e, cardElem) {
             disabled: isFull
         });
     } else if (area === 'inventory') {
-        // 全てのアイテムで「使用する」ボタンを表示
-        actions.push({ label: '使用する', handler: () => useItem(card) });
-        actions.push({ label: '捨てる', handler: () => dropItem(card) });
+        let actionList = [];
+        if (window.itemTypeMaster && card.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == card.itemTypeID);
+            if (t && t.action) {
+                actionList = t.action.split(',').map(s => s.trim());
+            }
+        }
+        actionList.forEach(act => {
+            if (act === '使用' || act === '使用する') {
+                actions.push({ label: '使用する', handler: () => useItem(card) });
+            } else if (act === '捨てる') {
+                actions.push({ label: '捨てる', handler: () => dropItem(card) });
+            } else if (act === '攻撃') {
+                // 装填済みでない場合はグレーアウト
+                const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
+                const isLoaded = (widx !== -1 && inventory[widx].isLoaded);
+                actions.push({
+                    label: '攻撃',
+                    handler: () => {
+                        if (isLoaded) {
+                            actionMenuForceOpen = true;
+                            setTimeout(() => { actionMenuForceOpen = false; }, 0);
+                            showWeaponAttackMenu(card);
+                        }
+                    },
+                    disabled: !isLoaded
+                });
+            } else if (act === 'マナ装填') {
+                // 装填済みならグレーアウト
+                const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
+                const isLoaded = (widx !== -1 && inventory[widx].isLoaded);
+                actions.push({
+                    label: 'マナ装填', handler: () => {
+                        if (!isLoaded) {
+                            actionMenuForceOpen = true;
+                            setTimeout(() => { actionMenuForceOpen = false; }, 0);
+                            showManaLoadMenu(card);
+                        }
+                    }, disabled: isLoaded
+                });
+            } else if (act === '装備') {
+                actions.push({ label: '装備', handler: () => alert('装備は未実装です') });
+            } else {
+                actions.push({ label: act, handler: () => alert(`${act}は未実装です`) });
+            }
+        });
+    } else if (area === 'enemy') {
+        // 敵カードのアクション（現状なし）
     }
     actions.forEach(act => {
         const btn = document.createElement('button');
@@ -564,10 +612,8 @@ function showActionMenu(card, area, e, cardElem) {
                 const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                 if (idx !== -1 && inventory[idx].currentDurability > 1) {
                     actionMenuForceOpen = true;
-                    // console.log('[actionMenu] 耐久1以上でチップ閉じ禁止: 次フレームまで');
                     setTimeout(() => {
                         actionMenuForceOpen = false;
-                        // console.log('[actionMenu] チップ閉じ禁止解除');
                     }, 0);
                 }
             }
@@ -575,7 +621,6 @@ function showActionMenu(card, area, e, cardElem) {
             if (!act.disabled) act.handler();
             // --- 情報チップの耐久値だけを直接更新 ---
             if (act.label === '使用する' && tooltipTargetCard) {
-                // カード右上の耐久値表示
                 const duraDiv = Array.from(tooltipTargetCard.childNodes).find(n => n && n.textContent && n.textContent.match(/\d+\/\d+/));
                 if (duraDiv) {
                     const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
@@ -583,7 +628,6 @@ function showActionMenu(card, area, e, cardElem) {
                         duraDiv.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
                     }
                 }
-                // ツールチップ内の耐久値表示
                 const tooltipDura = document.querySelector('#tooltip .tooltip-durability');
                 if (tooltipDura) {
                     const idx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
@@ -591,12 +635,9 @@ function showActionMenu(card, area, e, cardElem) {
                         tooltipDura.textContent = `${inventory[idx].currentDurability}/${inventory[idx].maxDurability}`;
                     }
                 }
-                // console.log('[actionMenu] ツールチップ耐久値のみ更新');
-                // 枠線が消えていたら再付与
                 if (tooltipTargetCard.classList && !tooltipTargetCard.classList.contains('card-tooltip-focus')) {
                     tooltipTargetCard.classList.add('card-tooltip-focus');
                     void tooltipTargetCard.offsetWidth;
-                    // console.log('[actionMenu] 枠線再付与');
                 }
             }
         };
@@ -615,21 +656,18 @@ function showActionMenu(card, area, e, cardElem) {
         let top = rect.top;
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
-        // outline幅をCSSから動的に取得
         let outlineWidth = 0;
         if (cardElem.classList && cardElem.classList.contains('card-tooltip-focus')) {
             const style = window.getComputedStyle(cardElem);
             outlineWidth = parseInt(style.outlineWidth) || 0;
         }
         top = top - outlineWidth;
-        // アクションメニューの左上をカードの右上に合わせる（上にオフセット）
         menu.style.left = (right + scrollX) + 'px';
         menu.style.top = (top + scrollY) + 'px';
     } else {
         menu.style.left = e.pageX + 'px';
         menu.style.top = e.pageY + 'px';
     }
-    // --- アクションメニューのマウスイベント ---
     menu.onmouseenter = function () {
         tooltipMenuOpen = true;
         if (tooltipHideTimer) {
@@ -754,6 +792,17 @@ function attackEnemy(weapon, enemy) {
     addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`, 'action');
     addLog(`→ ダメージ: <span style="color:red; font-weight:bold;">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
     renderEnemies();
+    // 武器の耐久値を減らす＆未装填に戻す
+    const widx = inventory.findIndex(i => i.itemID === weapon.itemID && i.invIndex === weapon.invIndex);
+    if (widx !== -1) {
+        if (inventory[widx].currentDurability > 1) {
+            inventory[widx].currentDurability--;
+            inventory[widx].isLoaded = false;
+        } else {
+            inventory.splice(widx, 1); // 0になったら削除
+        }
+        renderInventory();
+    }
 }
 function addLog(msg, type = 'action', isHtml = false) {
     const log = document.getElementById('log');
@@ -902,7 +951,11 @@ function restartGame() {
         const result = [];
         for (let i = 0; i < n; i++) {
             const idx = Math.floor(Math.random() * arr.length);
-            result.push({ ...arr[idx], currentDurability: arr[idx].maxDurability, invIndex: nextInvIndex++ });
+            const base = arr[idx];
+            // 武器ならisLoaded初期化
+            let extra = {};
+            if (base.itemTypeID === 1) extra.isLoaded = false;
+            result.push({ ...base, currentDurability: base.maxDurability, invIndex: nextInvIndex++, ...extra });
         }
         return result;
     }
@@ -1051,4 +1104,92 @@ window.onload = function () {
             debugWindow.style.display = 'none';
         }
     }
-})(); 
+    const debugLootGen = document.getElementById('debug-lootgen');
+    if (debugLootGen) {
+        debugLootGen.onclick = function () {
+            // ルートアイテムをランダム生成（10個）
+            if (itemMaster && itemMaster.length > 0) {
+                loot = [];
+                for (let i = 0; i < 10; i++) {
+                    const idx = Math.floor(Math.random() * itemMaster.length);
+                    loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
+                }
+                renderLoot();
+            }
+        };
+    }
+})();
+// ===== 武器のマナ装填メニュー =====
+function showManaLoadMenu(weaponCard) {
+    console.log('[マナ装填] showManaLoadMenu呼び出し', weaponCard);
+    const menu = document.getElementById('action-menu');
+    menu.innerHTML = '<div class="mana-select-title">装填するマナを選択</div>';
+    // 武器属性
+    const attrID = weaponCard.attrID;
+    console.log('[マナ装填] 武器attrID:', attrID);
+    // インベントリから同じ属性のマナを抽出
+    const manaList = inventory.filter(i => i.itemTypeID === 2 && i.attrID === attrID);
+    console.log('[マナ装填] 候補マナ:', manaList);
+    if (manaList.length === 0) {
+        const div = document.createElement('div');
+        div.textContent = '同属性マナ無し';
+        div.className = 'mana-select-noitem';
+        menu.appendChild(div);
+    } else {
+        manaList.forEach(mana => {
+            const btn = document.createElement('button');
+            btn.textContent = `${mana.itemName} (${mana.currentDurability}/${mana.maxDurability})`;
+            // インラインスタイル削除。CSSで統一。
+            btn.onclick = () => {
+                console.log('[マナ装填] 選択マナ:', mana);
+                // マナの耐久値を1減らす
+                const idx = inventory.findIndex(i => i.itemID === mana.itemID && i.invIndex === mana.invIndex);
+                if (idx !== -1) {
+                    inventory[idx].currentDurability--;
+                    console.log('[マナ装填] マナ耐久値減少:', inventory[idx]);
+                    if (inventory[idx].currentDurability <= 0) {
+                        console.log('[マナ装填] マナ削除:', inventory[idx]);
+                        inventory.splice(idx, 1);
+                    }
+                }
+                // 武器を装填済みに
+                const widx = inventory.findIndex(i => i.itemID === weaponCard.itemID && i.invIndex === weaponCard.invIndex);
+                if (widx !== -1) {
+                    inventory[widx].isLoaded = true;
+                    console.log('[マナ装填] 武器を装填済みに:', inventory[widx]);
+                }
+                renderInventory();
+                hideActionMenu();
+                addLog(`${weaponCard.itemName}に${mana.itemName}を装填した。`, 'action');
+            };
+            menu.appendChild(btn);
+        });
+    }
+    menu.style.display = 'flex';
+    menu.style.flexDirection = 'column';
+    menu.style.gap = '4px';
+    console.log('[マナ装填] メニュー表示完了');
+}
+function showWeaponAttackMenu(weaponCard) {
+    const menu = document.getElementById('action-menu');
+    menu.innerHTML = '<div class="mana-select-title">攻撃対象を選択</div>';
+    if (enemies.length === 0) {
+        const div = document.createElement('div');
+        div.textContent = '敵がいません';
+        div.className = 'mana-select-noitem';
+        menu.appendChild(div);
+    } else {
+        enemies.forEach(e => {
+            const btn = document.createElement('button');
+            btn.textContent = `${e.name} (HP:${e.hp})`;
+            btn.onclick = () => {
+                menu.style.display = 'none';
+                attackEnemy(weaponCard, e);
+            };
+            menu.appendChild(btn);
+        });
+    }
+    menu.style.display = 'flex';
+    menu.style.flexDirection = 'column';
+    menu.style.gap = '4px';
+} 
