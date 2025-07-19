@@ -58,16 +58,16 @@ body {
     left: 660px;
     top: 20px;
     width: 690px;
-    height: 180px;
+    height: 220px;
     display: flex;
     flex-direction: column;
 }
 
 #loot-area {
     left: 660px;
-    top: 230px;
+    top: 270px;
     width: 690px;
-    height: 180px;
+    height: 150px;
     display: flex;
     flex-direction: column;
 }
@@ -139,7 +139,7 @@ body {
     display: flex;
     flex-direction: row;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 0px;
     justify-content: center;
 }
 
@@ -148,7 +148,7 @@ body {
     grid-template-columns: repeat(10, 50px);
     grid-template-rows: repeat(2, 80px);
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 0px;
     justify-content: center;
 }
 
