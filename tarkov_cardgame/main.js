@@ -49,9 +49,8 @@ function renderEnemies() {
         card.dataset.id = e.id;
         card.dataset.type = 'enemy';
         // --- エネミー画像（Canvasで抜き色処理） ---
-        const randImg = ENEMY_IMAGE_LIST[Math.floor(Math.random() * ENEMY_IMAGE_LIST.length)];
         const img = new window.Image();
-        img.src = 'images/enemy/' + randImg;
+        img.src = 'images/enemy/' + e.imageName;
         img.onload = function () {
             const cardW = Math.max(50, img.width);
             const cardH = Math.max(80, img.height);
@@ -211,7 +210,8 @@ fetch('json/enemy.json')
                 maxHp: enemy1001.maxHp,
                 attack: enemy1001.attack,
                 attackChance: [enemy1001.attackChance_attr01, enemy1001.attackChance_attr02, enemy1001.attackChance_attr03, enemy1001.attackChance_attr04],
-                defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04]
+                defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04],
+                imageName: enemy1001.imageName
             }];
         }
         renderEnemies();
@@ -858,6 +858,19 @@ function attackEnemy(weapon, enemy) {
     if (hit) {
         enemy.hp -= dmg;
         if (enemy.hp < 0) enemy.hp = 0;
+        // --- シェイクアニメーション ---
+        setTimeout(() => {
+            const area = document.getElementById('enemies');
+            const card = area.querySelector(`.enemy-card[data-id='${enemy.id}']`);
+            if (card) {
+                card.classList.remove('enemy-shake'); // 連続攻撃時のため一度消す
+                void card.offsetWidth; // 強制リフロー
+                card.classList.add('enemy-shake');
+                setTimeout(() => {
+                    card.classList.remove('enemy-shake');
+                }, 500);
+            }
+        }, 0);
     }
     // ログ
     addLog(`${enemy.name}に${weapon.itemName}${attrName ? '（' + attrName + '）' : ''}で攻撃した！`, 'action');
@@ -865,6 +878,28 @@ function attackEnemy(weapon, enemy) {
         addLog(`<span style=\"color:#888; font-weight:bold;\">攻撃は外れた！</span>（命中率${Math.round(accuracy * 100)}%）`, 'detail', true);
     } else {
         addLog(`→ ダメージ: <span style=\"color:red; font-weight:bold;\">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
+    }
+    // --- 撃破判定・演出 ---
+    if (enemy.hp === 0) {
+        // 撃破アニメーション
+        setTimeout(() => {
+            const area = document.getElementById('enemies');
+            const card = area.querySelector(`.enemy-card[data-id='${enemy.id}']`);
+            if (card) {
+                const ripple = document.createElement('div');
+                ripple.className = 'enemy-defeat-ripple';
+                card.appendChild(ripple);
+                setTimeout(() => {
+                    // 敵カードを削除
+                    card.remove();
+                    // enemies配列からも削除
+                    const idx = enemies.findIndex(e => e.id === enemy.id);
+                    if (idx !== -1) enemies.splice(idx, 1);
+                    // ログに撃破テキスト
+                    addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！</span>`, 'action', true);
+                }, 650); // rippleアニメーション終了後
+            }
+        }, 50); // 少し遅延して演出
     }
     // --- 毒: 攻撃時10ダメージ ---
     if (player.statuses.includes('毒') && !player.statuses.includes('加護')) {
@@ -1095,7 +1130,8 @@ function restartGame() {
             maxHp: enemy1001.maxHp,
             attack: enemy1001.attack,
             attackChance: [enemy1001.attackChance_attr01, enemy1001.attackChance_attr02, enemy1001.attackChance_attr03, enemy1001.attackChance_attr04],
-            defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04]
+            defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04],
+            imageName: enemy1001.imageName
         }];
     } else {
         enemies = [];

@@ -548,3 +548,66 @@ progress.status-bar {
 #gameover-dialog button:hover {
     background: #fee;
 }
+
+.enemy-defeat-ripple {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 80px;
+    height: 80px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 10px solid #e22;
+    opacity: 0.7;
+    pointer-events: none;
+    animation: ripple-expand 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    z-index: 20;
+}
+
+@keyframes ripple-expand {
+    0% {
+        transform: translate(-50%, -50%) scale(0.2);
+        opacity: 0.7;
+    }
+
+    60% {
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(3.2);
+        opacity: 0;
+    }
+}
+
+.enemy-shake {
+    animation: enemy-shake-anim 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes enemy-shake-anim {
+
+    10%,
+    90% {
+        transform: translateX(-2px);
+    }
+
+    20%,
+    80% {
+        transform: translateX(4px);
+    }
+
+    30%,
+    50%,
+    70% {
+        transform: translateX(-8px);
+    }
+
+    40%,
+    60% {
+        transform: translateX(8px);
+    }
+
+    100% {
+        transform: translateX(0);
+    }
+}

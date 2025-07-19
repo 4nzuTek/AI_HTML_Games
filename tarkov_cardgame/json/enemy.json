@@ -2,6 +2,7 @@
   {
     "enemyID": 1001,
     "enemyName": "テストエネミー",
+    "imageName": "mon_011.bmp",
     "maxHp": 30,
     "attack": 25,
     "attackChance_attr01": 0.25,
@@ -11,6 +12,7 @@
     "defence_attr01": 0,
     "defence_attr02": 10,
     "defence_attr03": 20,
-    "defence_attr04": 30
+    "defence_attr04": 30,
+    "": null
   }
 ]
