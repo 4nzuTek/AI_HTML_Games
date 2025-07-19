@@ -732,9 +732,27 @@ function useItem(card) {
     const before = { hp: player.hp, energy: player.energy, water: player.water };
     // 先に使用ログ（アクション）
     addLog(`${card.itemName}を使用した。`, 'action');
+    // --- 状態異常回復 ---
+    let cured = [];
+    if (card.paralysisCure && player.statuses.includes('痺れ')) {
+        player.statuses = player.statuses.filter(s => s !== '痺れ');
+        cured.push('痺れ');
+    }
+    if (card.poisonCure && player.statuses.includes('毒')) {
+        player.statuses = player.statuses.filter(s => s !== '毒');
+        cured.push('毒');
+    }
+    if (card.curseCure && player.statuses.includes('呪い')) {
+        player.statuses = player.statuses.filter(s => s !== '呪い');
+        cured.push('呪い');
+    }
+    if (cured.length > 0) {
+        addLog(`<span style=\"color:#06c; font-weight:bold;\">${cured.join('・')}が回復した！</span>`, 'detail', true);
+        updatePlayerStatus();
+    }
     // --- 呪い: HP回復無効 ---
     let hpRecov = (typeof card.hpRecov === 'number') ? card.hpRecov : 0;
-    if (player.statuses.includes('呪い') && hpRecov > 0) {
+    if (player.statuses.includes('呪い') && !player.statuses.includes('加護') && hpRecov > 0) {
         hpRecov = 0;
         addLog('<span style="color:#800; font-weight:bold;">呪いのためHPは回復しなかった！</span>', 'detail', true);
     }
@@ -750,12 +768,12 @@ function useItem(card) {
     // 増減ログ（詳細）
     const after = { hp: player.hp, energy: player.energy, water: player.water };
     let changed = false;
-    if (after.hp > before.hp) { addLog(`HPが<span style="color:green; font-weight:bold;">${after.hp - before.hp}</span>回復した！`, 'detail', true); changed = true; }
-    if (after.hp < before.hp) { addLog(`HPが<span style="color:red; font-weight:bold;">${before.hp - after.hp}</span>減少した…`, 'detail', true); changed = true; }
-    if (after.energy > before.energy) { addLog(`エネルギーが<span style="color:green; font-weight:bold;">${after.energy - before.energy}</span>回復した！`, 'detail', true); changed = true; }
-    if (after.energy < before.energy) { addLog(`エネルギーが<span style="color:red; font-weight:bold;">${before.energy - after.energy}</span>減少した…`, 'detail', true); changed = true; }
-    if (after.water > before.water) { addLog(`水分が<span style="color:green; font-weight:bold;">${after.water - before.water}</span>回復した！`, 'detail', true); changed = true; }
-    if (after.water < before.water) { addLog(`水分が<span style="color:red; font-weight:bold;">${before.water - after.water}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.hp > before.hp) { addLog(`HPが<span style=\"color:green; font-weight:bold;\">${after.hp - before.hp}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.hp < before.hp) { addLog(`HPが<span style=\"color:red; font-weight:bold;\">${before.hp - after.hp}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.energy > before.energy) { addLog(`エネルギーが<span style=\"color:green; font-weight:bold;\">${after.energy - before.energy}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.energy < before.energy) { addLog(`エネルギーが<span style=\"color:red; font-weight:bold;\">${before.energy - after.energy}</span>減少した…`, 'detail', true); changed = true; }
+    if (after.water > before.water) { addLog(`水分が<span style=\"color:green; font-weight:bold;\">${after.water - before.water}</span>回復した！`, 'detail', true); changed = true; }
+    if (after.water < before.water) { addLog(`水分が<span style=\"color:red; font-weight:bold;\">${before.water - after.water}</span>減少した…`, 'detail', true); changed = true; }
     // 何も変動しなかった場合
     if (!changed) {
         addLog('しかし、何も起こらなかった...', 'detail');
@@ -815,7 +833,7 @@ function attackEnemy(weapon, enemy) {
     }
     // --- 痺れ: 命中率-25% ---
     let accuracy = (typeof weapon.accuracy === 'number') ? weapon.accuracy : 1.0;
-    if (player.statuses.includes('痺れ')) {
+    if (player.statuses.includes('痺れ') && !player.statuses.includes('加護')) {
         accuracy -= 0.25;
         if (accuracy < 0) accuracy = 0;
     }
@@ -841,7 +859,7 @@ function attackEnemy(weapon, enemy) {
         addLog(`→ ダメージ: <span style=\"color:red; font-weight:bold;\">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
     }
     // --- 毒: 攻撃時10ダメージ ---
-    if (player.statuses.includes('毒')) {
+    if (player.statuses.includes('毒') && !player.statuses.includes('加護')) {
         player.hp -= 10;
         addLog('<span style="color:#090; font-weight:bold;">毒のダメージで10失った！</span>', 'detail', true);
         if (player.hp < 0) player.hp = 0;
@@ -937,20 +955,24 @@ function nextFloor() {
             }
             addLog(detailMsg, 'detail', true);
             // --- 状態異常付与判定 ---
-            // 10% 痺れ
-            if (Math.random() < 0.10 && !player.statuses.includes('痺れ')) {
-                player.statuses.push('痺れ');
-                addLog('<span style="color:#00c; font-weight:bold;">痺れ状態になった！</span>', 'detail', true);
-            }
-            // 7% 毒
-            if (Math.random() < 0.07 && !player.statuses.includes('毒')) {
-                player.statuses.push('毒');
-                addLog('<span style="color:#090; font-weight:bold;">毒状態になった！</span>', 'detail', true);
-            }
-            // 5% 呪い
-            if (Math.random() < 0.05 && !player.statuses.includes('呪い')) {
-                player.statuses.push('呪い');
-                addLog('<span style="color:#800; font-weight:bold;">呪い状態になった！</span>', 'detail', true);
+            if (!player.statuses.includes('加護')) {
+                // 10% 痺れ
+                if (Math.random() < 0.10 && !player.statuses.includes('痺れ')) {
+                    player.statuses.push('痺れ');
+                    addLog('<span style="color:#00c; font-weight:bold;">痺れ状態になった！</span>', 'detail', true);
+                }
+                // 7% 毒
+                if (Math.random() < 0.07 && !player.statuses.includes('毒')) {
+                    player.statuses.push('毒');
+                    addLog('<span style="color:#090; font-weight:bold;">毒状態になった！</span>', 'detail', true);
+                }
+                // 5% 呪い
+                if (Math.random() < 0.05 && !player.statuses.includes('呪い')) {
+                    player.statuses.push('呪い');
+                    addLog('<span style="color:#800; font-weight:bold;">呪い状態になった！</span>', 'detail', true);
+                }
+            } else {
+                addLog('<span style="color:#06c; font-weight:bold;">加護により状態異常を防いだ！</span>', 'detail', true);
             }
         });
         player.hp -= totalAtk;
@@ -1143,6 +1165,11 @@ window.onload = function () {
         document.getElementById('debug-def2').value = player.defense[2];
         document.getElementById('debug-def3').value = player.defense[3];
         document.getElementById('debug-def4').value = player.defense[4];
+        // 状態異常チェックボックス
+        document.getElementById('debug-status-paralysis').checked = player.statuses.includes('痺れ');
+        document.getElementById('debug-status-poison').checked = player.statuses.includes('毒');
+        document.getElementById('debug-status-curse').checked = player.statuses.includes('呪い');
+        document.getElementById('debug-status-bless').checked = player.statuses.includes('加護');
     }
     // フォーム送信で値を反映
     debugForm.onsubmit = function (e) {
@@ -1154,6 +1181,13 @@ window.onload = function () {
         player.defense[2] = Number(document.getElementById('debug-def2').value);
         player.defense[3] = Number(document.getElementById('debug-def3').value);
         player.defense[4] = Number(document.getElementById('debug-def4').value);
+        // 状態異常チェックボックス
+        const statuses = [];
+        if (document.getElementById('debug-status-paralysis').checked) statuses.push('痺れ');
+        if (document.getElementById('debug-status-poison').checked) statuses.push('毒');
+        if (document.getElementById('debug-status-curse').checked) statuses.push('呪い');
+        if (document.getElementById('debug-status-bless').checked) statuses.push('加護');
+        player.statuses = statuses;
         updatePlayerStatus();
         toggleDebugWindow(false);
     };
