@@ -231,6 +231,14 @@ function getItemTooltip(item) {
             if (t.color) typeColor = `#${t.color}`;
         }
     }
+    // 属性名を取得
+    let attrName = '';
+    if (item.attrID !== null && item.attrID !== undefined) {
+        if (item.attrID === 1) attrName = '炎';
+        else if (item.attrID === 2) attrName = '水';
+        else if (item.attrID === 3) attrName = '風';
+        else if (item.attrID === 4) attrName = '地';
+    }
     // 耐久値
     let durability = '';
     if (item.maxDurability > 0 && item.currentDurability !== undefined) {
@@ -238,9 +246,17 @@ function getItemTooltip(item) {
     }
     // パラメータ表
     let paramRows = '';
-    if (item.eneRecov !== null && item.eneRecov !== undefined) paramRows += `<tr><td>エネルギー回復量</td><td>${item.eneRecov}</td></tr>`;
-    if (item.waterRecov !== null && item.waterRecov !== undefined) paramRows += `<tr><td>水分回復量</td><td>${item.waterRecov}</td></tr>`;
-    if (item.hpRecov !== null && item.hpRecov !== undefined) paramRows += `<tr><td>HP回復量</td><td>${item.hpRecov}</td></tr>`;
+    if (item.eneRecov !== null && item.eneRecov !== undefined && item.eneRecov !== 0) paramRows += `<tr><td>エネルギー回復量</td><td>${item.eneRecov}</td></tr>`;
+    if (item.waterRecov !== null && item.waterRecov !== undefined && item.waterRecov !== 0) paramRows += `<tr><td>水分回復量</td><td>${item.waterRecov}</td></tr>`;
+    if (item.hpRecov !== null && item.hpRecov !== undefined && item.hpRecov !== 0) paramRows += `<tr><td>HP回復量</td><td>${item.hpRecov}</td></tr>`;
+    // 攻撃力
+    if (item.attack !== null && item.attack !== undefined && item.attack !== 0) paramRows += `<tr><td>攻撃力</td><td>${item.attack}</td></tr>`;
+    // 防御力
+    if (item.defence !== null && item.defence !== undefined && item.defence !== 0) paramRows += `<tr><td>防御力</td><td>${item.defence}</td></tr>`;
+    // 命中率
+    if (item.accuracy !== null && item.accuracy !== undefined && item.accuracy !== 0) paramRows += `<tr><td>命中率</td><td>${Math.round(item.accuracy * 100)}%</td></tr>`;
+    // クリティカル率
+    if (item.critical !== null && item.critical !== undefined && item.critical !== 0) paramRows += `<tr><td>クリティカル率</td><td>${Math.round(item.critical * 100)}%</td></tr>`;
     if (item.paralysisCure) paramRows += `<tr><td>麻痺回復</td><td>○</td></tr>`;
     if (item.poisonCure) paramRows += `<tr><td>毒回復</td><td>○</td></tr>`;
     if (item.curseCure) paramRows += `<tr><td>呪い回復</td><td>○</td></tr>`;
@@ -253,7 +269,7 @@ function getItemTooltip(item) {
         <b class="tooltip-title">${item.itemName}</b>
         ${durability ? `<span class="tooltip-durability">${durability}</span>` : ''}
       </div>
-      <div class="tooltip-type">${itemTypeName}</div>
+      <div class="tooltip-type">${itemTypeName}${attrName ? `（${attrName}）` : ''}</div>
       ${img}
       <div class="tooltip-divider"></div>
       <table class="tooltip-paramtable">${paramRows}</table>
