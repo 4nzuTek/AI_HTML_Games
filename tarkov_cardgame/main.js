@@ -897,6 +897,8 @@ function attackEnemy(weapon, enemy) {
                     if (idx !== -1) enemies.splice(idx, 1);
                     // ログに撃破テキスト
                     addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！</span>`, 'action', true);
+                    // ここでrenderEnemies()を呼ぶことで、enemies.length===0時に脱出ボタンが即時反映される
+                    renderEnemies();
                 }, 650); // rippleアニメーション終了後
             }
         }, 50); // 少し遅延して演出
@@ -1193,9 +1195,22 @@ window.onload = function () {
     // 脱出ボタン押下時
     escapeBtn.onclick = function () {
         if (!escapeBtn.disabled) {
-            addLog('脱出に成功した！ゲームクリア！', 'action');
-            // ここでゲームクリア処理等を追加可能
+            // 確認ダイアログを表示
+            document.getElementById('escape-confirm-dialog').style.display = 'block';
+            document.getElementById('escape-confirm-mask').style.display = 'block';
         }
+    };
+    // 脱出確認ダイアログのOK/キャンセル
+    document.getElementById('escape-ok-btn').onclick = function () {
+        // ダイアログを閉じる
+        document.getElementById('escape-confirm-dialog').style.display = 'none';
+        document.getElementById('escape-confirm-mask').style.display = 'none';
+        // ゲームクリアダイアログを表示
+        showGameClear();
+    };
+    document.getElementById('escape-cancel-btn').onclick = function () {
+        document.getElementById('escape-confirm-dialog').style.display = 'none';
+        document.getElementById('escape-confirm-mask').style.display = 'none';
     };
     // 初期ログに「B1Fに到達」だけ表示
     const log = document.getElementById('log');
@@ -1291,6 +1306,44 @@ window.onload = function () {
             }
         };
     }
+    const debugEnemyKill = document.getElementById('debug-enemykill');
+    if (debugEnemyKill) {
+        debugEnemyKill.onclick = async function () {
+            if (enemies.length === 0) {
+                addLog('<span style="color:#888;">敵がいません</span>', 'action', true);
+                return;
+            }
+            // 全撃破処理（1体ずつ演出付きで）
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                await debugDefeatEnemyWithEffect(enemies[i]);
+            }
+            addLog('<span style="color:#a00; font-weight:bold;">デバッグ：敵を全撃破しました</span>', 'action', true);
+        };
+    }
+
+    // デバッグ用：敵を撃破する演出付き関数
+    async function debugDefeatEnemyWithEffect(enemy) {
+        // HPを0に
+        enemy.hp = 0;
+        // 撃破アニメーション
+        const area = document.getElementById('enemies');
+        const card = area.querySelector(`.enemy-card[data-id='${enemy.id}']`);
+        if (card) {
+            const ripple = document.createElement('div');
+            ripple.className = 'enemy-defeat-ripple';
+            card.appendChild(ripple);
+            await new Promise(res => setTimeout(res, 650));
+            card.remove();
+        } else {
+            await new Promise(res => setTimeout(res, 100));
+        }
+        // enemies配列から削除
+        const idx = enemies.findIndex(e => e.id === enemy.id);
+        if (idx !== -1) enemies.splice(idx, 1);
+        // ログ
+        addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！（デバッグ）</span>`, 'action', true);
+        renderEnemies();
+    }
 })();
 // ===== 武器のマナ装填メニュー =====
 function showManaLoadMenu(weaponCard) {
@@ -1378,4 +1431,52 @@ function getTotalDefense(attr) {
         }
     });
     return base + armor;
-} 
+}
+// ===== ゲームクリア処理 =====
+function showGameClear() {
+    // ログにクリアメッセージ
+    addLog('<span style="color:#228b22; font-weight:bold; font-size:1.2em;">=== ダンジョン脱出成功！ ===</span>', 'action', true);
+    // 持ち帰りアイテム一覧を作成
+    let html = '';
+    if (inventory.length === 0) {
+        html = '<div style="color:#888;">持ち帰ったアイテムはありません</div>';
+    } else {
+        html = '<ul style="padding-left:0; list-style:none; margin:0;">';
+        for (const item of inventory) {
+            // アイテム画像
+            const imgTag = item.imageName ? `<img src='images/item/${item.imageName}' alt='' style='width:24px; height:24px; vertical-align:middle; margin-right:6px; border:1px solid #ccc; border-radius:4px; background:#fafafa;'>` : '';
+            html += `<li style='margin-bottom:4px;'>${imgTag}<span style='vertical-align:middle;'>${item.itemName}`;
+            if (item.currentDurability !== undefined && item.maxDurability > 0) {
+                html += ` (${item.currentDurability}/${item.maxDurability})`;
+            }
+            html += '</span></li>';
+        }
+        html += '</ul>';
+    }
+    document.getElementById('gameclear-items').innerHTML = html;
+    // アイコンにマウスオーバーでチップ表示
+    const itemImgs = document.querySelectorAll('#gameclear-items img');
+    itemImgs.forEach((img, idx) => {
+        const item = inventory[idx];
+        img.addEventListener('mouseenter', function (e) {
+            onCardMouseEnter(getItemTooltip(item), img);
+        });
+        img.addEventListener('mouseleave', function (e) {
+            onCardMouseLeave();
+        });
+    });
+    // ダイアログ表示
+    document.getElementById('gameclear-dialog').style.display = 'block';
+    document.getElementById('gameclear-mask').style.display = 'block';
+    // すべてのボタンを無効化
+    Array.from(document.querySelectorAll('button')).forEach(btn => {
+        btn.disabled = true;
+    });
+    document.getElementById('gameclear-close-btn').disabled = false;
+    document.getElementById('gameclear-close-btn').onclick = function () {
+        document.getElementById('gameclear-dialog').style.display = 'none';
+        document.getElementById('gameclear-mask').style.display = 'none';
+        // ページをリロードして最初からやり直し
+        location.reload();
+    };
+}

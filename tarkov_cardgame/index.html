@@ -77,6 +77,8 @@
             <button type="submit" style="margin-top:12px;">適用</button>
             <button type="button" id="debug-cancel" style="margin-top:12px; margin-left:16px;">キャンセル</button>
             <button type="button" id="debug-lootgen" style="margin-top:12px; margin-left:16px;">ルートアイテムランダム生成</button>
+            <button type="button" id="debug-enemykill"
+                style="margin-top:12px; margin-left:16px; background:#fdd; color:#a00;">敵を全撃破</button>
         </form>
         <div style="margin-top:16px; font-size:0.9em; color:#888;">Dキーで閉じる/戻る</div>
     </div>
@@ -87,6 +89,29 @@
         <button id="retry-btn" style="font-size:1.1em; padding:8px 32px;">リトライ</button>
     </div>
     <div id="gameover-mask"></div>
+    <!-- 脱出確認ダイアログ -->
+    <div id="escape-confirm-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2100; background:#fff; border:3px solid #2ecc40; padding:32px 40px; min-width:320px; min-height:140px; box-shadow:0 0 32px #2ecc4088; text-align:center; border-radius:10px;">
+        <div style="font-weight:bold; font-size:1.3em; color:#228b22; margin-bottom:18px;">脱出確認</div>
+        <div style="font-size:1.1em; margin-bottom:24px;">ダンジョン探索を終えて帰還しますか？<br>（持ち帰ったアイテムは全て獲得します）</div>
+        <button id="escape-ok-btn" style="font-size:1.1em; padding:8px 32px; margin-right:16px;">OK</button>
+        <button id="escape-cancel-btn" style="font-size:1.1em; padding:8px 32px;">キャンセル</button>
+    </div>
+    <div id="escape-confirm-mask"
+        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:2099;">
+    </div>
+    <!-- ゲームクリアダイアログ -->
+    <div id="gameclear-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2200; background:#fff; border:3px solid #2ecc40; padding:32px 40px; min-width:340px; min-height:200px; box-shadow:0 0 32px #2ecc4088; text-align:center; border-radius:10px;">
+        <div style="font-weight:bold; font-size:1.6em; color:#228b22; margin-bottom:18px;">ダンジョン脱出成功！</div>
+        <div id="gameclear-message" style="font-size:1.1em; margin-bottom:18px;">おめでとうございます！</div>
+        <div id="gameclear-items"
+            style="font-size:1em; margin-bottom:24px; text-align:left; max-height:180px; overflow:auto;"></div>
+        <button id="gameclear-close-btn" style="font-size:1.1em; padding:8px 32px;">閉じる</button>
+    </div>
+    <div id="gameclear-mask"
+        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:2199;">
+    </div>
     <script src="main.js"></script>
 </body>
 
