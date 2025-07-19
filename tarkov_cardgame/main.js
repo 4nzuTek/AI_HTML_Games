@@ -270,6 +270,7 @@ function getItemTooltip(item) {
     if (item.paralysisCure) paramRows += `<tr><td>麻痺回復</td><td>○</td></tr>`;
     if (item.poisonCure) paramRows += `<tr><td>毒回復</td><td>○</td></tr>`;
     if (item.curseCure) paramRows += `<tr><td>呪い回復</td><td>○</td></tr>`;
+    if (item.blessing) paramRows += `<tr><td>加護付与</td><td>○</td></tr>`;
     // 画像
     const img = `<div class="tooltip-imgbox"><img src="images/item/${item.imageName}" alt="${item.itemName}" class="tooltip-img"></div>`;
     // HTML組み立て
@@ -750,6 +751,12 @@ function useItem(card) {
         addLog(`<span style=\"color:#06c; font-weight:bold;\">${cured.join('・')}が回復した！</span>`, 'detail', true);
         updatePlayerStatus();
     }
+    // --- 加護付与 ---
+    if (card.blessing && !player.statuses.includes('加護')) {
+        player.statuses.push('加護');
+        addLog('<span style="color:#06c; font-weight:bold;">加護状態になった！</span>', 'detail', true);
+        updatePlayerStatus();
+    }
     // --- 呪い: HP回復無効 ---
     let hpRecov = (typeof card.hpRecov === 'number') ? card.hpRecov : 0;
     if (player.statuses.includes('呪い') && !player.statuses.includes('加護') && hpRecov > 0) {
@@ -971,8 +978,6 @@ function nextFloor() {
                     player.statuses.push('呪い');
                     addLog('<span style="color:#800; font-weight:bold;">呪い状態になった！</span>', 'detail', true);
                 }
-            } else {
-                addLog('<span style="color:#06c; font-weight:bold;">加護により状態異常を防いだ！</span>', 'detail', true);
             }
         });
         player.hp -= totalAtk;
