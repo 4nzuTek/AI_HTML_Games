@@ -502,9 +502,15 @@ function showTooltip(desc, cardOrEvent) {
         }
         const style = window.getComputedStyle(cardOrEvent);
         outlineW = parseInt(style.outlineWidth) || 0;
-        // console.log('item-card outlineW:', outlineW);
-        const left = rect.left - outlineW;
-        const top = rect.top;
+        // result-item-imgクラスならリザルト用の左寄せ補正
+        let left, top;
+        if (cardOrEvent.classList && cardOrEvent.classList.contains('result-item-img')) {
+            left = rect.left - tooltip.offsetWidth - 0; // 0pxほどさらに左へ
+            top = rect.bottom + 3; // 画像の下端よりpx下に表示
+        } else {
+            left = rect.left - outlineW;
+            top = rect.top;
+        }
         const scrollX = window.scrollX || window.pageXOffset;
         const scrollY = window.scrollY || window.pageYOffset;
         tooltip.style.left = (left + scrollX) + 'px';
@@ -1444,7 +1450,7 @@ function showGameClear() {
         html = '<ul style="padding-left:0; list-style:none; margin:0;">';
         for (const item of inventory) {
             // アイテム画像
-            const imgTag = item.imageName ? `<img src='images/item/${item.imageName}' alt='' style='width:24px; height:24px; vertical-align:middle; margin-right:6px; border:1px solid #ccc; border-radius:4px; background:#fafafa;'>` : '';
+            const imgTag = item.imageName ? `<img src='images/item/${item.imageName}' alt='' class='result-item-img' style='width:24px; height:24px; vertical-align:middle; margin-right:6px; border:1px solid #ccc; border-radius:4px; background:#fafafa;'>` : '';
             html += `<li style='margin-bottom:4px;'>${imgTag}<span style='vertical-align:middle;'>${item.itemName}`;
             if (item.currentDurability !== undefined && item.maxDurability > 0) {
                 html += ` (${item.currentDurability}/${item.maxDurability})`;
