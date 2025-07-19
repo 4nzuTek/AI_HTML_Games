@@ -710,7 +710,7 @@
     "paralysisCure": null,
     "poisonCure": null,
     "curseCure": null,
-    "blessing": 1
+    "blessing": null
   },
   {
     "itemID": 11232,
@@ -733,7 +733,7 @@
     "paralysisCure": null,
     "poisonCure": null,
     "curseCure": null,
-    "blessing": 1
+    "blessing": null
   },
   {
     "itemID": 11233,
@@ -756,7 +756,7 @@
     "paralysisCure": null,
     "poisonCure": null,
     "curseCure": null,
-    "blessing": 1
+    "blessing": null
   },
   {
     "itemID": 11234,
@@ -779,7 +779,7 @@
     "paralysisCure": null,
     "poisonCure": null,
     "curseCure": null,
-    "blessing": 1
+    "blessing": null
   },
   {
     "itemID": 10301,

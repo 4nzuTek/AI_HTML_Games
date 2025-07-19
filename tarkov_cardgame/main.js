@@ -129,8 +129,8 @@ function updatePlayerStatus() {
     document.getElementById('hp-bar').value = player.hp;
     document.getElementById('energy-bar').value = player.energy;
     document.getElementById('water-bar').value = player.water;
-    // --- 防御力の表記を更新するだけに修正 ---
-    const defenseText = `防御力：炎:${player.defense[1]} 水:${player.defense[2]} 風:${player.defense[3]} 地:${player.defense[4]}`;
+    // --- 防御力の表記をgetTotalDefenseで更新 ---
+    const defenseText = `防御力：炎:${getTotalDefense(1)} 水:${getTotalDefense(2)} 風:${getTotalDefense(3)} 地:${getTotalDefense(4)}`;
     const defenseElem = document.getElementById('defense');
     if (defenseElem) defenseElem.textContent = defenseText;
     // --- 状態表示を追加 ---
@@ -385,6 +385,7 @@ function renderInventory() {
         area.appendChild(card);
     });
     updateWeight();
+    updatePlayerStatus(); // ここで必ず呼ぶ
 }
 function onCardMouseEnter(desc, card) {
     // 今表示中のカードと異なるカードに乗った場合のみアクションメニューを閉じる
@@ -880,7 +881,11 @@ function attackEnemy(weapon, enemy) {
             inventory[widx].currentDurability--;
             inventory[widx].isLoaded = false;
         } else {
-            inventory.splice(widx, 1); // 0になったら削除
+            inventory[widx].currentDurability--;
+            if (inventory[widx].currentDurability < 0) inventory[widx].currentDurability = 0;
+            addLog(`<span style=\"color:#a00; font-weight:bold;\">${inventory[widx].itemName}が壊れた！</span>`, 'detail', true);
+            // 削除せず残す
+            inventory[widx].isLoaded = false;
         }
         renderInventory();
     }
@@ -949,7 +954,7 @@ function nextFloor() {
                 attackValue = e.attack;
             }
             // プレイヤーの防御力
-            const defenseValue = player.defense[attr + 1] || 0;
+            const defenseValue = getTotalDefense(attr + 1);
             // ダメージ計算
             const dmg = Math.max(0, attackValue - defenseValue);
             totalAtk += dmg;
@@ -961,6 +966,26 @@ function nextFloor() {
                 detailMsg = `<span style=\"color:green; font-weight:bold;\">ただし完全にダメージを防いだ！</span>`;
             }
             addLog(detailMsg, 'detail', true);
+            // --- 防具の耐久値減少 ---
+            if (attackValue > 0) {
+                const loss = Math.ceil(attackValue / 10);
+                let durabilityChanged = false;
+                inventory.forEach(item => {
+                    if (item.itemTypeID === 3 && item.attrID === (attr + 1) && item.currentDurability > 0) {
+                        item.currentDurability -= loss;
+                        if (item.currentDurability < 0) item.currentDurability = 0;
+                        addLog(`<span style=\"color:#a60;\">${item.itemName}の耐久値が${loss}減少（残り${item.currentDurability}）</span>`, 'detail', true);
+                        if (item.currentDurability === 0) {
+                            addLog(`<span style=\"color:#a00; font-weight:bold;\">${item.itemName}が壊れた！</span>`, 'detail', true);
+                        }
+                        durabilityChanged = true;
+                    }
+                });
+                if (durabilityChanged) {
+                    renderInventory();
+                    renderLoot();
+                }
+            }
             // --- 状態異常付与判定 ---
             if (!player.statuses.includes('加護')) {
                 // 10% 痺れ
@@ -1304,4 +1329,17 @@ function showWeaponAttackMenu(weaponCard) {
     menu.style.display = 'flex';
     menu.style.flexDirection = 'column';
     menu.style.gap = '4px';
+}
+// プレイヤーの素の防御力＋所持防具の合計防御力を返す関数
+function getTotalDefense(attr) {
+    let base = player.defense[attr] || 0;
+    let armor = 0;
+    inventory.forEach(item => {
+        if (item.itemTypeID === 3) { // 防具タイプID=3と仮定
+            if (item.attrID === attr && item.defence !== undefined && item.defence !== null && item.currentDurability > 0) {
+                armor += item.defence;
+            }
+        }
+    });
+    return base + armor;
 } 
