@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>恋愛シミュレーション風ノベルゲーム</title>
+    <style>
+        body {
+            background: #b3d0ff;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'メイリオ', Meiryo, sans-serif;
+        }
+
+        #bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(120deg, #b3d0ff 60%, #fff 100%);
+            z-index: 0;
+        }
+
+        #game-box {
+            position: relative;
+            width: 720px;
+            height: 480px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 18px;
+            box-shadow: 0 8px 32px #0004;
+            overflow: hidden;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        #char-area {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 120px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .char {
+            height: 340px;
+            width: auto;
+            max-width: 220px;
+            background: none;
+            margin: 0 24px;
+            opacity: 0.95;
+            object-fit: contain;
+        }
+
+        #textbox {
+            position: relative;
+            background: rgba(30, 30, 60, 0.92);
+            color: #fff;
+            border-radius: 0 0 18px 18px;
+            padding: 24px 32px 32px 32px;
+            min-height: 120px;
+            z-index: 3;
+            box-shadow: 0 -2px 12px #0002;
+        }
+
+        #name {
+            position: absolute;
+            top: -32px;
+            left: 32px;
+            background: #fff;
+            color: #2a3a6a;
+            font-weight: bold;
+            font-size: 1.1em;
+            border-radius: 12px 12px 0 0;
+            padding: 6px 24px 4px 24px;
+            box-shadow: 0 2px 8px #0002;
+            z-index: 4;
+            letter-spacing: 0.1em;
+        }
+
+        #text {
+            font-size: 1.18em;
+            line-height: 1.7;
+            min-height: 2.5em;
+            margin-bottom: 12px;
+        }
+
+        #next-btn {
+            background: #ff7fa6;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 32px;
+            font-size: 1.1em;
+            cursor: pointer;
+            float: right;
+            margin-top: 8px;
+            box-shadow: 0 2px 8px #0002;
+            transition: background 0.2s;
+        }
+
+        #next-btn:hover {
+            background: #e05588;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="bg"></div>
+    <div id="game-box">
+        <div id="char-area">
+            <img class="char" id="char1" src="character1.png" alt="ユイの立ち絵" style="display:none;" />
+            <!-- 追加キャラはここに -->
+        </div>
+        <div id="textbox">
+            <div id="name"></div>
+            <div id="text"></div>
+            <button id="next-btn">次へ</button>
+        </div>
+    </div>
+    <script>
+        // サンプルシナリオ
+        const scenario = [
+            { name: "ユイ", text: "おはよう！今日もいい天気だね。", char1: true },
+            { name: "主人公", text: "あ、ユイ。おはよう。", char1: false },
+            { name: "ユイ", text: "ねえ、放課後一緒に帰らない？", char1: true },
+            { name: "主人公", text: "えっ…！？（ドキドキ…）", char1: false },
+            { name: "ユイ", text: "ふふっ、冗談だよ！でも、また話そうね。", char1: true },
+            { name: "", text: "ユイは笑顔で教室を出ていった。", char1: false },
+            { name: "", text: "物語は、ここから始まる――。", char1: false }
+        ];
+        let current = 0;
+        const nameBox = document.getElementById('name');
+        const textBox = document.getElementById('text');
+        const nextBtn = document.getElementById('next-btn');
+        const char1 = document.getElementById('char1');
+
+        function showScene() {
+            const scene = scenario[current];
+            nameBox.textContent = scene.name;
+            textBox.textContent = scene.text;
+            // キャラ立ち絵の表示切替
+            if (scene.char1) {
+                char1.style.opacity = '1';
+                char1.style.display = '';
+            } else {
+                char1.style.opacity = '0.3';
+                char1.style.display = '';
+            }
+            if (typeof scene.char1 === 'undefined') {
+                char1.style.display = 'none';
+            }
+            if (current === scenario.length - 1) {
+                nextBtn.textContent = 'はじめから';
+            } else {
+                nextBtn.textContent = '次へ';
+            }
+        }
+
+        nextBtn.addEventListener('click', () => {
+            current++;
+            if (current >= scenario.length) {
+                current = 0;
+            }
+            showScene();
+        });
+
+        showScene();
+    </script>
+</body>
+
+</html>
