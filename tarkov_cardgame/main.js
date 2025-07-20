@@ -256,11 +256,12 @@ function getItemTooltip(item) {
     }
     // 属性名を取得
     let attrName = '';
+    let attrIconHtml = '';
     if (item.attrID !== null && item.attrID !== undefined) {
-        if (item.attrID === 1) attrName = '炎';
-        else if (item.attrID === 2) attrName = '水';
-        else if (item.attrID === 3) attrName = '風';
-        else if (item.attrID === 4) attrName = '地';
+        if (item.attrID === 1) { attrName = '炎'; attrIconHtml = '<img src="images/icon/fire.png" class="attr-icon-inline" alt="炎">'; }
+        else if (item.attrID === 2) { attrName = '水'; attrIconHtml = '<img src="images/icon/water.png" class="attr-icon-inline" alt="水">'; }
+        else if (item.attrID === 3) { attrName = '風'; attrIconHtml = '<img src="images/icon/wind.png" class="attr-icon-inline" alt="風">'; }
+        else if (item.attrID === 4) { attrName = '地'; attrIconHtml = '<img src="images/icon/earth.png" class="attr-icon-inline" alt="地">'; }
     }
     // 耐久値
     let durability = '';
@@ -290,7 +291,7 @@ function getItemTooltip(item) {
     return `
     <div class="tooltip-cardbox"${typeColor ? ` style=\"background:${typeColor};\"` : ''}>
       <div class="tooltip-header">
-        <b class="tooltip-title">${item.itemName}</b>
+        <b class="tooltip-title">${attrIconHtml}${item.itemName}</b>
         ${durability ? `<span class="tooltip-durability">${durability}</span>` : ''}
       </div>
       <div class="tooltip-type">${itemTypeName}${attrName ? `（${attrName}）` : ''}</div>
@@ -340,6 +341,15 @@ function renderLoot() {
             dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
             card.appendChild(dura);
         }
+        // === 属性アイコン表示（左下） ===
+        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+            const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
+            const iconImg = document.createElement('img');
+            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+            iconImg.alt = '属性';
+            iconImg.className = 'attr-icon';
+            card.appendChild(iconImg);
+        }
         // 枠線再付与
         if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {
             card.classList.add('card-tooltip-focus');
@@ -388,6 +398,15 @@ function renderInventory() {
             dura.style.padding = '0';
             dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
             card.appendChild(dura);
+        }
+        // === 属性アイコン表示（左下） ===
+        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+            const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
+            const iconImg = document.createElement('img');
+            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+            iconImg.alt = '属性';
+            iconImg.className = 'attr-icon';
+            card.appendChild(iconImg);
         }
         // 枠線再付与
         if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {

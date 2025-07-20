@@ -627,3 +627,24 @@ progress.status-bar {
         transform: translateX(0);
     }
 }
+
+/* 属性アイコン共通スタイル（カード内限定で強く指定） */
+.card .attr-icon {
+    position: absolute;
+    left: 0px;
+    bottom: 0px;
+    width: 18px;
+    height: 18px;
+    opacity: 0.85;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* インライン属性アイコン（ツールチップ用） */
+.attr-icon-inline {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    margin-right: 4px;
+    display: inline-block;
+}
