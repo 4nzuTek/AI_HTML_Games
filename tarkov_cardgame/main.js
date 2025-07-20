@@ -122,6 +122,19 @@ function updatePlayerStatus() {
     player.hp = Math.max(0, Math.min(player.hp, 100));
     player.energy = Math.max(0, Math.min(player.energy, 100));
     player.water = Math.max(0, Math.min(player.water, 100));
+    // === 倦怠・脱水状態の自動付与/解除 ===
+    // 倦怠
+    if (player.energy === 0) {
+        if (!player.statuses.includes('倦怠')) player.statuses.push('倦怠');
+    } else {
+        player.statuses = player.statuses.filter(s => s !== '倦怠');
+    }
+    // 脱水
+    if (player.water === 0) {
+        if (!player.statuses.includes('脱水')) player.statuses.push('脱水');
+    } else {
+        player.statuses = player.statuses.filter(s => s !== '脱水');
+    }
     document.getElementById('hp').textContent = player.hp;
     document.getElementById('energy').textContent = player.energy;
     document.getElementById('water').textContent = player.water;
@@ -959,9 +972,33 @@ function addLog(msg, type = 'action', isHtml = false) {
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
 }
+// ====== 追加: 倦怠・脱水ダメージ定数 ======
+const FATIGUE_DAMAGE = 10;
+const DEHYDRATION_DAMAGE = 10;
 function nextFloor() {
     // 仕切り線
     addLog('----------------------', 'floor');
+    // === 倦怠・脱水ダメージ（移動前判定） ===
+    let statusDamage = 0;
+    const isFatigue = player.statuses.includes('倦怠');
+    const isDehydration = player.statuses.includes('脱水');
+    const isBlessed = player.statuses.includes('加護');
+    if (!isBlessed) {
+        if (isFatigue) statusDamage += FATIGUE_DAMAGE;
+        if (isDehydration) statusDamage += DEHYDRATION_DAMAGE;
+        if (statusDamage > 0) {
+            player.hp -= statusDamage;
+            if (isFatigue && isDehydration) {
+                addLog(`<span style="color:#a00; font-weight:bold;">空腹で苦しい...${FATIGUE_DAMAGE}ダメージ！</span>`, 'action', true);
+                addLog(`<span style="color:#a00; font-weight:bold;">喉がカラカラだ...${DEHYDRATION_DAMAGE}ダメージ！</span>`, 'action', true);
+            } else if (isFatigue) {
+                addLog(`<span style="color:#a00; font-weight:bold;">空腹で苦しい...${FATIGUE_DAMAGE}ダメージ！</span>`, 'action', true);
+            } else if (isDehydration) {
+                addLog(`<span style="color:#a00; font-weight:bold;">喉がカラカラだ...${DEHYDRATION_DAMAGE}ダメージ！</span>`, 'action', true);
+            }
+            updatePlayerStatus();
+        }
+    }
     // 1. フロア番号を進める
     floor++;
     updateFloor();
