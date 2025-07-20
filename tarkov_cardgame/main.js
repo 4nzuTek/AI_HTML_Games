@@ -633,32 +633,34 @@ function showActionMenu(card, area, e, cardElem) {
             } else if (act === '捨てる') {
                 actions.push({ label: '捨てる', handler: () => dropItem(card) });
             } else if (act === '攻撃') {
-                // 装填済みでない場合はグレーアウト
+                // 装填済みでない場合、または耐久値0ならグレーアウト
                 const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                 const isLoaded = (widx !== -1 && inventory[widx].isLoaded);
+                const isBroken = (widx !== -1 && inventory[widx].currentDurability === 0);
                 actions.push({
                     label: '攻撃',
                     handler: () => {
-                        if (isLoaded) {
+                        if (isLoaded && !isBroken) {
                             actionMenuForceOpen = true;
                             setTimeout(() => { actionMenuForceOpen = false; }, 0);
                             showWeaponAttackMenu(card);
                         }
                     },
-                    disabled: !isLoaded
+                    disabled: !isLoaded || isBroken
                 });
             } else if (act === 'マナ装填') {
-                // 装填済みならグレーアウト
+                // 装填済みならグレーアウト、または耐久値0ならグレーアウト
                 const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
                 const isLoaded = (widx !== -1 && inventory[widx].isLoaded);
+                const isBroken = (widx !== -1 && inventory[widx].currentDurability === 0);
                 actions.push({
                     label: 'マナ装填', handler: () => {
-                        if (!isLoaded) {
+                        if (!isLoaded && !isBroken) {
                             actionMenuForceOpen = true;
                             setTimeout(() => { actionMenuForceOpen = false; }, 0);
                             showManaLoadMenu(card);
                         }
-                    }, disabled: isLoaded
+                    }, disabled: isLoaded || isBroken
                 });
             } else if (act === '装備') {
                 actions.push({ label: '装備', handler: () => alert('装備は未実装です') });
@@ -888,8 +890,18 @@ function attackEnemy(weapon, enemy) {
     if (accuracy < 1.0) {
         hit = Math.random() < accuracy;
     }
+    // === クリティカル判定 ===
+    let isCritical = false;
+    let criticalRate = (typeof weapon.critical === 'number') ? weapon.critical : 0;
+    if (hit && criticalRate > 0) {
+        isCritical = Math.random() < criticalRate;
+    }
     // 敵の防御力
-    const defenseValue = enemy.defence[attr - 1] || 0;
+    let defenseValue = enemy.defence[attr - 1] || 0;
+    // クリティカル時は防御力無視
+    if (isCritical) {
+        defenseValue = 0;
+    }
     // ダメージ計算
     let dmg = hit ? Math.max(0, attackValue - defenseValue) : 0;
     // HP減少
@@ -915,6 +927,9 @@ function attackEnemy(weapon, enemy) {
     if (!hit) {
         addLog(`<span style=\"color:#888; font-weight:bold;\">攻撃は外れた！</span>（命中率${Math.round(accuracy * 100)}%）`, 'detail', true);
     } else {
+        if (isCritical) {
+            addLog(`<span style=\"color:#ff9800; font-weight:bold;\">クリティカルヒット！防御力を無視してダメージ！</span>`, 'detail', true);
+        }
         addLog(`→ ダメージ: <span style=\"color:red; font-weight:bold;\">${dmg}</span>　敵HP: ${enemy.hp} / ${enemy.maxHp}`, 'detail', true);
     }
     // --- 撃破判定・演出 ---
@@ -1052,13 +1067,27 @@ function nextFloor() {
             } else {
                 attackValue = e.attack;
             }
+            // === クリティカル判定 ===
+            let isCritical = false;
+            let criticalRate = (typeof e.critical === 'number') ? e.critical : 0;
+            if (criticalRate > 0) {
+                isCritical = Math.random() < criticalRate;
+            }
             // プレイヤーの防御力
-            const defenseValue = getTotalDefense(attr + 1);
+            let defenseValue = getTotalDefense(attr + 1);
+            // クリティカル時は防御力無視
+            if (isCritical) {
+                defenseValue = 0;
+            }
             // ダメージ計算
             const dmg = Math.max(0, attackValue - defenseValue);
             totalAtk += dmg;
             // アクションログ（攻撃宣言）
             addLog(`${e.name}の${attrNames[attr]}攻撃！`, 'action');
+            // クリティカルログ
+            if (isCritical) {
+                addLog(`<span style=\"color:#ff9800; font-weight:bold;\">クリティカルヒット！防御力を無視してダメージ！</span>`, 'detail', true);
+            }
             // 詳細ログ（ダメージ or 完全防御）
             let detailMsg = `HPが<span style=\"color:red; font-weight:bold;\">${dmg}</span>減少した…`;
             if (dmg === 0) {
@@ -1457,6 +1486,17 @@ function showManaLoadMenu(weaponCard) {
     menu.style.flexDirection = 'column';
     menu.style.gap = '4px';
     console.log('[マナ装填] メニュー表示完了');
+    // 武器の耐久値が0なら全ボタンをグレーアウト
+    if (weaponCard.currentDurability === 0) {
+        const div = document.createElement('div');
+        div.textContent = '武器の耐久値が0のため装填できません';
+        div.className = 'mana-select-noitem';
+        menu.appendChild(div);
+        menu.style.display = 'flex';
+        menu.style.flexDirection = 'column';
+        menu.style.gap = '4px';
+        return;
+    }
 }
 function showWeaponAttackMenu(weaponCard) {
     const menu = document.getElementById('action-menu');
@@ -1480,6 +1520,17 @@ function showWeaponAttackMenu(weaponCard) {
     menu.style.display = 'flex';
     menu.style.flexDirection = 'column';
     menu.style.gap = '4px';
+    // 武器の耐久値が0なら全ボタンをグレーアウト
+    if (weaponCard.currentDurability === 0) {
+        const div = document.createElement('div');
+        div.textContent = '武器の耐久値が0のため攻撃できません';
+        div.className = 'mana-select-noitem';
+        menu.appendChild(div);
+        menu.style.display = 'flex';
+        menu.style.flexDirection = 'column';
+        menu.style.gap = '4px';
+        return;
+    }
 }
 // プレイヤーの素の防御力＋所持防具の合計防御力を返す関数
 function getTotalDefense(attr) {
