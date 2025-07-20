@@ -116,7 +116,7 @@
             .then(data => { itemData = data; })
             .catch(() => { itemData = []; });
         // item_images.jsonの取得＆画像一覧表示
-        fetch('item_images.json')
+        fetch('json/item_images.json')
             .then(res => res.json())
             .then(files => { renderItemImages(files); })
             .catch(() => { renderItemImages([]); });
