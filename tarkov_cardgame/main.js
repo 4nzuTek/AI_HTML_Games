@@ -459,6 +459,10 @@ function onCardMouseLeave() {
     tryHideTooltipWithDelay();
 }
 function showTooltip(desc, cardOrEvent) {
+    // --- 追加: 情報チップ切り替え時はアクションメニューも即時消す ---
+    const menu = document.getElementById('action-menu');
+    if (menu) menu.style.display = 'none';
+    actionMenuTargetCard = null;
     const tooltip = document.getElementById('tooltip');
     tooltip.innerHTML = desc;
     tooltip.style.display = 'block';
@@ -593,11 +597,10 @@ function hideTooltip() {
     currentTooltipTargetItem = null;
     tooltipTargetCard = null;
     tooltipHideTimer = null;
-    // アクションメニューも同時に消す
+    // --- アクションメニューも即時消す ---
     const menu = document.getElementById('action-menu');
     if (menu) menu.style.display = 'none';
     actionMenuTargetCard = null;
-    // console.log('[actionMenu] hideTooltip: チップを閉じた');
 }
 function showActionMenu(card, area, e, cardElem) {
     e.preventDefault();
@@ -1875,8 +1878,18 @@ function showBaseWarehouseMenu(item, e, cardElem) {
     // メニュー表示位置
     if (cardElem && cardElem.getBoundingClientRect) {
         const rect = cardElem.getBoundingClientRect();
-        menu.style.left = (rect.right + window.scrollX) + 'px';
-        menu.style.top = (rect.top + window.scrollY) + 'px';
+        let outlineWidth = 0;
+        if (cardElem.classList && cardElem.classList.contains('card-tooltip-focus')) {
+            const style = window.getComputedStyle(cardElem);
+            outlineWidth = parseInt(style.outlineWidth) || 0;
+        }
+        const right = rect.right;
+        let top = rect.top;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        top = top - outlineWidth;
+        menu.style.left = (right + scrollX) + 'px';
+        menu.style.top = (top + scrollY) + 'px';
     } else {
         menu.style.left = e.pageX + 'px';
         menu.style.top = e.pageY + 'px';
@@ -1884,7 +1897,17 @@ function showBaseWarehouseMenu(item, e, cardElem) {
     menu.style.display = 'flex';
     menu.style.flexDirection = 'column';
     menu.style.gap = '4px';
-    menu.onmouseleave = function () { menu.style.display = 'none'; };
+    menu.onmouseenter = function () {
+        tooltipMenuOpen = true;
+        if (tooltipHideTimer) {
+            clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = null;
+        }
+    };
+    menu.onmouseleave = function () {
+        tooltipMenuOpen = false;
+        tryHideTooltipWithDelay();
+    };
     document.addEventListener('click', function handler() { menu.style.display = 'none'; document.removeEventListener('click', handler); }, { once: true });
 }
 function showBaseInventoryMenu(item, e, cardElem) {
@@ -1916,8 +1939,18 @@ function showBaseInventoryMenu(item, e, cardElem) {
     // メニュー表示位置
     if (cardElem && cardElem.getBoundingClientRect) {
         const rect = cardElem.getBoundingClientRect();
-        menu.style.left = (rect.right + window.scrollX) + 'px';
-        menu.style.top = (rect.top + window.scrollY) + 'px';
+        let outlineWidth = 0;
+        if (cardElem.classList && cardElem.classList.contains('card-tooltip-focus')) {
+            const style = window.getComputedStyle(cardElem);
+            outlineWidth = parseInt(style.outlineWidth) || 0;
+        }
+        const right = rect.right;
+        let top = rect.top;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        top = top - outlineWidth;
+        menu.style.left = (right + scrollX) + 'px';
+        menu.style.top = (top + scrollY) + 'px';
     } else {
         menu.style.left = e.pageX + 'px';
         menu.style.top = e.pageY + 'px';
@@ -1925,7 +1958,17 @@ function showBaseInventoryMenu(item, e, cardElem) {
     menu.style.display = 'flex';
     menu.style.flexDirection = 'column';
     menu.style.gap = '4px';
-    menu.onmouseleave = function () { menu.style.display = 'none'; };
+    menu.onmouseenter = function () {
+        tooltipMenuOpen = true;
+        if (tooltipHideTimer) {
+            clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = null;
+        }
+    };
+    menu.onmouseleave = function () {
+        tooltipMenuOpen = false;
+        tryHideTooltipWithDelay();
+    };
     document.addEventListener('click', function handler() { menu.style.display = 'none'; document.removeEventListener('click', handler); }, { once: true });
 }
 
