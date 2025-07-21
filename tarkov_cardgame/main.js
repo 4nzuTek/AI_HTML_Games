@@ -1593,3 +1593,127 @@ function showGameClear() {
         location.reload();
     };
 }
+
+// ===== 画面遷移・UI制御 =====
+function showTitleScreen() {
+    document.getElementById('title-screen').style.display = 'block';
+    document.getElementById('base-screen').style.display = 'none';
+    document.getElementById('dungeon-screen').style.display = 'none';
+}
+function showBaseScreen() {
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('base-screen').style.display = 'block';
+    document.getElementById('dungeon-screen').style.display = 'none';
+}
+function showDungeonScreen() {
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('base-screen').style.display = 'none';
+    document.getElementById('dungeon-screen').style.display = 'block';
+}
+// ===== ダイアログ制御 =====
+function showInvConfirmDialog() {
+    // インベントリリストを表示
+    const list = document.getElementById('inv-confirm-list');
+    if (inventory.length === 0) {
+        list.innerHTML = '<div style="color:#888;">持ち物はありません</div>';
+    } else {
+        let html = '<ul style="padding-left:0; list-style:none; margin:0;">';
+        for (const item of inventory) {
+            html += `<li style='margin-bottom:4px;'>${item.itemName}`;
+            if (item.currentDurability !== undefined && item.maxDurability > 0) {
+                html += ` (${item.currentDurability}/${item.maxDurability})`;
+            }
+            html += '</li>';
+        }
+        html += '</ul>';
+        list.innerHTML = html;
+    }
+    document.getElementById('inv-confirm-dialog').style.display = 'block';
+}
+function hideInvConfirmDialog() {
+    document.getElementById('inv-confirm-dialog').style.display = 'none';
+}
+function showResumeDialog() {
+    document.getElementById('resume-dialog').style.display = 'block';
+}
+function hideResumeDialog() {
+    document.getElementById('resume-dialog').style.display = 'none';
+}
+function showLoseItemsDialog() {
+    // アイテムリストを表示
+    const list = document.getElementById('lose-items-list');
+    if (inventory.length === 0) {
+        list.innerHTML = '<div style="color:#888;">失われるアイテムはありません</div>';
+    } else {
+        let html = '<ul style="padding-left:0; list-style:none; margin:0;">';
+        for (const item of inventory) {
+            html += `<li style='margin-bottom:4px;'>${item.itemName}`;
+            if (item.currentDurability !== undefined && item.maxDurability > 0) {
+                html += ` (${item.currentDurability}/${item.maxDurability})`;
+            }
+            html += '</li>';
+        }
+        html += '</ul>';
+        list.innerHTML = html;
+    }
+    document.getElementById('lose-items-dialog').style.display = 'block';
+}
+function hideLoseItemsDialog() {
+    document.getElementById('lose-items-dialog').style.display = 'none';
+}
+function showEndDialog() {
+    document.getElementById('end-dialog').style.display = 'block';
+}
+function hideEndDialog() {
+    document.getElementById('end-dialog').style.display = 'none';
+}
+
+// ===== ボタンイベント =====
+window.addEventListener('DOMContentLoaded', function () {
+    // タイトル画面ボタン
+    document.getElementById('to-base-btn').onclick = function () {
+        showBaseScreen();
+    };
+    document.getElementById('to-dungeon-btn').onclick = function () {
+        // 通常はインベントリ確認ダイアログを表示
+        showInvConfirmDialog();
+    };
+    // 拠点画面ボタン
+    document.getElementById('back-to-title-btn').onclick = function () {
+        showTitleScreen();
+    };
+    // インベントリ確認ダイアログ
+    document.getElementById('inv-confirm-ok-btn').onclick = function () {
+        hideInvConfirmDialog();
+        showDungeonScreen();
+        // 必要ならここでダンジョン初期化処理を呼ぶ
+    };
+    document.getElementById('inv-confirm-cancel-btn').onclick = function () {
+        hideInvConfirmDialog();
+    };
+    // 中断データ警告ダイアログ
+    document.getElementById('resume-btn').onclick = function () {
+        hideResumeDialog();
+        showDungeonScreen();
+    };
+    document.getElementById('giveup-btn').onclick = function () {
+        hideResumeDialog();
+        showLoseItemsDialog();
+    };
+    // アイテム喪失確認ダイアログ
+    document.getElementById('lose-items-ok-btn').onclick = function () {
+        hideLoseItemsDialog();
+        showEndDialog();
+    };
+    document.getElementById('lose-items-cancel-btn').onclick = function () {
+        hideLoseItemsDialog();
+        showTitleScreen();
+    };
+    // 探索終了ダイアログ
+    document.getElementById('end-ok-btn').onclick = function () {
+        hideEndDialog();
+        showTitleScreen();
+    };
+    // 初期表示
+    showTitleScreen();
+});

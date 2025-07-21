@@ -10,107 +10,158 @@
 </head>
 
 <body>
-    <div id="game-canvas">
-        <div id="info-area" class="area">
-            <div class="area-title">Info</div>
-            <div>階層：<span id="floor">B1F</span></div>
-            <div class="status-row"><span style="display:inline-block; min-width:70px;">HP : <span
-                        id="hp">100</span></span><span style="float:right;"><progress id="hp-bar" value="100" max="100"
-                        class="status-bar"></progress></span></div>
-            <!-- 防御力表記をHPの下に左詰めで追加 -->
-            <div class="status-row"><span id="defense" style="min-width:200px;"></span></div>
-            <div class="status-row"><span style="display:inline-block; min-width:70px;">エネルギー : <span
-                        id="energy">100</span></span><span style="float:right;"><progress id="energy-bar" value="100"
-                        max="100" class="status-bar"></progress></span></div>
-            <div class="status-row"><span style="display:inline-block; min-width:70px;">水分 : <span
-                        id="water">100</span></span><span style="float:right;"><progress id="water-bar" value="100"
-                        max="100" class="status-bar"></progress></span></div>
-            <div>重量：<span id="weight">0/20</span></div>
-            <div class="status-row"><span style="display:inline-block; min-width:70px;">状態 : <span
-                        id="status">-</span></span></div>
-        </div>
-        <div id="log-area" class="area">
-            <div class="area-title">Log</div>
-            <hr>
-            <div id="log" class="log-scroll"></div>
-        </div>
-        <button id="next-floor-btn">次のフロアへ進む</button>
-        <button id="escape-btn" disabled>脱出</button>
-        <div id="enemy-area" class="area">
-            <div class="area-title">Enemy</div>
-            <div id="enemies" class="card-row"></div>
-        </div>
-        <div id="loot-area" class="area">
-            <div class="area-title">Loot</div>
-            <div id="loot" class="card-row"></div>
-        </div>
-        <div id="inventory-area" class="area">
-            <div class="area-title">Inventory</div>
-            <div id="inventory" class="card-grid"></div>
+    <!-- タイトル画面 -->
+    <div id="title-screen"
+        style="display:block; position:fixed; left:0; top:0; width:100vw; height:100vh; background:#222; color:#fff; z-index:3000; text-align:center;">
+        <div style="margin-top:120px; font-size:2.4em; font-weight:bold; letter-spacing:0.1em;">お宝カード</div>
+        <div style="margin-top:60px;">
+            <button id="to-base-btn" style="font-size:1.3em; padding:18px 60px; margin:24px;">拠点</button>
+            <button id="to-dungeon-btn" style="font-size:1.3em; padding:18px 60px; margin:24px;">ダンジョン</button>
         </div>
     </div>
-    <div id="tooltip" class="tooltip" style="display:none;"></div>
-    <div id="action-menu" class="action-menu" style="display:none;"></div>
-    <!-- デバッグウィンドウ -->
-    <div id="debug-window"
-        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1000; background:#fff; border:3px solid #333; padding:24px; min-width:340px; min-height:260px; box-shadow:0 0 24px #0008;">
-        <div style="font-weight:bold; font-size:1.2em; margin-bottom:12px;">デバッグウィンドウ</div>
-        <form id="debug-form">
-            <div style="margin-bottom:8px;">HP: <input type="number" id="debug-hp" min="0" max="100"
-                    style="width:60px;"> / 100</div>
-            <div style="margin-bottom:8px;">エネルギー: <input type="number" id="debug-energy" min="0" max="100"
-                    style="width:60px;"> / 100</div>
-            <div style="margin-bottom:8px;">水分: <input type="number" id="debug-water" min="0" max="100"
-                    style="width:60px;"> / 100</div>
-            <div style="margin-bottom:8px;">防御力:
-                炎 <input type="number" id="debug-def1" min="0" max="999" style="width:40px;">
-                水 <input type="number" id="debug-def2" min="0" max="999" style="width:40px;">
-                風 <input type="number" id="debug-def3" min="0" max="999" style="width:40px;">
-                地 <input type="number" id="debug-def4" min="0" max="999" style="width:40px;">
+    <!-- 拠点画面 -->
+    <div id="base-screen"
+        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:#f5f5f5; color:#222; z-index:3000; text-align:center;">
+        <div style="margin-top:100px; font-size:2em; font-weight:bold;">拠点</div>
+        <div style="margin-top:40px; font-size:1.2em;">（ここに拠点の内容を追加できます）</div>
+        <button id="back-to-title-btn" style="margin-top:60px; font-size:1.1em; padding:12px 40px;">タイトルに戻る</button>
+    </div>
+    <!-- ダンジョン画面（既存UIをラップ） -->
+    <div id="dungeon-screen" style="display:none;">
+        <div id="game-canvas">
+            <div id="info-area" class="area">
+                <div class="area-title">Info</div>
+                <div>階層：<span id="floor">B1F</span></div>
+                <div class="status-row"><span style="display:inline-block; min-width:70px;">HP : <span
+                            id="hp">100</span></span><span style="float:right;"><progress id="hp-bar" value="100"
+                            max="100" class="status-bar"></progress></span></div>
+                <!-- 防御力表記をHPの下に左詰めで追加 -->
+                <div class="status-row"><span id="defense" style="min-width:200px;"></span></div>
+                <div class="status-row"><span style="display:inline-block; min-width:70px;">エネルギー : <span
+                            id="energy">100</span></span><span style="float:right;"><progress id="energy-bar"
+                            value="100" max="100" class="status-bar"></progress></span></div>
+                <div class="status-row"><span style="display:inline-block; min-width:70px;">水分 : <span
+                            id="water">100</span></span><span style="float:right;"><progress id="water-bar" value="100"
+                            max="100" class="status-bar"></progress></span></div>
+                <div>重量：<span id="weight">0/20</span></div>
+                <div class="status-row"><span style="display:inline-block; min-width:70px;">状態 : <span
+                            id="status">-</span></span></div>
             </div>
-            <div style="margin-bottom:8px;">状態異常:
-                <label><input type="checkbox" id="debug-status-paralysis"> 痺れ</label>
-                <label><input type="checkbox" id="debug-status-poison"> 毒</label>
-                <label><input type="checkbox" id="debug-status-curse"> 呪い</label>
-                <label><input type="checkbox" id="debug-status-bless"> 加護</label>
+            <div id="log-area" class="area">
+                <div class="area-title">Log</div>
+                <hr>
+                <div id="log" class="log-scroll"></div>
             </div>
-            <button type="submit" style="margin-top:12px;">適用</button>
-            <button type="button" id="debug-cancel" style="margin-top:12px; margin-left:16px;">キャンセル</button>
-            <button type="button" id="debug-lootgen" style="margin-top:12px; margin-left:16px;">ルートアイテムランダム生成</button>
-            <button type="button" id="debug-enemykill"
-                style="margin-top:12px; margin-left:16px; background:#fdd; color:#a00;">敵を全撃破</button>
-        </form>
-        <div style="margin-top:16px; font-size:0.9em; color:#888;">Dキーで閉じる/戻る</div>
+            <button id="next-floor-btn">次のフロアへ進む</button>
+            <button id="escape-btn" disabled>脱出</button>
+            <div id="enemy-area" class="area">
+                <div class="area-title">Enemy</div>
+                <div id="enemies" class="card-row"></div>
+            </div>
+            <div id="loot-area" class="area">
+                <div class="area-title">Loot</div>
+                <div id="loot" class="card-row"></div>
+            </div>
+            <div id="inventory-area" class="area">
+                <div class="area-title">Inventory</div>
+                <div id="inventory" class="card-grid"></div>
+            </div>
+        </div>
+        <div id="tooltip" class="tooltip" style="display:none;"></div>
+        <div id="action-menu" class="action-menu" style="display:none;"></div>
+        <!-- デバッグウィンドウ -->
+        <div id="debug-window"
+            style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1000; background:#fff; border:3px solid #333; padding:24px; min-width:340px; min-height:260px; box-shadow:0 0 24px #0008;">
+            <div style="font-weight:bold; font-size:1.2em; margin-bottom:12px;">デバッグウィンドウ</div>
+            <form id="debug-form">
+                <div style="margin-bottom:8px;">HP: <input type="number" id="debug-hp" min="0" max="100"
+                        style="width:60px;"> / 100</div>
+                <div style="margin-bottom:8px;">エネルギー: <input type="number" id="debug-energy" min="0" max="100"
+                        style="width:60px;"> / 100</div>
+                <div style="margin-bottom:8px;">水分: <input type="number" id="debug-water" min="0" max="100"
+                        style="width:60px;"> / 100</div>
+                <div style="margin-bottom:8px;">防御力:
+                    炎 <input type="number" id="debug-def1" min="0" max="999" style="width:40px;">
+                    水 <input type="number" id="debug-def2" min="0" max="999" style="width:40px;">
+                    風 <input type="number" id="debug-def3" min="0" max="999" style="width:40px;">
+                    地 <input type="number" id="debug-def4" min="0" max="999" style="width:40px;">
+                </div>
+                <div style="margin-bottom:8px;">状態異常:
+                    <label><input type="checkbox" id="debug-status-paralysis"> 痺れ</label>
+                    <label><input type="checkbox" id="debug-status-poison"> 毒</label>
+                    <label><input type="checkbox" id="debug-status-curse"> 呪い</label>
+                    <label><input type="checkbox" id="debug-status-bless"> 加護</label>
+                </div>
+                <button type="submit" style="margin-top:12px;">適用</button>
+                <button type="button" id="debug-cancel" style="margin-top:12px; margin-left:16px;">キャンセル</button>
+                <button type="button" id="debug-lootgen"
+                    style="margin-top:12px; margin-left:16px;">ルートアイテムランダム生成</button>
+                <button type="button" id="debug-enemykill"
+                    style="margin-top:12px; margin-left:16px; background:#fdd; color:#a00;">敵を全撃破</button>
+            </form>
+            <div style="margin-top:16px; font-size:0.9em; color:#888;">Dキーで閉じる/戻る</div>
+        </div>
+        <div id="gameover-dialog"
+            style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2000; background:#fff; border:3px solid #a00; padding:32px 40px; min-width:320px; min-height:180px; box-shadow:0 0 32px #a008; text-align:center;">
+            <div style="font-weight:bold; font-size:1.6em; color:#a00; margin-bottom:18px;">ゲームオーバー</div>
+            <div id="gameover-message" style="font-size:1.1em; margin-bottom:24px;">あなたは力尽きた…</div>
+            <button id="retry-btn" style="font-size:1.1em; padding:8px 32px;">リトライ</button>
+        </div>
+        <div id="gameover-mask"></div>
+        <!-- 脱出確認ダイアログ -->
+        <div id="escape-confirm-dialog"
+            style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2100; background:#fff; border:3px solid #2ecc40; padding:32px 40px; min-width:320px; min-height:140px; box-shadow:0 0 32px #2ecc4088; text-align:center; border-radius:10px;">
+            <div style="font-weight:bold; font-size:1.3em; color:#228b22; margin-bottom:18px;">脱出確認</div>
+            <div style="font-size:1.1em; margin-bottom:24px;">ダンジョン探索を終えて帰還しますか？<br>（持ち帰ったアイテムは全て獲得します）</div>
+            <button id="escape-ok-btn" style="font-size:1.1em; padding:8px 32px; margin-right:16px;">OK</button>
+            <button id="escape-cancel-btn" style="font-size:1.1em; padding:8px 32px;">キャンセル</button>
+        </div>
+        <div id="escape-confirm-mask"
+            style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:2099;">
+        </div>
+        <!-- ゲームクリアダイアログ -->
+        <div id="gameclear-dialog"
+            style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2200; background:#fff; border:3px solid #2ecc40; padding:32px 40px; min-width:340px; min-height:200px; box-shadow:0 0 32px #2ecc4088; text-align:center; border-radius:10px;">
+            <div style="font-weight:bold; font-size:1.6em; color:#228b22; margin-bottom:18px;">ダンジョン脱出成功！</div>
+            <div id="gameclear-message" style="font-size:1.1em; margin-bottom:18px;">おめでとうございます！</div>
+            <div id="gameclear-items"
+                style="font-size:1em; margin-bottom:24px; text-align:left; max-height:180px; overflow:auto;"></div>
+            <button id="gameclear-close-btn" style="font-size:1.1em; padding:8px 32px;">閉じる</button>
+        </div>
+        <div id="gameclear-mask"
+            style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:2199;">
+        </div>
     </div>
-    <div id="gameover-dialog"
-        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2000; background:#fff; border:3px solid #a00; padding:32px 40px; min-width:320px; min-height:180px; box-shadow:0 0 32px #a008; text-align:center;">
-        <div style="font-weight:bold; font-size:1.6em; color:#a00; margin-bottom:18px;">ゲームオーバー</div>
-        <div id="gameover-message" style="font-size:1.1em; margin-bottom:24px;">あなたは力尽きた…</div>
-        <button id="retry-btn" style="font-size:1.1em; padding:8px 32px;">リトライ</button>
-    </div>
-    <div id="gameover-mask"></div>
-    <!-- 脱出確認ダイアログ -->
-    <div id="escape-confirm-dialog"
-        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2100; background:#fff; border:3px solid #2ecc40; padding:32px 40px; min-width:320px; min-height:140px; box-shadow:0 0 32px #2ecc4088; text-align:center; border-radius:10px;">
-        <div style="font-weight:bold; font-size:1.3em; color:#228b22; margin-bottom:18px;">脱出確認</div>
-        <div style="font-size:1.1em; margin-bottom:24px;">ダンジョン探索を終えて帰還しますか？<br>（持ち帰ったアイテムは全て獲得します）</div>
-        <button id="escape-ok-btn" style="font-size:1.1em; padding:8px 32px; margin-right:16px;">OK</button>
-        <button id="escape-cancel-btn" style="font-size:1.1em; padding:8px 32px;">キャンセル</button>
-    </div>
-    <div id="escape-confirm-mask"
-        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:2099;">
-    </div>
-    <!-- ゲームクリアダイアログ -->
-    <div id="gameclear-dialog"
-        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2200; background:#fff; border:3px solid #2ecc40; padding:32px 40px; min-width:340px; min-height:200px; box-shadow:0 0 32px #2ecc4088; text-align:center; border-radius:10px;">
-        <div style="font-weight:bold; font-size:1.6em; color:#228b22; margin-bottom:18px;">ダンジョン脱出成功！</div>
-        <div id="gameclear-message" style="font-size:1.1em; margin-bottom:18px;">おめでとうございます！</div>
-        <div id="gameclear-items"
+    <!-- インベントリ確認ダイアログ -->
+    <div id="inv-confirm-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:4000; background:#fff; border:3px solid #333; padding:32px 40px; min-width:340px; min-height:180px; box-shadow:0 0 32px #0008; text-align:center;">
+        <div style="font-weight:bold; font-size:1.3em; margin-bottom:18px;">この持ち物で出撃します</div>
+        <div id="inv-confirm-list"
             style="font-size:1em; margin-bottom:24px; text-align:left; max-height:180px; overflow:auto;"></div>
-        <button id="gameclear-close-btn" style="font-size:1.1em; padding:8px 32px;">閉じる</button>
+        <button id="inv-confirm-ok-btn" style="font-size:1.1em; padding:8px 32px; margin-right:16px;">OK</button>
+        <button id="inv-confirm-cancel-btn" style="font-size:1.1em; padding:8px 32px;">キャンセル</button>
     </div>
-    <div id="gameclear-mask"
-        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); z-index:2199;">
+    <!-- 中断データ警告ダイアログ -->
+    <div id="resume-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:4000; background:#fff; border:3px solid #333; padding:32px 40px; min-width:340px; min-height:180px; box-shadow:0 0 32px #0008; text-align:center;">
+        <div style="font-weight:bold; font-size:1.3em; margin-bottom:18px;">ダンジョン探索中の中断データがあります</div>
+        <button id="resume-btn" style="font-size:1.1em; padding:8px 32px; margin-right:16px;">続きから</button>
+        <button id="giveup-btn" style="font-size:1.1em; padding:8px 32px;">探索をやめる</button>
+    </div>
+    <!-- アイテム喪失確認ダイアログ -->
+    <div id="lose-items-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:4000; background:#fff; border:3px solid #a00; padding:32px 40px; min-width:340px; min-height:180px; box-shadow:0 0 32px #a008; text-align:center;">
+        <div style="font-weight:bold; font-size:1.2em; color:#a00; margin-bottom:18px;">以下のアイテムが失われます</div>
+        <div id="lose-items-list"
+            style="font-size:1em; margin-bottom:24px; text-align:left; max-height:180px; overflow:auto;"></div>
+        <button id="lose-items-ok-btn" style="font-size:1.1em; padding:8px 32px; margin-right:16px;">OK</button>
+        <button id="lose-items-cancel-btn" style="font-size:1.1em; padding:8px 32px;">キャンセル</button>
+    </div>
+    <!-- 探索終了ダイアログ -->
+    <div id="end-dialog"
+        style="display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:4000; background:#fff; border:3px solid #333; padding:32px 40px; min-width:340px; min-height:140px; box-shadow:0 0 32px #0008; text-align:center;">
+        <div style="font-weight:bold; font-size:1.2em; margin-bottom:18px;">ダンジョン探索を終了しました</div>
+        <button id="end-ok-btn" style="font-size:1.1em; padding:8px 32px;">OK</button>
     </div>
     <script src="main.js"></script>
 </body>
