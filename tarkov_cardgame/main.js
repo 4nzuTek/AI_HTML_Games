@@ -198,6 +198,8 @@ fetch('json/itemType.json')
         renderInventory();
         updatePlayerStatus();
         updateWeight();
+        // === 拠点画面用アイテムもここで初期化 ===
+        initBaseScreenItems();
     })
     .catch(err => {
         alert('アイテムデータまたはタイプデータの読み込みに失敗しました: ' + err.message);
@@ -1678,10 +1680,10 @@ window.addEventListener('DOMContentLoaded', function () {
         // 通常はインベントリ確認ダイアログを表示
         showInvConfirmDialog();
     };
-    // 拠点画面ボタン
-    document.getElementById('back-to-title-btn').onclick = function () {
-        showTitleScreen();
-    };
+    // 拠点画面ボタン（旧back-to-title-btnは削除）
+    // document.getElementById('back-to-title-btn').onclick = function () {
+    //     showTitleScreen();
+    // };
     // インベントリ確認ダイアログ
     document.getElementById('inv-confirm-ok-btn').onclick = function () {
         hideInvConfirmDialog();
@@ -1716,4 +1718,230 @@ window.addEventListener('DOMContentLoaded', function () {
     };
     // 初期表示
     showTitleScreen();
+});
+
+// ===== 拠点画面用データ =====
+let warehouseItems = [];
+let baseInventoryItems = [];
+
+// 拠点画面用アイテム初期化（itemMasterロード後に呼ぶ）
+function initBaseScreenItems() {
+    if (itemMaster && itemMaster.length > 0) {
+        warehouseItems = [];
+        baseInventoryItems = [];
+        for (let i = 0; i < 200; i++) {
+            const idx = Math.floor(Math.random() * itemMaster.length);
+            warehouseItems.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: i });
+        }
+        for (let i = 0; i < 10; i++) {
+            const idx = Math.floor(Math.random() * itemMaster.length);
+            baseInventoryItems.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: i });
+        }
+    }
+}
+
+// ===== 拠点画面UI描画 =====
+function renderBaseWarehouse() {
+    const area = document.getElementById('base-warehouse-grid');
+    area.innerHTML = '';
+    warehouseItems.forEach(i => {
+        const card = document.createElement('div');
+        card.className = 'card warehouse-card';
+        card.style.position = 'relative';
+        // 背景色
+        let bgColor = '';
+        if (window.itemTypeMaster && i.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+            if (t && t.color) bgColor = t.color;
+        }
+        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
+        const img = document.createElement('img');
+        img.src = 'images/item/' + i.imageName;
+        img.alt = i.itemName;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        card.appendChild(img);
+        card.dataset.id = i.itemID;
+        card.dataset.index = i.invIndex;
+        // 耐久値表示
+        if (i.maxDurability > 0 && i.currentDurability !== undefined) {
+            const dura = document.createElement('div');
+            dura.style.position = 'absolute';
+            dura.style.top = '0px';
+            dura.style.right = '2px';
+            dura.style.fontSize = '0.75em';
+            dura.style.color = '#222';
+            dura.style.background = 'none';
+            dura.style.padding = '0';
+            dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
+            card.appendChild(dura);
+        }
+        // 属性アイコン
+        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+            const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
+            const iconImg = document.createElement('img');
+            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+            iconImg.alt = '属性';
+            iconImg.className = 'attr-icon';
+            card.appendChild(iconImg);
+        }
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
+        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showBaseWarehouseMenu(i, e, card); });
+        area.appendChild(card);
+    });
+}
+function renderBaseInventory() {
+    const area = document.getElementById('base-inventory-grid');
+    area.innerHTML = '';
+    baseInventoryItems.forEach(i => {
+        const card = document.createElement('div');
+        card.className = 'card inventory-card';
+        card.style.position = 'relative';
+        // 背景色
+        let bgColor = '';
+        if (window.itemTypeMaster && i.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+            if (t && t.color) bgColor = t.color;
+        }
+        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
+        const img = document.createElement('img');
+        img.src = 'images/item/' + i.imageName;
+        img.alt = i.itemName;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        card.appendChild(img);
+        card.dataset.id = i.itemID;
+        card.dataset.index = i.invIndex;
+        // 耐久値表示
+        if (i.maxDurability > 0 && i.currentDurability !== undefined) {
+            const dura = document.createElement('div');
+            dura.style.position = 'absolute';
+            dura.style.top = '0px';
+            dura.style.right = '2px';
+            dura.style.fontSize = '0.75em';
+            dura.style.color = '#222';
+            dura.style.background = 'none';
+            dura.style.padding = '0';
+            dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
+            card.appendChild(dura);
+        }
+        // 属性アイコン
+        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+            const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
+            const iconImg = document.createElement('img');
+            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+            iconImg.alt = '属性';
+            iconImg.className = 'attr-icon';
+            card.appendChild(iconImg);
+        }
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
+        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showBaseInventoryMenu(i, e, card); });
+        area.appendChild(card);
+    });
+}
+
+// ===== 拠点画面 右クリックメニュー =====
+function showBaseWarehouseMenu(item, e, cardElem) {
+    e.preventDefault();
+    const menu = document.getElementById('action-menu');
+    menu.innerHTML = '';
+    // 持ち出す
+    const btnTake = document.createElement('button');
+    btnTake.textContent = '持ち出す';
+    btnTake.onclick = function () {
+        // 仮：baseInventoryItemsに追加、warehouseItemsから削除
+        baseInventoryItems.push(item);
+        const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+        if (idx !== -1) warehouseItems.splice(idx, 1);
+        renderBaseWarehouse();
+        renderBaseInventory();
+        menu.style.display = 'none';
+    };
+    menu.appendChild(btnTake);
+    // 捨てる
+    const btnDrop = document.createElement('button');
+    btnDrop.textContent = '捨てる';
+    btnDrop.onclick = function () {
+        const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+        if (idx !== -1) warehouseItems.splice(idx, 1);
+        renderBaseWarehouse();
+        menu.style.display = 'none';
+    };
+    menu.appendChild(btnDrop);
+    // メニュー表示位置
+    if (cardElem && cardElem.getBoundingClientRect) {
+        const rect = cardElem.getBoundingClientRect();
+        menu.style.left = (rect.right + window.scrollX) + 'px';
+        menu.style.top = (rect.top + window.scrollY) + 'px';
+    } else {
+        menu.style.left = e.pageX + 'px';
+        menu.style.top = e.pageY + 'px';
+    }
+    menu.style.display = 'flex';
+    menu.style.flexDirection = 'column';
+    menu.style.gap = '4px';
+    menu.onmouseleave = function () { menu.style.display = 'none'; };
+    document.addEventListener('click', function handler() { menu.style.display = 'none'; document.removeEventListener('click', handler); }, { once: true });
+}
+function showBaseInventoryMenu(item, e, cardElem) {
+    e.preventDefault();
+    const menu = document.getElementById('action-menu');
+    menu.innerHTML = '';
+    // 倉庫にしまう
+    const btnStore = document.createElement('button');
+    btnStore.textContent = '倉庫にしまう';
+    btnStore.onclick = function () {
+        warehouseItems.push(item);
+        const idx = baseInventoryItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+        if (idx !== -1) baseInventoryItems.splice(idx, 1);
+        renderBaseWarehouse();
+        renderBaseInventory();
+        menu.style.display = 'none';
+    };
+    menu.appendChild(btnStore);
+    // 捨てる
+    const btnDrop = document.createElement('button');
+    btnDrop.textContent = '捨てる';
+    btnDrop.onclick = function () {
+        const idx = baseInventoryItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+        if (idx !== -1) baseInventoryItems.splice(idx, 1);
+        renderBaseInventory();
+        menu.style.display = 'none';
+    };
+    menu.appendChild(btnDrop);
+    // メニュー表示位置
+    if (cardElem && cardElem.getBoundingClientRect) {
+        const rect = cardElem.getBoundingClientRect();
+        menu.style.left = (rect.right + window.scrollX) + 'px';
+        menu.style.top = (rect.top + window.scrollY) + 'px';
+    } else {
+        menu.style.left = e.pageX + 'px';
+        menu.style.top = e.pageY + 'px';
+    }
+    menu.style.display = 'flex';
+    menu.style.flexDirection = 'column';
+    menu.style.gap = '4px';
+    menu.onmouseleave = function () { menu.style.display = 'none'; };
+    document.addEventListener('click', function handler() { menu.style.display = 'none'; document.removeEventListener('click', handler); }, { once: true });
+}
+
+// ===== 拠点画面遷移・初期化 =====
+function showBaseScreen() {
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('base-screen').style.display = 'block';
+    document.getElementById('dungeon-screen').style.display = 'none';
+    // データ初期化は削除（itemMasterロード後に行う）
+    renderBaseWarehouse();
+    renderBaseInventory();
+}
+
+// ===== ホームボタン =====
+window.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('base-home-btn').onclick = function () {
+        showTitleScreen();
+    };
 });
