@@ -152,6 +152,16 @@ body {
     justify-content: center;
 }
 
+#base-inventory-grid.card-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 50px);
+    grid-template-rows: repeat(4, 80px);
+    gap: 10px;
+    margin-top: 0px;
+    justify-content: center;
+    padding: 16px;
+}
+
 .card {
     width: 50px;
     height: 80px;

@@ -1798,6 +1798,17 @@ function renderBaseWarehouse() {
 function renderBaseInventory() {
     const area = document.getElementById('base-inventory-grid');
     area.innerHTML = '';
+    // --- 持ち出しインベントリ数表示 ---
+    let countLabel = document.getElementById('base-inventory-count');
+    if (!countLabel) {
+        countLabel = document.createElement('div');
+        countLabel.id = 'base-inventory-count';
+        countLabel.style.fontSize = '1em';
+        countLabel.style.marginBottom = '8px';
+        area.parentElement.insertBefore(countLabel, area);
+    }
+    countLabel.textContent = `所持数: ${baseInventoryItems.length} / 20`;
+    // ---
     baseInventoryItems.forEach(i => {
         const card = document.createElement('div');
         card.className = 'card inventory-card';
@@ -1855,8 +1866,15 @@ function showBaseWarehouseMenu(item, e, cardElem) {
     // 持ち出す
     const btnTake = document.createElement('button');
     btnTake.textContent = '持ち出す';
+    // 20個以上ならグレーアウト
+    if (baseInventoryItems.length >= 20) {
+        btnTake.disabled = true;
+        btnTake.style.opacity = '0.5';
+        btnTake.style.cursor = 'not-allowed';
+        btnTake.title = '20個までしか持ち出せません';
+    }
     btnTake.onclick = function () {
-        // 仮：baseInventoryItemsに追加、warehouseItemsから削除
+        if (baseInventoryItems.length >= 20) return;
         baseInventoryItems.push(item);
         const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
         if (idx !== -1) warehouseItems.splice(idx, 1);
