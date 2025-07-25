@@ -1169,6 +1169,9 @@ function showGameOver() {
     });
     // キー入力も無効化
     document.addEventListener('keydown', blockAllKey, true);
+    // ダンジョン内インベントリは全て失う
+    inventory = [];
+    renderInventory();
 }
 function hideGameOver() {
     isGameOver = false;
@@ -1572,6 +1575,8 @@ function showGameClear() {
         html += '</ul>';
     }
     document.getElementById('gameclear-items').innerHTML = html;
+    // 持ち帰りアイテムを拠点の持ち出しリストに戻す
+    baseInventoryItems = inventory.map(item => ({ ...item }));
     // アイコンにマウスオーバーでチップ表示
     const itemImgs = document.querySelectorAll('#gameclear-items img');
     itemImgs.forEach((img, idx) => {
@@ -1594,8 +1599,11 @@ function showGameClear() {
     document.getElementById('gameclear-close-btn').onclick = function () {
         document.getElementById('gameclear-dialog').style.display = 'none';
         document.getElementById('gameclear-mask').style.display = 'none';
-        // ページをリロードして最初からやり直し
-        location.reload();
+        // 全ボタンを再度有効化
+        Array.from(document.querySelectorAll('button')).forEach(btn => {
+            btn.disabled = false;
+        });
+        showBaseScreen();
     };
 }
 
@@ -1619,11 +1627,11 @@ function showDungeonScreen() {
 function showInvConfirmDialog() {
     // インベントリリストを表示
     const list = document.getElementById('inv-confirm-list');
-    if (inventory.length === 0) {
+    if (baseInventoryItems.length === 0) {
         list.innerHTML = '<div style="color:#888;">持ち物はありません</div>';
     } else {
         let html = '<ul style="padding-left:0; list-style:none; margin:0;">';
-        for (const item of inventory) {
+        for (const item of baseInventoryItems) {
             html += `<li style='margin-bottom:4px;'>${item.itemName}`;
             if (item.currentDurability !== undefined && item.maxDurability > 0) {
                 html += ` (${item.currentDurability}/${item.maxDurability})`;
@@ -1683,15 +1691,12 @@ window.addEventListener('DOMContentLoaded', function () {
         // 通常はインベントリ確認ダイアログを表示
         showInvConfirmDialog();
     };
-    // 拠点画面ボタン（旧back-to-title-btnは削除）
-    // document.getElementById('back-to-title-btn').onclick = function () {
-    //     showTitleScreen();
-    // };
     // インベントリ確認ダイアログ
     document.getElementById('inv-confirm-ok-btn').onclick = function () {
         hideInvConfirmDialog();
+        // ダンジョン初期化
         showDungeonScreen();
-        // 必要ならここでダンジョン初期化処理を呼ぶ
+        initDungeonRun();
     };
     document.getElementById('inv-confirm-cancel-btn').onclick = function () {
         hideInvConfirmDialog();
@@ -1729,18 +1734,9 @@ let baseInventoryItems = [];
 
 // 拠点画面用アイテム初期化（itemMasterロード後に呼ぶ）
 function initBaseScreenItems() {
-    if (itemMaster && itemMaster.length > 0) {
-        warehouseItems = [];
-        baseInventoryItems = [];
-        for (let i = 0; i < 200; i++) {
-            const idx = Math.floor(Math.random() * itemMaster.length);
-            warehouseItems.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: i });
-        }
-        for (let i = 0; i < 10; i++) {
-            const idx = Math.floor(Math.random() * itemMaster.length);
-            baseInventoryItems.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: i });
-        }
-    }
+    // 何も持っていない状態で開始
+    warehouseItems = [];
+    baseInventoryItems = [];
 }
 
 // ===== 拠点画面UI描画 =====
@@ -2006,3 +2002,51 @@ window.addEventListener('DOMContentLoaded', function () {
         showTitleScreen();
     };
 });
+
+// ===== ダンジョン初期化 =====
+function initDungeonRun() {
+    // フロア初期化
+    floor = 1;
+    updateFloor();
+    // プレイヤー初期化
+    player.hp = 100;
+    player.energy = 100;
+    player.water = 100;
+    player.defense = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    player.statuses = [];
+    // 敵初期化（ID=1001の敵を1体だけ配置、なければ空）
+    let enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
+    if (enemy1001) {
+        enemies = [{
+            id: enemy1001.enemyID,
+            name: enemy1001.enemyName,
+            hp: enemy1001.maxHp,
+            maxHp: enemy1001.maxHp,
+            attack: enemy1001.attack,
+            attackChance: [enemy1001.attackChance_attr01, enemy1001.attackChance_attr02, enemy1001.attackChance_attr03, enemy1001.attackChance_attr04],
+            defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04],
+            imageName: enemy1001.imageName
+        }];
+    } else {
+        enemies = [];
+    }
+    // ルートアイテム初期化
+    loot = [];
+    const lootNum = Math.floor(Math.random() * 10) + 1;
+    for (let i = 0; i < lootNum; i++) {
+        const idx = Math.floor(Math.random() * itemMaster.length);
+        loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
+    }
+    // インベントリ初期化（持ち出しアイテムをコピー）
+    inventory = baseInventoryItems.map(item => ({ ...item }));
+    // ログ初期化
+    const log = document.getElementById('log');
+    log.innerHTML = '';
+    addLog('B1Fに到達した。', 'floor');
+    // 画面描画
+    renderInventory();
+    renderLoot();
+    renderEnemies();
+    updatePlayerStatus();
+    updateWeight();
+}
