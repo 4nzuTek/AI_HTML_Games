@@ -1246,6 +1246,19 @@ function attackEnemy(weapon, enemy) {
                     if (idx !== -1) enemies.splice(idx, 1);
                     // ログに撃破テキスト
                     addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！</span>`, 'action', true);
+
+                    // 敵撃破時のドロップアイテム生成
+                    // 敵撃破時のドロップアイテム生成
+                    if (loot.length < 10) {
+                        const dropCount = Math.floor(Math.random() * 3) + 1; // 1-3個
+                        const dropItems = getRandomItemsByType(itemMaster, dropCount);
+                        loot.push(...dropItems);
+                        addLog(`<span style="color:#4af;">${dropCount}個のアイテムがドロップした！</span>`, 'detail', true);
+                        renderLoot(); // ドロップアイテムを表示
+                    } else {
+                        addLog(`<span style="color:#888;">ルートエリアがいっぱいのため、アイテムはドロップしなかった。</span>`, 'detail', true);
+                    }
+
                     // ここでrenderEnemies()を呼ぶことで、enemies.length===0時に脱出ボタンが即時反映される
                     renderEnemies();
                 }, 650); // rippleアニメーション終了後
@@ -1711,6 +1724,18 @@ window.onload = function () {
         if (idx !== -1) enemies.splice(idx, 1);
         // ログ
         addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！（デバッグ）</span>`, 'action', true);
+
+        // 敵撃破時のドロップアイテム生成（デバッグ用）
+        if (loot.length < 10) {
+            const dropCount = Math.floor(Math.random() * 3) + 1; // 1-3個
+            const dropItems = getRandomItemsByType(itemMaster, dropCount);
+            loot.push(...dropItems);
+            addLog(`<span style="color:#4af;">${dropCount}個のアイテムがドロップした！（デバッグ）</span>`, 'detail', true);
+            renderLoot(); // ドロップアイテムを表示
+        } else {
+            addLog(`<span style="color:#888;">ルートエリアがいっぱいのため、アイテムはドロップしなかった。（デバッグ）</span>`, 'detail', true);
+        }
+
         renderEnemies();
     }
 })();
