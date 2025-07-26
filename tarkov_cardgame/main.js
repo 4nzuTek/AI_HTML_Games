@@ -257,21 +257,50 @@ fetch('json/itemType.json')
     .then(data => {
         itemMaster = data;
         console.log('itemMaster:', itemMaster); // データ確認用
-        // loot/inventoryにcurrentDurabilityとinvIndexを持たせてランダムに10個ずつ生成
-        function getRandomItems(arr, n) {
+        // loot/inventoryにcurrentDurabilityとinvIndexを持たせてランダムに10個ずつ生成（各アイテムタイプが同じ確率でスポーン）
+        function getRandomItemsByType(arr, n) {
             const result = [];
+
+            // アイテムタイプごとにアイテムを分類
+            const itemsByType = {};
+            arr.forEach(item => {
+                if (!itemsByType[item.itemTypeID]) {
+                    itemsByType[item.itemTypeID] = [];
+                }
+                itemsByType[item.itemTypeID].push(item);
+            });
+
+            // 各アイテムタイプからランダムに選択
             for (let i = 0; i < n; i++) {
-                const idx = Math.floor(Math.random() * arr.length);
-                const base = arr[idx];
+                // 利用可能なアイテムタイプを取得
+                const availableTypes = Object.keys(itemsByType).filter(typeId =>
+                    itemsByType[typeId] && itemsByType[typeId].length > 0
+                );
+
+                if (availableTypes.length === 0) break;
+
+                // ランダムにアイテムタイプを選択
+                const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                const itemsOfType = itemsByType[randomTypeId];
+
+                // 選択されたタイプからランダムにアイテムを選択
+                const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
+
                 // 武器ならisLoaded初期化
                 let extra = {};
-                if (base.itemTypeID === 1) extra.isLoaded = false;
-                result.push({ ...base, currentDurability: base.maxDurability, invIndex: nextInvIndex++, ...extra });
+                if (randomItem.itemTypeID === 1) extra.isLoaded = false;
+
+                result.push({
+                    ...randomItem,
+                    currentDurability: randomItem.maxDurability,
+                    invIndex: nextInvIndex++,
+                    ...extra
+                });
             }
             return result;
         }
-        loot = getRandomItems(itemMaster, 10);
-        inventory = getRandomItems(itemMaster, 10);
+        loot = getRandomItemsByType(itemMaster, 10);
+        inventory = getRandomItemsByType(itemMaster, 10);
         renderLoot();
         renderInventory();
         updatePlayerStatus();
@@ -1265,12 +1294,39 @@ function nextFloor() {
         player.hp = Math.max(0, Math.min(player.hp, 100));
         updatePlayerStatus();
     }
-    // 4. ルートアイテム再生成
+    // 4. ルートアイテム再生成（各アイテムタイプが同じ確率でスポーン）
     const lootNum = Math.floor(Math.random() * 10) + 1;
     loot = [];
+
+    // アイテムタイプごとにアイテムを分類
+    const itemsByType = {};
+    itemMaster.forEach(item => {
+        if (!itemsByType[item.itemTypeID]) {
+            itemsByType[item.itemTypeID] = [];
+        }
+        itemsByType[item.itemTypeID].push(item);
+    });
+
+    // 各アイテムタイプからランダムに選択
     for (let i = 0; i < lootNum; i++) {
-        const idx = Math.floor(Math.random() * itemMaster.length);
-        loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
+        // 利用可能なアイテムタイプを取得
+        const availableTypes = Object.keys(itemsByType).filter(typeId =>
+            itemsByType[typeId] && itemsByType[typeId].length > 0
+        );
+
+        if (availableTypes.length === 0) break;
+
+        // ランダムにアイテムタイプを選択
+        const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+        const itemsOfType = itemsByType[randomTypeId];
+
+        // 選択されたタイプからランダムにアイテムを選択
+        const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
+        loot.push({
+            ...randomItem,
+            currentDurability: randomItem.maxDurability,
+            invIndex: nextInvIndex++
+        });
     }
     renderLoot();
     // 5. 敵は再生成しない（消さない）
@@ -1328,22 +1384,51 @@ function restartGame() {
     // フロア初期化
     floor = 1;
     updateFloor();
-    // 敵・アイテム再生成
+    // 敵・アイテム再生成（各アイテムタイプが同じ確率でスポーン）
     // itemMaster, enemyMasterはfetch済み前提
-    function getRandomItems(arr, n) {
+    function getRandomItemsByType(arr, n) {
         const result = [];
+
+        // アイテムタイプごとにアイテムを分類
+        const itemsByType = {};
+        arr.forEach(item => {
+            if (!itemsByType[item.itemTypeID]) {
+                itemsByType[item.itemTypeID] = [];
+            }
+            itemsByType[item.itemTypeID].push(item);
+        });
+
+        // 各アイテムタイプからランダムに選択
         for (let i = 0; i < n; i++) {
-            const idx = Math.floor(Math.random() * arr.length);
-            const base = arr[idx];
+            // 利用可能なアイテムタイプを取得
+            const availableTypes = Object.keys(itemsByType).filter(typeId =>
+                itemsByType[typeId] && itemsByType[typeId].length > 0
+            );
+
+            if (availableTypes.length === 0) break;
+
+            // ランダムにアイテムタイプを選択
+            const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+            const itemsOfType = itemsByType[randomTypeId];
+
+            // 選択されたタイプからランダムにアイテムを選択
+            const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
+
             // 武器ならisLoaded初期化
             let extra = {};
-            if (base.itemTypeID === 1) extra.isLoaded = false;
-            result.push({ ...base, currentDurability: base.maxDurability, invIndex: nextInvIndex++, ...extra });
+            if (randomItem.itemTypeID === 1) extra.isLoaded = false;
+
+            result.push({
+                ...randomItem,
+                currentDurability: randomItem.maxDurability,
+                invIndex: nextInvIndex++,
+                ...extra
+            });
         }
         return result;
     }
-    loot = getRandomItems(itemMaster, 10);
-    inventory = getRandomItems(itemMaster, 10);
+    loot = getRandomItemsByType(itemMaster, 10);
+    inventory = getRandomItemsByType(itemMaster, 10);
     const enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
     if (enemy1001) {
         enemies = [{
@@ -1516,12 +1601,39 @@ window.onload = function () {
     const debugLootGen = document.getElementById('debug-lootgen');
     if (debugLootGen) {
         debugLootGen.onclick = function () {
-            // ルートアイテムをランダム生成（10個）
+            // ルートアイテムをランダム生成（10個、各アイテムタイプが同じ確率でスポーン）
             if (itemMaster && itemMaster.length > 0) {
                 loot = [];
+
+                // アイテムタイプごとにアイテムを分類
+                const itemsByType = {};
+                itemMaster.forEach(item => {
+                    if (!itemsByType[item.itemTypeID]) {
+                        itemsByType[item.itemTypeID] = [];
+                    }
+                    itemsByType[item.itemTypeID].push(item);
+                });
+
+                // 各アイテムタイプからランダムに選択
                 for (let i = 0; i < 10; i++) {
-                    const idx = Math.floor(Math.random() * itemMaster.length);
-                    loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
+                    // 利用可能なアイテムタイプを取得
+                    const availableTypes = Object.keys(itemsByType).filter(typeId =>
+                        itemsByType[typeId] && itemsByType[typeId].length > 0
+                    );
+
+                    if (availableTypes.length === 0) break;
+
+                    // ランダムにアイテムタイプを選択
+                    const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                    const itemsOfType = itemsByType[randomTypeId];
+
+                    // 選択されたタイプからランダムにアイテムを選択
+                    const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
+                    loot.push({
+                        ...randomItem,
+                        currentDurability: randomItem.maxDurability,
+                        invIndex: nextInvIndex++
+                    });
                 }
                 renderLoot();
             }
