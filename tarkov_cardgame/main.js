@@ -29,6 +29,21 @@ let player = {
     statuses: [] // 状態異常配列を追加
 };
 
+// 重み付きランダム抽選関数（spawnBaseRateをウエイトとして使用）
+function getWeightedRandomItem(items) {
+    if (!items || items.length === 0) return null;
+
+    const totalWeight = items.reduce((sum, item) => sum + (item.spawnBaseRate || 1), 0);
+    let r = Math.random() * totalWeight;
+
+    for (const item of items) {
+        r -= (item.spawnBaseRate || 1);
+        if (r < 0) return item;
+    }
+
+    return items[items.length - 1]; // 念のため
+}
+
 let floor = 1;
 function updateFloor() {
     document.getElementById('floor').textContent = `B${floor}F`;
@@ -283,19 +298,20 @@ fetch('json/itemType.json')
                 const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
                 const itemsOfType = itemsByType[randomTypeId];
 
-                // 選択されたタイプからランダムにアイテムを選択
-                const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
+                // 選択されたタイプからspawnBaseRateをウエイトとして重み付き抽選
+                const randomItem = getWeightedRandomItem(itemsOfType);
+                if (randomItem) {
+                    // 武器ならisLoaded初期化
+                    let extra = {};
+                    if (randomItem.itemTypeID === 1) extra.isLoaded = false;
 
-                // 武器ならisLoaded初期化
-                let extra = {};
-                if (randomItem.itemTypeID === 1) extra.isLoaded = false;
-
-                result.push({
-                    ...randomItem,
-                    currentDurability: randomItem.maxDurability,
-                    invIndex: nextInvIndex++,
-                    ...extra
-                });
+                    result.push({
+                        ...randomItem,
+                        currentDurability: randomItem.maxDurability,
+                        invIndex: nextInvIndex++,
+                        ...extra
+                    });
+                }
             }
             return result;
         }
@@ -1320,13 +1336,15 @@ function nextFloor() {
         const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
         const itemsOfType = itemsByType[randomTypeId];
 
-        // 選択されたタイプからランダムにアイテムを選択
-        const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
-        loot.push({
-            ...randomItem,
-            currentDurability: randomItem.maxDurability,
-            invIndex: nextInvIndex++
-        });
+        // 選択されたタイプからspawnBaseRateをウエイトとして重み付き抽選
+        const randomItem = getWeightedRandomItem(itemsOfType);
+        if (randomItem) {
+            loot.push({
+                ...randomItem,
+                currentDurability: randomItem.maxDurability,
+                invIndex: nextInvIndex++
+            });
+        }
     }
     renderLoot();
     // 5. 敵は再生成しない（消さない）
@@ -1411,19 +1429,20 @@ function restartGame() {
             const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
             const itemsOfType = itemsByType[randomTypeId];
 
-            // 選択されたタイプからランダムにアイテムを選択
-            const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
+            // 選択されたタイプからspawnBaseRateをウエイトとして重み付き抽選
+            const randomItem = getWeightedRandomItem(itemsOfType);
+            if (randomItem) {
+                // 武器ならisLoaded初期化
+                let extra = {};
+                if (randomItem.itemTypeID === 1) extra.isLoaded = false;
 
-            // 武器ならisLoaded初期化
-            let extra = {};
-            if (randomItem.itemTypeID === 1) extra.isLoaded = false;
-
-            result.push({
-                ...randomItem,
-                currentDurability: randomItem.maxDurability,
-                invIndex: nextInvIndex++,
-                ...extra
-            });
+                result.push({
+                    ...randomItem,
+                    currentDurability: randomItem.maxDurability,
+                    invIndex: nextInvIndex++,
+                    ...extra
+                });
+            }
         }
         return result;
     }
@@ -1627,13 +1646,15 @@ window.onload = function () {
                     const randomTypeId = availableTypes[Math.floor(Math.random() * availableTypes.length)];
                     const itemsOfType = itemsByType[randomTypeId];
 
-                    // 選択されたタイプからランダムにアイテムを選択
-                    const randomItem = itemsOfType[Math.floor(Math.random() * itemsOfType.length)];
-                    loot.push({
-                        ...randomItem,
-                        currentDurability: randomItem.maxDurability,
-                        invIndex: nextInvIndex++
-                    });
+                    // 選択されたタイプからspawnBaseRateをウエイトとして重み付き抽選
+                    const randomItem = getWeightedRandomItem(itemsOfType);
+                    if (randomItem) {
+                        loot.push({
+                            ...randomItem,
+                            currentDurability: randomItem.maxDurability,
+                            invIndex: nextInvIndex++
+                        });
+                    }
                 }
                 renderLoot();
             }
