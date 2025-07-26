@@ -330,6 +330,14 @@ function renderLoot() {
         card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'loot', e, card); });
+        // Ctrl+左クリックで自動拾い
+        card.addEventListener('mousedown', function (e) {
+            if (e.ctrlKey && e.button === 0) {
+                e.preventDefault();
+                addToInventory(i);
+                hideTooltip();
+            }
+        });
         // 耐久値表示（右上、シンプル表示）
         if (i.maxDurability > 0 && i.currentDurability !== undefined) {
             const dura = document.createElement('div');
@@ -1193,7 +1201,7 @@ function blockAllKey(e) {
 window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('retry-btn').onclick = function () {
         hideGameOver();
-        restartGame();
+        showTitleScreen();
     };
 });
 function restartGame() {
@@ -1577,6 +1585,7 @@ function showGameClear() {
     document.getElementById('gameclear-items').innerHTML = html;
     // 持ち帰りアイテムを拠点の持ち出しリストに戻す
     baseInventoryItems = inventory.map(item => ({ ...item }));
+    savePlayerData();
     // アイコンにマウスオーバーでチップ表示
     const itemImgs = document.querySelectorAll('#gameclear-items img');
     itemImgs.forEach((img, idx) => {
@@ -1696,7 +1705,12 @@ window.addEventListener('DOMContentLoaded', function () {
         hideInvConfirmDialog();
         // ダンジョン初期化
         showDungeonScreen();
-        initDungeonRun();
+        // 持ち出しアイテムを一時保存
+        const itemsToTake = baseInventoryItems.map(item => ({ ...item }));
+        initDungeonRun(itemsToTake);
+        // 出撃後、持ち出しインベントリを空にしてセーブ
+        baseInventoryItems = [];
+        savePlayerData();
     };
     document.getElementById('inv-confirm-cancel-btn').onclick = function () {
         hideInvConfirmDialog();
@@ -1732,39 +1746,121 @@ window.addEventListener('DOMContentLoaded', function () {
 let warehouseItems = [];
 let baseInventoryItems = [];
 
-// 拠点画面用アイテム初期化（itemMasterロード後に呼ぶ）
+// ===== プレイヤーデータ セーブ・ロード =====
+let saveTimeout = null;
+
+function debouncedSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        savePlayerData();
+    }, 500); // 500ms後にセーブ
+}
+
+function savePlayerData() {
+    const data = {
+        warehouseItems,
+        baseInventoryItems
+    };
+    localStorage.setItem('tarkov_cardgame_player', JSON.stringify(data));
+}
+function loadPlayerData() {
+    const data = localStorage.getItem('tarkov_cardgame_player');
+    if (data) {
+        try {
+            const obj = JSON.parse(data);
+            warehouseItems = obj.warehouseItems || [];
+            baseInventoryItems = obj.baseInventoryItems || [];
+        } catch (e) {
+            warehouseItems = [];
+            baseInventoryItems = [];
+        }
+    } else {
+        warehouseItems = [];
+        baseInventoryItems = [];
+    }
+}
+
+// ===== 拠点画面用アイテム初期化 =====
 function initBaseScreenItems() {
-    // 何も持っていない状態で開始
-    warehouseItems = [];
-    baseInventoryItems = [];
+    // セーブデータがあればロード、なければ空
+    loadPlayerData();
 }
 
 // ===== 拠点画面UI描画 =====
 function renderBaseWarehouse() {
+    // ソート: 武器(属性1)→マナ(属性1)→武器(属性2)→マナ(属性2)→...属性4まで→防具→その他itemTypeID順、各グループ内itemID昇順
+    warehouseItems.sort((a, b) => {
+        // 武器・マナ属性グループ
+        for (let attr = 1; attr <= 4; attr++) {
+            // 武器(属性attr)
+            if (a.itemTypeID === 1 && a.attrID === attr) {
+                if (!(b.itemTypeID === 1 && b.attrID === attr)) return -1;
+            } else if (b.itemTypeID === 1 && b.attrID === attr) {
+                return 1;
+            }
+            // マナ(属性attr)
+            if (a.itemTypeID === 2 && a.attrID === attr) {
+                if (!(b.itemTypeID === 2 && b.attrID === attr)) return -1;
+            } else if (b.itemTypeID === 2 && b.attrID === attr) {
+                return 1;
+            }
+        }
+        // 防具
+        if (a.itemTypeID === 3 && b.itemTypeID !== 3) return -1;
+        if (b.itemTypeID === 3 && a.itemTypeID !== 3) return 1;
+        // その他itemTypeID順
+        if (a.itemTypeID !== b.itemTypeID) return a.itemTypeID - b.itemTypeID;
+        // 同じグループ内はitemID昇順
+        return a.itemID - b.itemID;
+    });
     const area = document.getElementById('base-warehouse-grid');
     area.innerHTML = '';
-    warehouseItems.forEach(i => {
+    warehouseItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'card warehouse-card';
         card.style.position = 'relative';
-        // 背景色
+        // === タイプごとの背景色 ===
         let bgColor = '';
-        if (window.itemTypeMaster && i.itemTypeID) {
-            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+        if (window.itemTypeMaster && item.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == item.itemTypeID);
             if (t && t.color) bgColor = t.color;
         }
         if (bgColor) card.style.backgroundColor = `#${bgColor}`;
         const img = document.createElement('img');
-        img.src = 'images/item/' + i.imageName;
-        img.alt = i.itemName;
+        img.src = 'images/item/' + item.imageName;
+        img.alt = item.itemName;
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'contain';
         card.appendChild(img);
-        card.dataset.id = i.itemID;
-        card.dataset.index = i.invIndex;
-        // 耐久値表示
-        if (i.maxDurability > 0 && i.currentDurability !== undefined) {
+        card.dataset.id = item.itemID;
+        card.dataset.type = item.itemTypeID;
+        card.dataset.index = item.invIndex;
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(item), card); });
+        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showBaseWarehouseMenu(item, e, card); });
+        // Ctrl+左クリックで自動持ち出し
+        card.addEventListener('mousedown', function (e) {
+            if (e.ctrlKey && e.button === 0) {
+                e.preventDefault();
+                // 20個制限チェック
+                if (baseInventoryItems.length >= 20) {
+                    addLog('20個までしか持ち出せません。', 'error');
+                    return;
+                }
+                // 自動持ち出し
+                baseInventoryItems.push(item);
+                const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+                if (idx !== -1) warehouseItems.splice(idx, 1);
+                renderBaseWarehouse();
+                renderBaseInventory();
+                debouncedSave();
+                // 移動成功時、情報チップを非表示
+                hideTooltip();
+            }
+        });
+        // 耐久値表示（右上、シンプル表示）
+        if (item.maxDurability > 0 && item.currentDurability !== undefined) {
             const dura = document.createElement('div');
             dura.style.position = 'absolute';
             dura.style.top = '0px';
@@ -1773,60 +1869,70 @@ function renderBaseWarehouse() {
             dura.style.color = '#222';
             dura.style.background = 'none';
             dura.style.padding = '0';
-            dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
+            dura.textContent = `${item.currentDurability}/${item.maxDurability}`;
             card.appendChild(dura);
         }
-        // 属性アイコン
-        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+        // === 属性アイコン表示（左下） ===
+        if (item.attrID && [1, 2, 3, 4].includes(item.attrID)) {
             const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
             const iconImg = document.createElement('img');
-            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+            iconImg.src = 'images/icon/' + attrIconMap[item.attrID];
             iconImg.alt = '属性';
             iconImg.className = 'attr-icon';
             card.appendChild(iconImg);
         }
-        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
-        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
-        card.addEventListener('contextmenu', function (e) { showBaseWarehouseMenu(i, e, card); });
+        // 枠線再付与
+        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == item.itemID && currentTooltipTargetItem.invIndex == item.invIndex) {
+            card.classList.add('card-tooltip-focus');
+            void card.offsetWidth;
+        }
         area.appendChild(card);
     });
 }
 function renderBaseInventory() {
     const area = document.getElementById('base-inventory-grid');
     area.innerHTML = '';
-    // --- 持ち出しインベントリ数表示 ---
-    let countLabel = document.getElementById('base-inventory-count');
-    if (!countLabel) {
-        countLabel = document.createElement('div');
-        countLabel.id = 'base-inventory-count';
-        countLabel.style.fontSize = '1em';
-        countLabel.style.marginBottom = '8px';
-        area.parentElement.insertBefore(countLabel, area);
-    }
-    countLabel.textContent = `所持数: ${baseInventoryItems.length} / 20`;
-    // ---
-    baseInventoryItems.forEach(i => {
+    baseInventoryItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'card inventory-card';
         card.style.position = 'relative';
-        // 背景色
+        // === タイプごとの背景色 ===
         let bgColor = '';
-        if (window.itemTypeMaster && i.itemTypeID) {
-            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+        if (window.itemTypeMaster && item.itemTypeID) {
+            const t = window.itemTypeMaster.find(t => t.tileTypeID == item.itemTypeID);
             if (t && t.color) bgColor = t.color;
         }
         if (bgColor) card.style.backgroundColor = `#${bgColor}`;
         const img = document.createElement('img');
-        img.src = 'images/item/' + i.imageName;
-        img.alt = i.itemName;
+        img.src = 'images/item/' + item.imageName;
+        img.alt = item.itemName;
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'contain';
         card.appendChild(img);
-        card.dataset.id = i.itemID;
-        card.dataset.index = i.invIndex;
-        // 耐久値表示
-        if (i.maxDurability > 0 && i.currentDurability !== undefined) {
+        card.dataset.id = item.itemID;
+        card.dataset.type = item.itemTypeID;
+        card.dataset.index = item.invIndex;
+        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(item), card); });
+        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
+        card.addEventListener('contextmenu', function (e) { showBaseInventoryMenu(item, e, card); });
+        // Ctrl+左クリックで自動倉庫入れ
+        card.addEventListener('mousedown', function (e) {
+            if (e.ctrlKey && e.button === 0) {
+                e.preventDefault();
+                // 自動倉庫入れ
+                warehouseItems.push(item);
+                const idx = baseInventoryItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+                if (idx !== -1) baseInventoryItems.splice(idx, 1);
+                renderBaseWarehouse();
+                renderBaseInventory();
+                debouncedSave();
+                // 移動成功時、情報チップを非表示
+                hideTooltip();
+            }
+        });
+        // 耐久値表示（右上、シンプル表示）
+        if (item.maxDurability > 0 && item.currentDurability !== undefined) {
             const dura = document.createElement('div');
             dura.style.position = 'absolute';
             dura.style.top = '0px';
@@ -1835,21 +1941,23 @@ function renderBaseInventory() {
             dura.style.color = '#222';
             dura.style.background = 'none';
             dura.style.padding = '0';
-            dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
+            dura.textContent = `${item.currentDurability}/${item.maxDurability}`;
             card.appendChild(dura);
         }
-        // 属性アイコン
-        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+        // === 属性アイコン表示（左下） ===
+        if (item.attrID && [1, 2, 3, 4].includes(item.attrID)) {
             const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
             const iconImg = document.createElement('img');
-            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+            iconImg.src = 'images/icon/' + attrIconMap[item.attrID];
             iconImg.alt = '属性';
             iconImg.className = 'attr-icon';
             card.appendChild(iconImg);
         }
-        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
-        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
-        card.addEventListener('contextmenu', function (e) { showBaseInventoryMenu(i, e, card); });
+        // 枠線再付与
+        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == item.itemID && currentTooltipTargetItem.invIndex == item.invIndex) {
+            card.classList.add('card-tooltip-focus');
+            void card.offsetWidth;
+        }
         area.appendChild(card);
     });
 }
@@ -1877,6 +1985,7 @@ function showBaseWarehouseMenu(item, e, cardElem) {
         renderBaseWarehouse();
         renderBaseInventory();
         menu.style.display = 'none';
+        debouncedSave(); // 遅延セーブ
     };
     menu.appendChild(btnTake);
     // 捨てる
@@ -1887,6 +1996,7 @@ function showBaseWarehouseMenu(item, e, cardElem) {
         if (idx !== -1) warehouseItems.splice(idx, 1);
         renderBaseWarehouse();
         menu.style.display = 'none';
+        debouncedSave(); // 遅延セーブ
     };
     menu.appendChild(btnDrop);
     // メニュー表示位置
@@ -1938,6 +2048,7 @@ function showBaseInventoryMenu(item, e, cardElem) {
         renderBaseWarehouse();
         renderBaseInventory();
         menu.style.display = 'none';
+        debouncedSave(); // 遅延セーブ
     };
     menu.appendChild(btnStore);
     // 捨てる
@@ -1948,6 +2059,7 @@ function showBaseInventoryMenu(item, e, cardElem) {
         if (idx !== -1) baseInventoryItems.splice(idx, 1);
         renderBaseInventory();
         menu.style.display = 'none';
+        debouncedSave(); // 遅延セーブ
     };
     menu.appendChild(btnDrop);
     // メニュー表示位置
@@ -2004,7 +2116,7 @@ window.addEventListener('DOMContentLoaded', function () {
 });
 
 // ===== ダンジョン初期化 =====
-function initDungeonRun() {
+function initDungeonRun(itemsToTake = []) {
     // フロア初期化
     floor = 1;
     updateFloor();
@@ -2038,7 +2150,7 @@ function initDungeonRun() {
         loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
     }
     // インベントリ初期化（持ち出しアイテムをコピー）
-    inventory = baseInventoryItems.map(item => ({ ...item }));
+    inventory = itemsToTake.map(item => ({ ...item }));
     // ログ初期化
     const log = document.getElementById('log');
     log.innerHTML = '';
