@@ -1248,7 +1248,6 @@ function attackEnemy(weapon, enemy) {
                     addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！</span>`, 'action', true);
 
                     // 敵撃破時のドロップアイテム生成
-                    // 敵撃破時のドロップアイテム生成
                     if (loot.length < 10) {
                         const dropCount = Math.floor(Math.random() * 3) + 1; // 1-3個
                         const dropItems = getRandomItemsByType(itemMaster, dropCount);
@@ -1451,7 +1450,28 @@ function nextFloor() {
     const lootNum = Math.floor(Math.random() * 10) + 1;
     loot = getRandomItemsByType(itemMaster, lootNum);
     renderLoot();
-    // 5. 敵は再生成しない（消さない）
+    // 5. 敵スポーン判定（20%の確率、最大5体）
+    if (Math.random() < 0.2 && enemies.length < 5) {
+        const spawnCount = Math.min(5 - enemies.length, Math.floor(Math.random() * 3) + 1); // 1-3体、最大5体まで
+        for (let i = 0; i < spawnCount; i++) {
+            const randomEnemy = enemyMaster[Math.floor(Math.random() * enemyMaster.length)];
+            if (randomEnemy) {
+                enemies.push({
+                    id: randomEnemy.enemyID,
+                    name: randomEnemy.enemyName,
+                    hp: randomEnemy.maxHp,
+                    maxHp: randomEnemy.maxHp,
+                    attack: randomEnemy.attack,
+                    attackChance: [randomEnemy.attackChance_attr01, randomEnemy.attackChance_attr02, randomEnemy.attackChance_attr03, randomEnemy.attackChance_attr04],
+                    defence: [randomEnemy.defence_attr01, randomEnemy.defence_attr02, randomEnemy.defence_attr03, randomEnemy.defence_attr04],
+                    imageName: randomEnemy.imageName
+                });
+            }
+        }
+        if (spawnCount > 0) {
+            addLog(`<span style="color:#a00;">${spawnCount}体の敵が現れた！</span>`, 'action', true);
+        }
+    }
     renderEnemies();
 }
 // ===== ゲームオーバー制御 =====
@@ -2433,22 +2453,8 @@ function initDungeonRun(itemsToTake = []) {
     player.water = 100;
     player.defense = { 1: 0, 2: 0, 3: 0, 4: 0 };
     player.statuses = [];
-    // 敵初期化（ID=1001の敵を1体だけ配置、なければ空）
-    let enemy1001 = enemyMaster.find(e => e.enemyID === 1001);
-    if (enemy1001) {
-        enemies = [{
-            id: enemy1001.enemyID,
-            name: enemy1001.enemyName,
-            hp: enemy1001.maxHp,
-            maxHp: enemy1001.maxHp,
-            attack: enemy1001.attack,
-            attackChance: [enemy1001.attackChance_attr01, enemy1001.attackChance_attr02, enemy1001.attackChance_attr03, enemy1001.attackChance_attr04],
-            defence: [enemy1001.defence_attr01, enemy1001.defence_attr02, enemy1001.defence_attr03, enemy1001.defence_attr04],
-            imageName: enemy1001.imageName
-        }];
-    } else {
-        enemies = [];
-    }
+    // 敵初期化（初期スポーンなし）
+    enemies = [];
     // ルートアイテム初期化
     const lootNum = Math.floor(Math.random() * 10) + 1;
     loot = getRandomItemsByType(itemMaster, lootNum); // ←修正
