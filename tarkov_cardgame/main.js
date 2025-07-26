@@ -447,35 +447,38 @@ function renderLoot() {
     area.addEventListener('mousemove', function (e) {
         if (!isSwipeMode) return;
 
-        const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
-        elementsBelow.forEach(element => {
-            if (element.classList.contains('loot-cover-img')) {
-                const parentCard = element.closest('.loot-card');
-                if (parentCard) {
-                    const lootIndex = Array.from(parentCard.parentNode.children).indexOf(parentCard);
-                    const lootItem = loot[lootIndex];
-                    if (lootItem && lootItem.isCovered) {
-                        // 背景色を設定
-                        let itemBgColor = '';
-                        if (window.itemTypeMaster && lootItem.itemTypeID) {
-                            const t = window.itemTypeMaster.find(t => t.tileTypeID == lootItem.itemTypeID);
-                            if (t && t.color) itemBgColor = t.color;
-                        }
-                        if (itemBgColor) {
-                            parentCard.style.backgroundColor = `#${itemBgColor}`;
-                        }
+        // スワイプモード中のみ、マウスボタンが押されている状態でカバー解除を実行
+        if (e.buttons === 1) { // 左ボタンが押されている
+            const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
+            elementsBelow.forEach(element => {
+                if (element.classList.contains('loot-cover-img')) {
+                    const parentCard = element.closest('.loot-card');
+                    if (parentCard) {
+                        const lootIndex = Array.from(parentCard.parentNode.children).indexOf(parentCard);
+                        const lootItem = loot[lootIndex];
+                        if (lootItem && lootItem.isCovered) {
+                            // 背景色を設定
+                            let itemBgColor = '';
+                            if (window.itemTypeMaster && lootItem.itemTypeID) {
+                                const t = window.itemTypeMaster.find(t => t.tileTypeID == lootItem.itemTypeID);
+                                if (t && t.color) itemBgColor = t.color;
+                            }
+                            if (itemBgColor) {
+                                parentCard.style.backgroundColor = `#${itemBgColor}`;
+                            }
 
-                        // カバー解除
-                        element.classList.add('cover-fadeout');
-                        setTimeout(() => {
-                            lootItem.isCovered = false;
-                            const newCard = renderLootCard(lootItem);
-                            parentCard.replaceWith(newCard);
-                        }, 350);
+                            // カバー解除
+                            element.classList.add('cover-fadeout');
+                            setTimeout(() => {
+                                lootItem.isCovered = false;
+                                const newCard = renderLootCard(lootItem);
+                                parentCard.replaceWith(newCard);
+                            }, 350);
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     });
 
     area.addEventListener('mouseup', function (e) {
@@ -542,36 +545,39 @@ function renderLootCard(i) {
         cover.addEventListener('mousemove', function (e) {
             if (!isSwipeMode) return;
 
-            // カーソル下の他のカバー要素を検出
-            const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
-            elementsBelow.forEach(element => {
-                if (element.classList.contains('loot-cover-img') && element !== cover) {
-                    const parentCard = element.closest('.loot-card');
-                    if (parentCard) {
-                        const lootIndex = Array.from(parentCard.parentNode.children).indexOf(parentCard);
-                        const lootItem = loot[lootIndex];
-                        if (lootItem && lootItem.isCovered) {
-                            // 背景色を設定
-                            let itemBgColor = '';
-                            if (window.itemTypeMaster && lootItem.itemTypeID) {
-                                const t = window.itemTypeMaster.find(t => t.tileTypeID == lootItem.itemTypeID);
-                                if (t && t.color) itemBgColor = t.color;
-                            }
-                            if (itemBgColor) {
-                                parentCard.style.backgroundColor = `#${itemBgColor}`;
-                            }
+            // スワイプモード中のみ、マウスボタンが押されている状態でカバー解除を実行
+            if (e.buttons === 1) { // 左ボタンが押されている
+                // カーソル下の他のカバー要素を検出
+                const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
+                elementsBelow.forEach(element => {
+                    if (element.classList.contains('loot-cover-img') && element !== cover) {
+                        const parentCard = element.closest('.loot-card');
+                        if (parentCard) {
+                            const lootIndex = Array.from(parentCard.parentNode.children).indexOf(parentCard);
+                            const lootItem = loot[lootIndex];
+                            if (lootItem && lootItem.isCovered) {
+                                // 背景色を設定
+                                let itemBgColor = '';
+                                if (window.itemTypeMaster && lootItem.itemTypeID) {
+                                    const t = window.itemTypeMaster.find(t => t.tileTypeID == lootItem.itemTypeID);
+                                    if (t && t.color) itemBgColor = t.color;
+                                }
+                                if (itemBgColor) {
+                                    parentCard.style.backgroundColor = `#${itemBgColor}`;
+                                }
 
-                            // カバー解除
-                            element.classList.add('cover-fadeout');
-                            setTimeout(() => {
-                                lootItem.isCovered = false;
-                                const newCard = renderLootCard(lootItem);
-                                parentCard.replaceWith(newCard);
-                            }, 350);
+                                // カバー解除
+                                element.classList.add('cover-fadeout');
+                                setTimeout(() => {
+                                    lootItem.isCovered = false;
+                                    const newCard = renderLootCard(lootItem);
+                                    parentCard.replaceWith(newCard);
+                                }, 350);
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         });
 
         cover.addEventListener('mouseup', function (e) {
