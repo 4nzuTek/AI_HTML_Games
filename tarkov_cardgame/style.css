@@ -435,6 +435,55 @@ body {
     margin: 0px 0;
 }
 
+/* 確認チップ（アクションメニューと同じスタイル） */
+#confirm-chip {
+    background: #fff;
+    color: #111;
+    border: 3px solid #111;
+    border-radius: 0;
+    padding: 4px 4px;
+    display: none;
+    position: absolute;
+    z-index: 5000;
+    flex-direction: column;
+    gap: 4px;
+    width: 167px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    min-height: 72px;
+    overflow: auto;
+}
+
+#confirm-chip button {
+    background: #f3f3f3;
+    border: 1.5px solid #bbb;
+    color: #111;
+    font-size: 12px;
+    padding: 0px 0;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: -1px;
+    transition: background 0.2s, border 0.2s;
+    font-weight: bold;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 20px;
+}
+
+#confirm-chip button:hover {
+    background: #e0e0e0;
+    border: 1.5px solid #888;
+}
+
+#confirm-chip .confirm-message {
+    padding: 0px;
+    font-size: 12px;
+    margin-bottom: 0px;
+    font-weight: bold;
+    text-align: left;
+    color: #a00;
+}
+
 /* HP・エネルギー・水分バーの横幅を長くする */
 progress.status-bar {
     width: 320px;

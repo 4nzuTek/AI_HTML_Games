@@ -370,6 +370,31 @@ function renderLoot() {
     });
 }
 function renderInventory() {
+    // ソート: 武器(属性1)→マナ(属性1)→武器(属性2)→マナ(属性2)→...属性4まで→防具→その他itemTypeID順、各グループ内itemID昇順
+    inventory.sort((a, b) => {
+        // 武器・マナ属性グループ
+        for (let attr = 1; attr <= 4; attr++) {
+            // 武器(属性attr)
+            if (a.itemTypeID === 1 && a.attrID === attr) {
+                if (!(b.itemTypeID === 1 && b.attrID === attr)) return -1;
+            } else if (b.itemTypeID === 1 && b.attrID === attr) {
+                return 1;
+            }
+            // マナ(属性attr)
+            if (a.itemTypeID === 2 && a.attrID === attr) {
+                if (!(b.itemTypeID === 2 && b.attrID === attr)) return -1;
+            } else if (b.itemTypeID === 2 && b.attrID === attr) {
+                return 1;
+            }
+        }
+        // 防具
+        if (a.itemTypeID === 3 && b.itemTypeID !== 3) return -1;
+        if (b.itemTypeID === 3 && a.itemTypeID !== 3) return 1;
+        // その他itemTypeID順
+        if (a.itemTypeID !== b.itemTypeID) return a.itemTypeID - b.itemTypeID;
+        // 同じグループ内はitemID昇順
+        return a.itemID - b.itemID;
+    });
     const area = document.getElementById('inventory');
     area.innerHTML = '';
     inventory.forEach(i => {
@@ -586,29 +611,21 @@ function hideTooltip() {
     }
     const tooltip = document.getElementById('tooltip');
     tooltip.style.display = 'none';
-    // 枠線制御: 情報チップ非表示時は必ず枠線を除去
+    // 枠線制御: 情報チップ非表示時は枠線を除去
     if (tooltipTargetCard && tooltipTargetCard.classList && tooltipTargetCard.classList.contains('card-tooltip-focus')) {
-        const cardId = tooltipTargetCard.dataset && tooltipTargetCard.dataset.id ? tooltipTargetCard.dataset.id : 'unknown';
         tooltipTargetCard.classList.remove('card-tooltip-focus');
-        // console.log(`[tooltip] 枠線除去(hideTooltip): cardID=${cardId}`);
+        void tooltipTargetCard.offsetWidth;
+        // console.log('[tooltip] 枠線除去');
     }
-    // 追加: 全カードから枠線クラスを除去（耐久が残っている時の枠線残り対策）
-    document.querySelectorAll('.card-tooltip-focus').forEach(card => {
-        card.classList.remove('card-tooltip-focus');
-    });
-    // ターゲット解除＋枠線除去
-    if (currentTooltipTargetItem) {
-        // console.log(`[tooltip] ターゲット解除: itemID=${currentTooltipTargetItem.itemID}`);
-    } else {
-        // console.log('[tooltip] ターゲット解除: null');
-    }
-    currentTooltipTargetItem = null;
     tooltipTargetCard = null;
-    tooltipHideTimer = null;
+    currentTooltipTargetItem = null;
+    tooltipCardHover = false;
     // --- アクションメニューも即時消す ---
     const menu = document.getElementById('action-menu');
     if (menu) menu.style.display = 'none';
     actionMenuTargetCard = null;
+    // 確認チップも一緒に非表示
+    hideConfirmChip();
 }
 function showActionMenu(card, area, e, cardElem) {
     e.preventDefault();
@@ -644,7 +661,12 @@ function showActionMenu(card, area, e, cardElem) {
             if (act === '使用' || act === '使用する') {
                 actions.push({ label: '使用する', handler: () => useItem(card) });
             } else if (act === '捨てる') {
-                actions.push({ label: '捨てる', handler: () => dropItem(card) });
+                actions.push({
+                    label: '捨てる', handler: () => {
+                        hideActionMenu();
+                        showConfirmChip('本当に捨てますか？', card, () => dropItem(card), e, cardElem);
+                    }
+                });
             } else if (act === '攻撃') {
                 // 装填済みでない場合、または耐久値0ならグレーアウト
                 const widx = inventory.findIndex(i => i.itemID === card.itemID && i.invIndex === card.invIndex);
@@ -1992,11 +2014,13 @@ function showBaseWarehouseMenu(item, e, cardElem) {
     const btnDrop = document.createElement('button');
     btnDrop.textContent = '捨てる';
     btnDrop.onclick = function () {
-        const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
-        if (idx !== -1) warehouseItems.splice(idx, 1);
-        renderBaseWarehouse();
         menu.style.display = 'none';
-        debouncedSave(); // 遅延セーブ
+        showConfirmChip('本当に捨てますか？', item, function () {
+            const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+            if (idx !== -1) warehouseItems.splice(idx, 1);
+            renderBaseWarehouse();
+            debouncedSave();
+        }, e, cardElem);
     };
     menu.appendChild(btnDrop);
     // メニュー表示位置
@@ -2055,11 +2079,13 @@ function showBaseInventoryMenu(item, e, cardElem) {
     const btnDrop = document.createElement('button');
     btnDrop.textContent = '捨てる';
     btnDrop.onclick = function () {
-        const idx = baseInventoryItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
-        if (idx !== -1) baseInventoryItems.splice(idx, 1);
-        renderBaseInventory();
         menu.style.display = 'none';
-        debouncedSave(); // 遅延セーブ
+        showConfirmChip('本当に捨てますか？', item, function () {
+            const idx = baseInventoryItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+            if (idx !== -1) baseInventoryItems.splice(idx, 1);
+            renderBaseInventory();
+            debouncedSave();
+        }, e, cardElem);
     };
     menu.appendChild(btnDrop);
     // メニュー表示位置
@@ -2161,4 +2187,123 @@ function initDungeonRun(itemsToTake = []) {
     renderEnemies();
     updatePlayerStatus();
     updateWeight();
+}
+
+// ===== 確認チップ =====
+let confirmChipTarget = null;
+let confirmChipAction = null;
+
+function showConfirmChip(message, target, action, e, cardElem) {
+    confirmChipTarget = target;
+    confirmChipAction = action;
+
+    const chip = document.getElementById('confirm-chip');
+    chip.innerHTML = `
+        <div class="confirm-message">${message}</div>
+        <button id="confirm-ok-btn">OK</button>
+        <button id="confirm-cancel-btn">キャンセル</button>
+    `;
+
+    // ボタンイベント
+    document.getElementById('confirm-ok-btn').onclick = function () {
+        if (confirmChipAction) {
+            const action = confirmChipAction;
+            hideConfirmChip();
+            action();
+        } else {
+            hideConfirmChip();
+        }
+    };
+    document.getElementById('confirm-cancel-btn').onclick = function () {
+        hideConfirmChip();
+    };
+
+    // アクションメニューと同じ表示位置計算
+    if (cardElem && cardElem.getBoundingClientRect && cardElem.getBoundingClientRect().width > 0) {
+        const rect = cardElem.getBoundingClientRect();
+        const right = rect.right;
+        let top = rect.top;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+        let outlineWidth = 0;
+        if (cardElem.classList && cardElem.classList.contains('card-tooltip-focus')) {
+            const style = window.getComputedStyle(cardElem);
+            outlineWidth = parseInt(style.outlineWidth) || 0;
+        }
+        top = top - outlineWidth;
+        chip.style.left = (right + scrollX) + 'px';
+        chip.style.top = (top + scrollY) + 'px';
+    } else {
+        // cardElemが見つからない場合、targetから対応するカード要素を探す
+        let targetCard = null;
+        if (target && target.itemID && target.invIndex !== undefined) {
+            // インベントリから該当するカードを探す
+            const inventoryCards = document.querySelectorAll('#inventory .card');
+            for (const card of inventoryCards) {
+                if (card.dataset.id == target.itemID && card.dataset.index == target.invIndex) {
+                    targetCard = card;
+                    break;
+                }
+            }
+            // ルートから該当するカードを探す
+            if (!targetCard) {
+                const lootCards = document.querySelectorAll('#loot .card');
+                for (const card of lootCards) {
+                    if (card.dataset.id == target.itemID && card.dataset.index == target.invIndex) {
+                        targetCard = card;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (targetCard && targetCard.getBoundingClientRect && targetCard.getBoundingClientRect().width > 0) {
+            const rect = targetCard.getBoundingClientRect();
+            const right = rect.right;
+            let top = rect.top;
+            const scrollX = window.scrollX || window.pageXOffset;
+            const scrollY = window.scrollY || window.pageYOffset;
+            let outlineWidth = 0;
+            if (targetCard.classList && targetCard.classList.contains('card-tooltip-focus')) {
+                const style = window.getComputedStyle(targetCard);
+                outlineWidth = parseInt(style.outlineWidth) || 0;
+            }
+            top = top - outlineWidth;
+            chip.style.left = (right + scrollX) + 'px';
+            chip.style.top = (top + scrollY) + 'px';
+        } else {
+            // フォールバック: マウス位置または画面中央
+            if (e && e.pageX && e.pageY) {
+                chip.style.left = e.pageX + 'px';
+                chip.style.top = e.pageY + 'px';
+            } else {
+                // 画面中央に表示
+                chip.style.left = '50%';
+                chip.style.top = '50%';
+                chip.style.transform = 'translate(-50%, -50%)';
+            }
+        }
+    }
+
+    chip.style.display = 'block';
+
+    // マウスオーバー時の情報チップ制御（アクションメニューと同じ）
+    chip.onmouseenter = function () {
+        tooltipMenuOpen = true;
+        if (tooltipHideTimer) {
+            clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = null;
+        }
+    };
+    chip.onmouseleave = function () {
+        tooltipMenuOpen = false;
+        tryHideTooltipWithDelay();
+    };
+}
+
+function hideConfirmChip() {
+    const chip = document.getElementById('confirm-chip');
+    chip.style.display = 'none';
+    confirmChipTarget = null;
+    confirmChipAction = null;
 }
