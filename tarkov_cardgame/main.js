@@ -421,6 +421,18 @@ function renderInventory() {
         card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'inventory', e, card); });
+        // Q+左クリックで捨てるショートカット
+        card.addEventListener('mousedown', function (e) {
+            if (e.button === 0 && e.qKey) {
+                e.preventDefault();
+                showConfirmChip('本当に捨てますか？', i, function () {
+                    const idx = inventory.findIndex(item => item.itemID === i.itemID && item.invIndex === i.invIndex);
+                    if (idx !== -1) inventory.splice(idx, 1);
+                    renderInventory();
+                    addLog(`${i.itemName}を捨てた。`, 'action');
+                }, e, card);
+            }
+        });
         // 耐久値表示（右上、ぎちぎち・シンプル表示）
         if (i.maxDurability > 0 && i.currentDurability !== undefined) {
             const dura = document.createElement('div');
@@ -496,6 +508,8 @@ function showTooltip(desc, cardOrEvent) {
     const menu = document.getElementById('action-menu');
     if (menu) menu.style.display = 'none';
     actionMenuTargetCard = null;
+    // 情報チップ切り替え時は確認チップも即時消す
+    hideConfirmChip();
     const tooltip = document.getElementById('tooltip');
     tooltip.innerHTML = desc;
     tooltip.style.display = 'block';
@@ -1861,7 +1875,7 @@ function renderBaseWarehouse() {
         card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(item), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showBaseWarehouseMenu(item, e, card); });
-        // Ctrl+左クリックで自動持ち出し
+        // Ctrl+左クリックまたはQ+左クリック
         card.addEventListener('mousedown', function (e) {
             if (e.ctrlKey && e.button === 0) {
                 e.preventDefault();
@@ -1879,6 +1893,14 @@ function renderBaseWarehouse() {
                 debouncedSave();
                 // 移動成功時、情報チップを非表示
                 hideTooltip();
+            } else if (e.button === 0 && e.qKey) {
+                e.preventDefault();
+                showConfirmChip('本当に捨てますか？', item, function () {
+                    const idx = warehouseItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+                    if (idx !== -1) warehouseItems.splice(idx, 1);
+                    renderBaseWarehouse();
+                    debouncedSave();
+                }, e, card);
             }
         });
         // 耐久値表示（右上、シンプル表示）
@@ -1938,7 +1960,7 @@ function renderBaseInventory() {
         card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(item), card); });
         card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
         card.addEventListener('contextmenu', function (e) { showBaseInventoryMenu(item, e, card); });
-        // Ctrl+左クリックで自動倉庫入れ
+        // Ctrl+左クリックまたはQ+左クリック
         card.addEventListener('mousedown', function (e) {
             if (e.ctrlKey && e.button === 0) {
                 e.preventDefault();
@@ -1951,6 +1973,14 @@ function renderBaseInventory() {
                 debouncedSave();
                 // 移動成功時、情報チップを非表示
                 hideTooltip();
+            } else if (e.button === 0 && e.qKey) {
+                e.preventDefault();
+                showConfirmChip('本当に捨てますか？', item, function () {
+                    const idx = baseInventoryItems.findIndex(i => i.itemID === item.itemID && i.invIndex === item.invIndex);
+                    if (idx !== -1) baseInventoryItems.splice(idx, 1);
+                    renderBaseInventory();
+                    debouncedSave();
+                }, e, card);
             }
         });
         // 耐久値表示（右上、シンプル表示）
@@ -2307,3 +2337,16 @@ function hideConfirmChip() {
     confirmChipTarget = null;
     confirmChipAction = null;
 }
+
+// --- Qキー判定をグローバルで管理 ---
+let qKeyDown = false;
+window.addEventListener('keydown', function (e) {
+    if (e.key === 'q' || e.key === 'Q') qKeyDown = true;
+});
+window.addEventListener('keyup', function (e) {
+    if (e.key === 'q' || e.key === 'Q') qKeyDown = false;
+});
+// --- mousedownイベントでe.qKeyをセット ---
+document.addEventListener('mousedown', function (e) {
+    e.qKey = qKeyDown;
+}, true);
