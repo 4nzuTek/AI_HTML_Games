@@ -9,6 +9,10 @@ let inventory = [];
 let enemyMaster = [];
 let nextInvIndex = 0; // 追加: invIndex管理用
 
+// スワイプ連続開封用グローバル変数
+let isSwipeMode = false;
+let swipeStartTime = 0;
+
 // --- グローバル定義 ---
 function getRandomItemsByType(arr, n) {
     const result = [];
@@ -36,7 +40,8 @@ function getRandomItemsByType(arr, n) {
                 ...randomItem,
                 currentDurability: randomItem.maxDurability,
                 invIndex: nextInvIndex++,
-                ...extra
+                ...extra,
+                isCovered: true // 追加: ルートは最初カバー
             });
         }
     }
@@ -422,16 +427,157 @@ function renderLoot() {
     const area = document.getElementById('loot');
     area.innerHTML = '';
     loot.forEach(i => {
-        const card = document.createElement('div');
-        card.className = 'card loot-card';
-        card.style.position = 'relative'; // 耐久値表示用
-        // === タイプごとの背景色 ===
-        let bgColor = '';
-        if (window.itemTypeMaster && i.itemTypeID) {
-            const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
-            if (t && t.color) bgColor = t.color;
+        const card = renderLootCard(i);
+        area.appendChild(card);
+    });
+
+    // エリア全体のスワイプイベント
+    area.addEventListener('mousedown', function (e) {
+        isSwipeMode = true;
+        swipeStartTime = Date.now();
+    });
+    area.addEventListener('mousemove', function (e) {
+        if (!isSwipeMode) return;
+
+        const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
+        elementsBelow.forEach(element => {
+            if (element.classList.contains('loot-cover-img')) {
+                const parentCard = element.closest('.loot-card');
+                if (parentCard) {
+                    const lootIndex = Array.from(parentCard.parentNode.children).indexOf(parentCard);
+                    const lootItem = loot[lootIndex];
+                    if (lootItem && lootItem.isCovered) {
+                        // 背景色を設定
+                        let itemBgColor = '';
+                        if (window.itemTypeMaster && lootItem.itemTypeID) {
+                            const t = window.itemTypeMaster.find(t => t.tileTypeID == lootItem.itemTypeID);
+                            if (t && t.color) itemBgColor = t.color;
+                        }
+                        if (itemBgColor) {
+                            parentCard.style.backgroundColor = `#${itemBgColor}`;
+                        }
+
+                        // カバー解除
+                        element.classList.add('cover-fadeout');
+                        setTimeout(() => {
+                            lootItem.isCovered = false;
+                            const newCard = renderLootCard(lootItem);
+                            parentCard.replaceWith(newCard);
+                        }, 350);
+                    }
+                }
+            }
+        });
+    });
+
+    area.addEventListener('mouseup', function (e) {
+        if (isSwipeMode) {
+            isSwipeMode = false;
         }
-        if (bgColor) card.style.backgroundColor = `#${bgColor}`;
+    });
+    // 追加: lootエリアでのドラッグ開始を禁止
+    area.addEventListener('dragstart', function (e) {
+        e.preventDefault();
+    });
+}
+
+function renderLootCard(i) {
+    const card = document.createElement('div');
+    card.className = 'card loot-card';
+    card.style.position = 'relative'; // 耐久値表示用
+    // === タイプごとの背景色 ===
+    let bgColor = '';
+    if (window.itemTypeMaster && i.itemTypeID) {
+        const t = window.itemTypeMaster.find(t => t.tileTypeID == i.itemTypeID);
+        if (t && t.color) bgColor = t.color;
+    }
+    if (bgColor) card.style.backgroundColor = `#${bgColor}`;
+    // --- カバー表示 ---
+    if (i.isCovered) {
+        // カバー中は背景色を白に固定
+        card.style.backgroundColor = '#ffffff';
+        // 本来の画像は非表示
+        const cover = document.createElement('img');
+        cover.src = 'images/unsearched.png';
+        cover.alt = '未発見';
+        cover.className = 'loot-cover-img';
+        cover.style.width = '100%';
+        cover.style.height = '100%';
+        cover.style.objectFit = 'contain';
+        cover.style.position = 'absolute';
+        cover.style.left = '0';
+        cover.style.top = '0';
+        cover.style.zIndex = '2';
+        cover.style.cursor = 'pointer';
+        cover.draggable = false; // 追加: 画像ドラッグ無効化
+        // カバークリックで解除
+        cover.addEventListener('click', function (e) {
+            e.stopPropagation();
+            // スワイプモード中は通常クリックを無効化
+            if (isSwipeMode) return;
+
+            // 背景色をアイテムタイプの色に設定（アニメーション開始）
+            if (bgColor) {
+                card.style.backgroundColor = `#${bgColor}`;
+            }
+            // アニメーション
+            cover.classList.add('cover-fadeout');
+            setTimeout(() => {
+                i.isCovered = false;
+                // カード要素だけ差し替え
+                const newCard = renderLootCard(i);
+                card.replaceWith(newCard);
+            }, 350); // アニメーション後に解除
+        });
+
+        // スワイプ連続開封機能
+        cover.addEventListener('mousemove', function (e) {
+            if (!isSwipeMode) return;
+
+            // カーソル下の他のカバー要素を検出
+            const elementsBelow = document.elementsFromPoint(e.clientX, e.clientY);
+            elementsBelow.forEach(element => {
+                if (element.classList.contains('loot-cover-img') && element !== cover) {
+                    const parentCard = element.closest('.loot-card');
+                    if (parentCard) {
+                        const lootIndex = Array.from(parentCard.parentNode.children).indexOf(parentCard);
+                        const lootItem = loot[lootIndex];
+                        if (lootItem && lootItem.isCovered) {
+                            // 背景色を設定
+                            let itemBgColor = '';
+                            if (window.itemTypeMaster && lootItem.itemTypeID) {
+                                const t = window.itemTypeMaster.find(t => t.tileTypeID == lootItem.itemTypeID);
+                                if (t && t.color) itemBgColor = t.color;
+                            }
+                            if (itemBgColor) {
+                                parentCard.style.backgroundColor = `#${itemBgColor}`;
+                            }
+
+                            // カバー解除
+                            element.classList.add('cover-fadeout');
+                            setTimeout(() => {
+                                lootItem.isCovered = false;
+                                const newCard = renderLootCard(lootItem);
+                                parentCard.replaceWith(newCard);
+                            }, 350);
+                        }
+                    }
+                }
+            });
+        });
+
+        cover.addEventListener('mouseup', function (e) {
+            if (isSwipeMode) {
+                isSwipeMode = false;
+                // スワイプ時間が短すぎる場合は通常クリックとして扱う
+                if (Date.now() - swipeStartTime < 100) {
+                    // 既に解除済みの場合は何もしない
+                }
+            }
+        });
+        card.appendChild(cover);
+        // カバー用アニメーションCSSを後で追加
+    } else {
         const img = document.createElement('img');
         img.src = 'images/item/' + i.imageName;
         img.alt = i.itemName;
@@ -439,50 +585,49 @@ function renderLoot() {
         img.style.height = '100%';
         img.style.objectFit = 'contain';
         card.appendChild(img);
-        card.dataset.id = i.itemID;
-        card.dataset.type = i.itemTypeID;
-        card.dataset.index = i.invIndex; // 追加
-        card.addEventListener('mouseenter', function (e) { onCardMouseEnter(getItemTooltip(i), card); });
-        card.addEventListener('mouseleave', function (e) { onCardMouseLeave(); });
-        card.addEventListener('contextmenu', function (e) { showActionMenu(i, 'loot', e, card); });
-        // Ctrl+左クリックで自動拾い
-        card.addEventListener('mousedown', function (e) {
-            if (e.ctrlKey && e.button === 0) {
-                e.preventDefault();
-                addToInventory(i);
-                hideTooltip();
-            }
-        });
-        // 耐久値表示（右上、シンプル表示）
-        if (i.maxDurability > 0 && i.currentDurability !== undefined) {
-            const dura = document.createElement('div');
-            dura.style.position = 'absolute';
-            dura.style.top = '0px';
-            dura.style.right = '2px';
-            dura.style.fontSize = '0.75em';
-            dura.style.color = '#222';
-            dura.style.background = 'none';
-            dura.style.padding = '0';
-            dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
-            card.appendChild(dura);
+    }
+    card.dataset.id = i.itemID;
+    card.dataset.type = i.itemTypeID;
+    card.dataset.index = i.invIndex; // 追加
+    card.addEventListener('mouseenter', function (e) { if (!i.isCovered) onCardMouseEnter(getItemTooltip(i), card); });
+    card.addEventListener('mouseleave', function (e) { if (!i.isCovered) onCardMouseLeave(); });
+    card.addEventListener('contextmenu', function (e) { if (!i.isCovered) showActionMenu(i, 'loot', e, card); });
+    // Ctrl+左クリックで自動拾い
+    card.addEventListener('mousedown', function (e) {
+        if (!i.isCovered && e.ctrlKey && e.button === 0) {
+            e.preventDefault();
+            addToInventory(i);
+            hideTooltip();
         }
-        // === 属性アイコン表示（左下） ===
-        if (i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
-            const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
-            const iconImg = document.createElement('img');
-            iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
-            iconImg.alt = '属性';
-            iconImg.className = 'attr-icon';
-            card.appendChild(iconImg);
-        }
-        // 枠線再付与
-        if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {
-            card.classList.add('card-tooltip-focus');
-            void card.offsetWidth;
-            // console.log(`[tooltip] 枠線再付与(renderLoot): cardID=${i.itemID}, invIndex=${i.invIndex}`);
-        }
-        area.appendChild(card);
     });
+    // 耐久値表示（右上、シンプル表示）
+    if (!i.isCovered && i.maxDurability > 0 && i.currentDurability !== undefined) {
+        const dura = document.createElement('div');
+        dura.style.position = 'absolute';
+        dura.style.top = '0px';
+        dura.style.right = '2px';
+        dura.style.fontSize = '0.75em';
+        dura.style.color = '#222';
+        dura.style.background = 'none';
+        dura.style.padding = '0';
+        dura.textContent = `${i.currentDurability}/${i.maxDurability}`;
+        card.appendChild(dura);
+    }
+    // === 属性アイコン表示（左下） ===
+    if (!i.isCovered && i.attrID && [1, 2, 3, 4].includes(i.attrID)) {
+        const attrIconMap = { 1: 'fire.png', 2: 'water.png', 3: 'wind.png', 4: 'earth.png' };
+        const iconImg = document.createElement('img');
+        iconImg.src = 'images/icon/' + attrIconMap[i.attrID];
+        iconImg.alt = '属性';
+        iconImg.className = 'attr-icon';
+        card.appendChild(iconImg);
+    }
+    // 枠線再付与
+    if (!i.isCovered && currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {
+        card.classList.add('card-tooltip-focus');
+        void card.offsetWidth;
+    }
+    return card;
 }
 function renderInventory() {
     // ソート: 武器(属性1)→マナ(属性1)→武器(属性2)→マナ(属性2)→...属性4まで→防具→その他itemTypeID順、各グループ内itemID昇順
@@ -574,7 +719,6 @@ function renderInventory() {
         if (currentTooltipTargetItem && currentTooltipTargetItem.itemID == i.itemID && currentTooltipTargetItem.invIndex == i.invIndex) {
             card.classList.add('card-tooltip-focus');
             void card.offsetWidth;
-            // console.log(`[tooltip] 枠線再付与(renderInventory): cardID=${i.itemID}, invIndex=${i.invIndex}`);
         }
         area.appendChild(card);
     });
@@ -2281,12 +2425,8 @@ function initDungeonRun(itemsToTake = []) {
         enemies = [];
     }
     // ルートアイテム初期化
-    loot = [];
     const lootNum = Math.floor(Math.random() * 10) + 1;
-    for (let i = 0; i < lootNum; i++) {
-        const idx = Math.floor(Math.random() * itemMaster.length);
-        loot.push({ ...itemMaster[idx], currentDurability: itemMaster[idx].maxDurability, invIndex: nextInvIndex++ });
-    }
+    loot = getRandomItemsByType(itemMaster, lootNum); // ←修正
     // インベントリ初期化（持ち出しアイテムをコピー）
     inventory = itemsToTake.map(item => ({ ...item }));
     // ログ初期化
