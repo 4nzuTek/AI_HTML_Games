@@ -11,35 +11,27 @@
 
 <body>
     <!-- タイトル画面 -->
-    <div id="title-screen"
-        style="display:block; position:fixed; left:0; top:0; width:100vw; height:100vh; background:#222; color:#fff; z-index:3000; text-align:center;">
-        <div style="margin-top:120px; font-size:2.4em; font-weight:bold; letter-spacing:0.1em;">お宝カード</div>
-        <div style="margin-top:60px;">
-            <button id="to-base-btn" style="font-size:1.3em; padding:18px 60px; margin:24px;">拠点</button>
-            <button id="to-dungeon-btn" style="font-size:1.3em; padding:18px 60px; margin:24px;">ダンジョン</button>
+    <div id="title-screen" class="fullscreen dark-bg center-text">
+        <div class="title-main">お宝カード</div>
+        <div class="title-btns">
+            <button id="to-base-btn" class="main-btn">拠点</button>
+            <button id="to-dungeon-btn" class="main-btn">ダンジョン</button>
         </div>
     </div>
     <!-- 拠点画面 -->
-    <div id="base-screen"
-        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:#f5f5f5; color:#222; z-index:3000; text-align:center;">
+    <div id="base-screen" class="fullscreen light-bg center-text" style="display:none;">
         <!-- ホームボタン -->
-        <button id="base-home-btn"
-            style="position:absolute; left:24px; top:24px; font-size:1.1em; padding:8px 28px;">ホーム</button>
-        <div
-            style="display:flex; flex-direction:row; justify-content:center; align-items:flex-start; width:100vw; height:100vh;">
+        <button id="base-home-btn" class="main-btn home-btn">ホーム</button>
+        <div class="base-flex">
             <!-- 左：持ち出しインベントリ -->
-            <div id="base-inventory-area"
-                style="width:520px; height:600px; margin:200px 24px 0 0; background:#fff; border:2px solid #888; border-radius:8px; box-sizing:border-box; padding:16px; display:flex; flex-direction:column; align-items:center;">
-                <div style="font-weight:bold; font-size:1.2em; margin-bottom:12px;">持ち出しインベントリ</div>
-                <div id="base-inventory-grid" class="card-grid" style="height:680px; overflow-y:auto;"></div>
+            <div id="base-inventory-area" class="base-area base-inventory-area">
+                <div class="base-area-title">持ち出しインベントリ</div>
+                <div id="base-inventory-grid" class="card-grid base-inventory-grid"></div>
             </div>
             <!-- 右：倉庫 -->
-            <div id="base-warehouse-area"
-                style="width:700px; height:600px; margin:200px 0 0 24px; background:#fff; border:2px solid #888; border-radius:8px; box-sizing:border-box; padding:16px; display:flex; flex-direction:column; align-items:center;">
-                <div style="font-weight:bold; font-size:1.2em; margin-bottom:12px;">倉庫</div>
-                <div id="base-warehouse-grid"
-                    style="display:grid; grid-template-columns:repeat(10,50px); grid-auto-rows:80px; gap:10px; width:100%; height:680px; overflow-y:auto; background:#f9f9f9; border:1px solid #ccc; padding:8px;">
-                </div>
+            <div id="base-warehouse-area" class="base-area base-warehouse-area">
+                <div class="base-area-title">倉庫</div>
+                <div id="base-warehouse-grid" class="base-warehouse-grid"></div>
             </div>
         </div>
     </div>
