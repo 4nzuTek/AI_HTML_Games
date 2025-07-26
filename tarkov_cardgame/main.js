@@ -117,6 +117,45 @@ function renderEnemies() {
         area.appendChild(card);
     });
 }
+// 状態アイコンのマッピング関数
+function getStatusIcon(statusName) {
+    const statusIconMap = {
+        '毒': 'poison.png',
+        '痺れ': 'paralysis.png',
+        '呪い': 'curse.png',
+        '加護': 'blessing.png',
+        '倦怠': 'fatigue.png',
+        '脱水': 'dehydration.png'
+    };
+    return statusIconMap[statusName] || null;
+}
+
+// 状態名の日本語表示マッピング
+function getStatusDisplayName(statusName) {
+    const statusDisplayMap = {
+        '毒': '毒',
+        '痺れ': '痺れ',
+        '呪い': '呪い',
+        '加護': '加護',
+        '倦怠': '倦怠',
+        '脱水': '脱水'
+    };
+    return statusDisplayMap[statusName] || statusName;
+}
+
+// 状態説明のマッピング関数
+function getStatusDescription(statusName) {
+    const statusDescMap = {
+        '毒': '攻撃時にHPが10減少する',
+        '痺れ': '攻撃時の命中率が25%低下する',
+        '呪い': '回復アイテムのHP回復が無効になる',
+        '加護': '全ての状態異常とペナルティを無効化する',
+        '倦怠': 'フロア移動時にHPが10減少する',
+        '脱水': 'フロア移動時にHPが10減少する'
+    };
+    return statusDescMap[statusName] || '';
+}
+
 function updatePlayerStatus() {
     // 0-100に制限
     player.hp = Math.max(0, Math.min(player.hp, 100));
@@ -145,11 +184,50 @@ function updatePlayerStatus() {
     const defenseText = `防御力：炎:${getTotalDefense(1)} 水:${getTotalDefense(2)} 風:${getTotalDefense(3)} 地:${getTotalDefense(4)}`;
     const defenseElem = document.getElementById('defense');
     if (defenseElem) defenseElem.textContent = defenseText;
-    // --- 状態表示を追加 ---
+    // --- 状態表示をアイコンに変更 ---
     const statusElem = document.getElementById('status');
     if (statusElem) {
+        statusElem.innerHTML = ''; // 既存の内容をクリア
+
         if (player.statuses && player.statuses.length > 0) {
-            statusElem.textContent = player.statuses.join(' / ');
+            // 全ての状態をアイコン表示
+            player.statuses.forEach((status, index) => {
+                const iconName = getStatusIcon(status);
+                if (iconName) {
+                    const iconContainer = document.createElement('div');
+                    iconContainer.className = 'status-icon-container';
+                    iconContainer.style.display = 'inline-block';
+                    iconContainer.style.marginRight = '4px';
+                    iconContainer.style.cursor = 'help';
+
+                    const iconImg = document.createElement('img');
+                    iconImg.src = `images/icon/${iconName}`;
+                    iconImg.alt = getStatusDisplayName(status);
+                    iconImg.className = 'status-icon';
+                    iconImg.style.width = '20px';
+                    iconImg.style.height = '20px';
+                    iconImg.style.verticalAlign = 'middle';
+
+                    // マウスオーバーでツールチップ表示
+                    iconContainer.addEventListener('mouseenter', function () {
+                        const statusName = getStatusDisplayName(status);
+                        const description = getStatusDescription(status);
+                        const tooltipText = description ? `${statusName}<br>${description}` : statusName;
+                        showTooltip(tooltipText, iconContainer);
+                    });
+                    iconContainer.addEventListener('mouseleave', function () {
+                        hideTooltip();
+                    });
+
+                    iconContainer.appendChild(iconImg);
+                    statusElem.appendChild(iconContainer);
+                }
+            });
+
+            // アイコンが表示されなかった場合は「-」を表示
+            if (statusElem.children.length === 0) {
+                statusElem.textContent = '-';
+            }
         } else {
             statusElem.textContent = '-';
         }

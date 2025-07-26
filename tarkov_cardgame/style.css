@@ -513,6 +513,26 @@ progress.status-bar {
     /* 水色 */
 }
 
+/* 状態アイコンのスタイル */
+.status-icon-container {
+    position: relative;
+    display: inline-block;
+    margin-right: 4px;
+    cursor: help;
+}
+
+.status-icon {
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+    border-radius: 2px;
+    transition: transform 0.2s ease;
+}
+
+.status-icon-container:hover .status-icon {
+    transform: scale(1.1);
+}
+
 /* HPバー */
 #hp-bar.status-bar::-webkit-progress-bar {
     background-color: #eee;
