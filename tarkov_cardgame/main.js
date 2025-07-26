@@ -158,12 +158,20 @@ function renderEnemies() {
         };
         // --- エネミー情報のツールチップ ---
         card.addEventListener('mouseenter', function () {
+            const totalDef = (e.defence[0] || 0) + (e.defence[1] || 0) + (e.defence[2] || 0) + (e.defence[3] || 0);
             const desc =
                 `<b>【${e.name}】</b><br>` +
                 `HP: <b>${e.hp}</b> / ${e.maxHp}<br>` +
                 `攻撃力: <b>${e.attack}</b><br>` +
-                `発生確率:<br>&emsp;炎: <b>${Math.round((e.attackChance[0] || 0) * 100)}%</b>　水: <b>${Math.round((e.attackChance[1] || 0) * 100)}%</b><br>&emsp;風: <b>${Math.round((e.attackChance[2] || 0) * 100)}%</b>　地: <b>${Math.round((e.attackChance[3] || 0) * 100)}%</b><br>` +
-                `防御力:<br>&emsp;炎: <b>${e.defence[0] || 0}</b>　水: <b>${e.defence[1] || 0}</b>　風: <b>${e.defence[2] || 0}</b>　地: <b>${e.defence[3] || 0}</b>`;
+                `&emsp;<img src=\"images/icon/fire.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${Math.round((e.attackChance[0] || 0) * 100)}%</b>　` +
+                `<img src=\"images/icon/water.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${Math.round((e.attackChance[1] || 0) * 100)}%</b>　` +
+                `<img src=\"images/icon/wind.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${Math.round((e.attackChance[2] || 0) * 100)}%</b>　` +
+                `<img src=\"images/icon/earth.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${Math.round((e.attackChance[3] || 0) * 100)}%</b><br>` +
+                `防御力：<b>${totalDef}</b><br>&emsp;` +
+                `<img src=\"images/icon/fire.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${e.defence[0] || 0}</b>　` +
+                `<img src=\"images/icon/water.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${e.defence[1] || 0}</b>　` +
+                `<img src=\"images/icon/wind.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${e.defence[2] || 0}</b>　` +
+                `<img src=\"images/icon/earth.png\" style=\"width:16px;height:16px;vertical-align:middle;\"> <b>${e.defence[3] || 0}</b>`;
             onCardMouseEnter(desc, card);
         });
         card.addEventListener('mouseleave', function () { onCardMouseLeave(); });
