@@ -328,6 +328,10 @@ fetch('json/itemType.json')
         updateWeight();
         // === 拠点画面用アイテムもここで初期化 ===
         initBaseScreenItems();
+        // === 拠点デバッグ機能を初期化 ===
+        initBaseDebugFunctions();
+        // === 拠点デバッグウィンドウを初期化 ===
+        initBaseDebugWindow();
     })
     .catch(err => {
         alert('アイテムデータまたはタイプデータの読み込みに失敗しました: ' + err.message);
@@ -1492,6 +1496,8 @@ function nextFloor() {
 let isGameOver = false;
 function showGameOver() {
     isGameOver = true;
+    // デバッグウィンドウを非表示
+    hideAllDebugWindows();
     // ログにゲームオーバー
     addLog('<span style="color:#a00; font-weight:bold; font-size:1.2em;">=== ゲームオーバー ===</span>', 'action', true);
     // ダイアログとマスク表示
@@ -1527,6 +1533,7 @@ function blockAllKey(e) {
 window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('retry-btn').onclick = function () {
         hideGameOver();
+        hideAllDebugWindows();
         showTitleScreen();
     };
 });
@@ -1651,28 +1658,38 @@ window.onload = function () {
         });
     }
 };
-// ===== デバッグウィンドウ制御 =====
-(function () {
-    let debugVisible = false;
-    const debugWindow = document.getElementById('debug-window');
-    const debugForm = document.getElementById('debug-form');
-    const debugCancel = document.getElementById('debug-cancel');
-    // フォームに現在値をセット
-    function setDebugFormValues() {
-        document.getElementById('debug-hp').value = player.hp;
-        document.getElementById('debug-energy').value = player.energy;
-        document.getElementById('debug-water').value = player.water;
-        document.getElementById('debug-def1').value = player.defense[1];
-        document.getElementById('debug-def2').value = player.defense[2];
-        document.getElementById('debug-def3').value = player.defense[3];
-        document.getElementById('debug-def4').value = player.defense[4];
-        // 状態異常チェックボックス
-        document.getElementById('debug-status-paralysis').checked = player.statuses.includes('痺れ');
-        document.getElementById('debug-status-poison').checked = player.statuses.includes('毒');
-        document.getElementById('debug-status-curse').checked = player.statuses.includes('呪い');
-        document.getElementById('debug-status-bless').checked = player.statuses.includes('加護');
-    }
-    // フォーム送信で値を反映
+// ===== ダンジョンデバッグ機能 =====
+let debugVisible = false;
+const debugWindow = document.getElementById('debug-window');
+const debugForm = document.getElementById('debug-form');
+const debugCancel = document.getElementById('debug-cancel');
+
+// ダンジョンデバッグウィンドウのドラッグ機能を初期化
+if (debugWindow) {
+    initDragWindow(debugWindow, 'debug-titlebar');
+}
+
+// デバッグボタンを初期化
+initDebugButtons();
+
+// フォームに現在値をセット
+function setDebugFormValues() {
+    document.getElementById('debug-hp').value = player.hp;
+    document.getElementById('debug-energy').value = player.energy;
+    document.getElementById('debug-water').value = player.water;
+    document.getElementById('debug-def1').value = player.defense[1];
+    document.getElementById('debug-def2').value = player.defense[2];
+    document.getElementById('debug-def3').value = player.defense[3];
+    document.getElementById('debug-def4').value = player.defense[4];
+    // 状態異常チェックボックス
+    document.getElementById('debug-status-paralysis').checked = player.statuses.includes('痺れ');
+    document.getElementById('debug-status-poison').checked = player.statuses.includes('毒');
+    document.getElementById('debug-status-curse').checked = player.statuses.includes('呪い');
+    document.getElementById('debug-status-bless').checked = player.statuses.includes('加護');
+}
+
+// フォーム送信で値を反映
+if (debugForm) {
     debugForm.onsubmit = function (e) {
         e.preventDefault();
         player.hp = Number(document.getElementById('debug-hp').value);
@@ -1692,26 +1709,31 @@ window.onload = function () {
         updatePlayerStatus();
         toggleDebugWindow(false);
     };
-    // キャンセルボタン
+}
+
+// キャンセルボタン
+if (debugCancel) {
     debugCancel.onclick = function () {
         toggleDebugWindow(false);
     };
-    // Dキーでトグル
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'd' || e.key === 'D') {
-            toggleDebugWindow();
-        }
-    });
-    function toggleDebugWindow(force) {
-        if (typeof force === 'boolean') debugVisible = force;
-        else debugVisible = !debugVisible;
-        if (debugVisible) {
-            setDebugFormValues();
-            debugWindow.style.display = 'block';
-        } else {
-            debugWindow.style.display = 'none';
-        }
+}
+
+// グローバル関数として定義
+function toggleDebugWindow(force) {
+    if (typeof force === 'boolean') debugVisible = force;
+    else debugVisible = !debugVisible;
+    if (debugVisible) {
+        setDebugFormValues();
+        debugWindow.style.display = 'block';
+        // ドラッグ機能を初期化
+        initDragWindow(debugWindow, 'debug-titlebar');
+    } else {
+        debugWindow.style.display = 'none';
     }
+}
+
+// デバッグボタンの初期化
+function initDebugButtons() {
     const debugLootGen = document.getElementById('debug-lootgen');
     if (debugLootGen) {
         debugLootGen.onclick = function () {
@@ -1722,6 +1744,7 @@ window.onload = function () {
             }
         };
     }
+
     const debugEnemyKill = document.getElementById('debug-enemykill');
     if (debugEnemyKill) {
         debugEnemyKill.onclick = async function () {
@@ -1736,43 +1759,43 @@ window.onload = function () {
             addLog('<span style="color:#a00; font-weight:bold;">デバッグ：敵を全撃破しました</span>', 'action', true);
         };
     }
+}
 
-    // デバッグ用：敵を撃破する演出付き関数
-    async function debugDefeatEnemyWithEffect(enemy) {
-        // HPを0に
-        enemy.hp = 0;
-        // 撃破アニメーション
-        const area = document.getElementById('enemies');
-        const card = area.querySelector(`.enemy-card[data-id='${enemy.id}']`);
-        if (card) {
-            const ripple = document.createElement('div');
-            ripple.className = 'enemy-defeat-ripple';
-            card.appendChild(ripple);
-            await new Promise(res => setTimeout(res, 650));
-            card.remove();
-        } else {
-            await new Promise(res => setTimeout(res, 100));
-        }
-        // enemies配列から削除
-        const idx = enemies.findIndex(e => e.id === enemy.id);
-        if (idx !== -1) enemies.splice(idx, 1);
-        // ログ
-        addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！（デバッグ）</span>`, 'action', true);
-
-        // 敵撃破時のドロップアイテム生成（デバッグ用）
-        if (loot.length < 10) {
-            const dropCount = Math.floor(Math.random() * 3) + 1; // 1-3個
-            const dropItems = getRandomItemsByType(itemMaster, dropCount);
-            loot.push(...dropItems);
-            addLog(`<span style="color:#4af;">${dropCount}個のアイテムがドロップした！（デバッグ）</span>`, 'detail', true);
-            renderLoot(); // ドロップアイテムを表示
-        } else {
-            addLog(`<span style="color:#888;">ルートエリアがいっぱいのため、アイテムはドロップしなかった。（デバッグ）</span>`, 'detail', true);
-        }
-
-        renderEnemies();
+// デバッグ用：敵を撃破する演出付き関数
+async function debugDefeatEnemyWithEffect(enemy) {
+    // HPを0に
+    enemy.hp = 0;
+    // 撃破アニメーション
+    const area = document.getElementById('enemies');
+    const card = area.querySelector(`.enemy-card[data-id='${enemy.id}']`);
+    if (card) {
+        const ripple = document.createElement('div');
+        ripple.className = 'enemy-defeat-ripple';
+        card.appendChild(ripple);
+        await new Promise(res => setTimeout(res, 650));
+        card.remove();
+    } else {
+        await new Promise(res => setTimeout(res, 100));
     }
-})();
+    // enemies配列から削除
+    const idx = enemies.findIndex(e => e.id === enemy.id);
+    if (idx !== -1) enemies.splice(idx, 1);
+    // ログ
+    addLog(`<span style=\"color:#4af; font-weight:bold;\">${enemy.name}を撃破した！（デバッグ）</span>`, 'action', true);
+
+    // 敵撃破時のドロップアイテム生成（デバッグ用）
+    if (loot.length < 10) {
+        const dropCount = Math.floor(Math.random() * 3) + 1; // 1-3個
+        const dropItems = getRandomItemsByType(itemMaster, dropCount);
+        loot.push(...dropItems);
+        addLog(`<span style="color:#4af;">${dropCount}個のアイテムがドロップした！（デバッグ）</span>`, 'detail', true);
+        renderLoot(); // ドロップアイテムを表示
+    } else {
+        addLog(`<span style="color:#888;">ルートエリアがいっぱいのため、アイテムはドロップしなかった。（デバッグ）</span>`, 'detail', true);
+    }
+
+    renderEnemies();
+}
 // ===== 武器のマナ装填メニュー =====
 function showManaLoadMenu(weaponCard) {
     console.log('[マナ装填] showManaLoadMenu呼び出し', weaponCard);
@@ -1884,6 +1907,8 @@ function getTotalDefense(attr) {
 }
 // ===== ゲームクリア処理 =====
 function showGameClear() {
+    // デバッグウィンドウを非表示
+    hideAllDebugWindows();
     // ログにクリアメッセージ
     addLog('<span style="color:#228b22; font-weight:bold; font-size:1.2em;">=== ダンジョン脱出成功！ ===</span>', 'action', true);
     // 持ち帰りアイテム一覧を作成
@@ -1942,6 +1967,8 @@ function showTitleScreen() {
     document.getElementById('title-screen').style.display = 'block';
     document.getElementById('base-screen').style.display = 'none';
     document.getElementById('dungeon-screen').style.display = 'none';
+    // デバッグウィンドウを非表示
+    hideAllDebugWindows();
 }
 function showBaseScreen() {
     document.getElementById('title-screen').style.display = 'none';
@@ -1952,6 +1979,8 @@ function showDungeonScreen() {
     document.getElementById('title-screen').style.display = 'none';
     document.getElementById('base-screen').style.display = 'none';
     document.getElementById('dungeon-screen').style.display = 'block';
+    // デバッグウィンドウを非表示
+    hideAllDebugWindows();
 }
 // ===== ダイアログ制御 =====
 function showInvConfirmDialog() {
@@ -2444,9 +2473,15 @@ function showBaseScreen() {
     document.getElementById('title-screen').style.display = 'none';
     document.getElementById('base-screen').style.display = 'block';
     document.getElementById('dungeon-screen').style.display = 'none';
+    // デバッグウィンドウを非表示
+    hideAllDebugWindows();
     // データ初期化は削除（itemMasterロード後に行う）
     renderBaseWarehouse();
     renderBaseInventory();
+    // デバッグ機能を初期化
+    initBaseDebugFunctions();
+    // === 拠点デバッグウィンドウを初期化 ===
+    initBaseDebugWindow();
 }
 
 // ===== ホームボタン =====
@@ -2617,3 +2652,254 @@ window.addEventListener('keyup', function (e) {
 document.addEventListener('mousedown', function (e) {
     e.qKey = qKeyDown;
 }, true);
+
+// --- Dキーでデバッグウィンドウ切り替え ---
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'd' || e.key === 'D') {
+        // 現在の画面に応じてデバッグウィンドウを切り替え
+        const dungeonScreen = document.getElementById('dungeon-screen');
+        const baseScreen = document.getElementById('base-screen');
+
+        console.log('Dキー押下:', {
+            dungeonScreen: dungeonScreen?.style.display,
+            baseScreen: baseScreen?.style.display
+        });
+
+        if (dungeonScreen && dungeonScreen.style.display !== 'none') {
+            console.log('ダンジョンデバッグウィンドウを切り替え');
+            toggleDebugWindow();
+        } else if (baseScreen && baseScreen.style.display !== 'none') {
+            console.log('拠点デバッグウィンドウを切り替え');
+            toggleBaseDebugWindow();
+        }
+    }
+});
+
+// ===== 拠点デバッグ機能 =====
+let baseDebugVisible = false;
+
+// 全てのデバッグウィンドウを非表示にする関数
+function hideAllDebugWindows() {
+    // 拠点デバッグウィンドウを非表示
+    const baseDebugWindow = document.getElementById('base-debug-window');
+    if (baseDebugWindow) {
+        baseDebugWindow.style.display = 'none';
+        baseDebugVisible = false;
+    }
+
+    // ダンジョンデバッグウィンドウを非表示
+    const debugWindow = document.getElementById('debug-window');
+    if (debugWindow) {
+        debugWindow.style.display = 'none';
+        debugVisible = false;
+    }
+}
+
+// ドラッグ可能なウィンドウ機能
+function initDragWindow(windowElement, titlebarId) {
+    const titlebar = document.getElementById(titlebarId);
+    if (!titlebar || !windowElement) return;
+
+    let isDragging = false;
+    let startX, startY, startLeft, startTop;
+
+    titlebar.addEventListener('mousedown', function (e) {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        // 現在の位置を取得
+        const rect = windowElement.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop = rect.top;
+
+        // transformをリセットしてleft/topで位置を制御
+        windowElement.style.transform = 'none';
+        windowElement.style.left = startLeft + 'px';
+        windowElement.style.top = startTop + 'px';
+
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function (e) {
+        if (!isDragging) return;
+
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+
+        const newLeft = startLeft + deltaX;
+        const newTop = startTop + deltaY;
+
+        // 画面内に制限
+        const maxLeft = window.innerWidth - windowElement.offsetWidth;
+        const maxTop = window.innerHeight - windowElement.offsetHeight;
+
+        windowElement.style.left = Math.max(0, Math.min(newLeft, maxLeft)) + 'px';
+        windowElement.style.top = Math.max(0, Math.min(newTop, maxTop)) + 'px';
+    });
+
+    document.addEventListener('mouseup', function () {
+        isDragging = false;
+    });
+}
+
+// 拠点デバッグウィンドウの初期化
+function initBaseDebugWindow() {
+    const debugWindow = document.getElementById('base-debug-window');
+    if (debugWindow) {
+        debugWindow.style.display = 'none';
+        // 位置を強制的に中央に設定
+        debugWindow.style.left = '50%';
+        debugWindow.style.top = '50%';
+        debugWindow.style.transform = 'translate(-50%, -50%)';
+        // ドラッグ機能を初期化
+        initDragWindow(debugWindow, 'base-debug-titlebar');
+    }
+}
+
+// 倉庫セーブスロット管理
+function saveWarehouseToSlot(slotNumber) {
+    const data = {
+        warehouseItems: JSON.parse(JSON.stringify(warehouseItems)), // ディープコピー
+        timestamp: new Date().toLocaleString()
+    };
+    localStorage.setItem(`tarkov_cardgame_warehouse_slot_${slotNumber}`, JSON.stringify(data));
+    alert(`倉庫をスロット${slotNumber}にセーブしました。`);
+}
+
+function loadWarehouseFromSlot(slotNumber) {
+    const data = localStorage.getItem(`tarkov_cardgame_warehouse_slot_${slotNumber}`);
+    if (data) {
+        try {
+            const obj = JSON.parse(data);
+            warehouseItems = obj.warehouseItems || [];
+            renderBaseWarehouse();
+            debouncedSave();
+            alert(`スロット${slotNumber}から倉庫をロードしました。`);
+        } catch (e) {
+            alert('ロードに失敗しました。');
+        }
+    } else {
+        alert(`スロット${slotNumber}にセーブデータがありません。`);
+    }
+}
+
+function clearWarehouse() {
+    if (confirm('倉庫の中身を全て削除しますか？')) {
+        warehouseItems = [];
+        renderBaseWarehouse();
+        debouncedSave();
+        alert('倉庫を全削除しました。');
+    }
+}
+
+function addItemToWarehouse(itemID) {
+    if (!itemMaster || itemMaster.length === 0) {
+        alert('アイテムマスターが読み込まれていません。');
+        return;
+    }
+
+    const item = itemMaster.find(i => i.itemID === itemID);
+    if (!item) {
+        alert('指定されたアイテムが見つかりません。');
+        return;
+    }
+
+    // アイテムのコピーを作成（invIndexを付与）
+    const newItem = JSON.parse(JSON.stringify(item));
+    newItem.invIndex = nextInvIndex++;
+
+    warehouseItems.push(newItem);
+    renderBaseWarehouse();
+    debouncedSave();
+    alert(`${item.itemName}を倉庫に追加しました。`);
+}
+
+function populateItemSelect() {
+    const select = document.getElementById('base-debug-item-select');
+    if (!select || !itemMaster) return;
+
+    select.innerHTML = '<option value="">アイテムを選択...</option>';
+    itemMaster.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.itemID;
+        option.textContent = `${item.itemName} (ID: ${item.itemID})`;
+        select.appendChild(option);
+    });
+}
+
+function toggleBaseDebugWindow(force) {
+    if (typeof force === 'boolean') baseDebugVisible = force;
+    else baseDebugVisible = !baseDebugVisible;
+
+    const debugWindow = document.getElementById('base-debug-window');
+    console.log('拠点デバッグウィンドウ切り替え:', baseDebugVisible, debugWindow);
+
+    if (baseDebugVisible) {
+        populateItemSelect();
+        debugWindow.style.display = 'block';
+        // 位置を強制的に中央に設定
+        debugWindow.style.left = '50%';
+        debugWindow.style.top = '50%';
+        debugWindow.style.transform = 'translate(-50%, -50%)';
+    } else {
+        debugWindow.style.display = 'none';
+    }
+}
+
+// 拠点デバッグ機能の初期化
+function initBaseDebugFunctions() {
+    const debugWindow = document.getElementById('base-debug-window');
+    const saveBtn = document.getElementById('base-debug-save');
+    const loadBtn = document.getElementById('base-debug-load');
+    const clearBtn = document.getElementById('base-debug-clear');
+    const addItemBtn = document.getElementById('base-debug-add-item');
+    const addSelectedBtn = document.getElementById('base-debug-add-selected');
+    const closeBtn = document.getElementById('base-debug-close');
+
+    if (saveBtn) {
+        saveBtn.onclick = () => {
+            const slotSelect = document.getElementById('base-debug-slot');
+            const slotNumber = slotSelect ? slotSelect.value : 1;
+            saveWarehouseToSlot(slotNumber);
+        };
+    }
+
+    if (loadBtn) {
+        loadBtn.onclick = () => {
+            const slotSelect = document.getElementById('base-debug-slot');
+            const slotNumber = slotSelect ? slotSelect.value : 1;
+            loadWarehouseFromSlot(slotNumber);
+        };
+    }
+
+    if (clearBtn) {
+        clearBtn.onclick = clearWarehouse;
+    }
+
+    if (addItemBtn) {
+        addItemBtn.onclick = () => {
+            // ランダムアイテムを追加
+            if (itemMaster && itemMaster.length > 0) {
+                const randomItem = itemMaster[Math.floor(Math.random() * itemMaster.length)];
+                addItemToWarehouse(randomItem.itemID);
+            }
+        };
+    }
+
+    if (addSelectedBtn) {
+        addSelectedBtn.onclick = () => {
+            const select = document.getElementById('base-debug-item-select');
+            const selectedItemID = select ? parseInt(select.value) : 0;
+            if (selectedItemID > 0) {
+                addItemToWarehouse(selectedItemID);
+            } else {
+                alert('アイテムを選択してください。');
+            }
+        };
+    }
+
+    if (closeBtn) {
+        closeBtn.onclick = () => toggleBaseDebugWindow(false);
+    }
+}

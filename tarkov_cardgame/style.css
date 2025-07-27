@@ -866,3 +866,38 @@ img {
     -ms-user-select: none;
     user-select: none;
 }
+
+/* 拠点デバッグウィンドウのスタイル */
+#base-debug-window {
+    font-family: inherit;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+#base-debug-window h4 {
+    margin: 0 0 8px 0;
+    font-size: 1em;
+    color: #333;
+}
+
+#base-debug-window button {
+    font-size: 1em;
+    padding: 2px 12px;
+    border: 1.5px solid #333;
+    border-radius: 3px;
+    background: #eee;
+    cursor: pointer;
+    margin-right: 4px;
+}
+
+#base-debug-window button:hover {
+    background: #ddd;
+}
+
+#base-debug-window select {
+    font-size: 1em;
+    padding: 2px 4px;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    margin-right: 4px;
+}
