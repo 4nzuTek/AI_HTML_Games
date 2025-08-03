@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>あんずの太鼓練習ツール</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥁</text></svg>">
+    <link rel="stylesheet" href="practice.css">
+</head>
+
+<body>
+    <div class="title-screen">
+        <div class="title-container">
+            <h1 class="main-title">あんずの太鼓練習ツール</h1>
+            <div class="practice-settings">
+                <div class="setting-group">
+                    <label for="bpm-setting">BPM:</label>
+                    <input type="number" id="bpm-setting" value="120" min="60" max="300" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="note-type">音符の種類:</label>
+                    <select id="note-type" class="setting-input">
+                        <option value="24th">24分音符（3連符）</option>
+                        <option value="16th" selected>16分音符</option>
+                        <option value="12th">12分音符（3連符）</option>
+                        <option value="8th">8分音符</option>
+                        <option value="6th">6分音符（3連符）</option>
+                        <option value="4th">4分音符</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="ren-count">連打数（○○連）:</label>
+                    <input type="number" id="ren-count" value="5" min="1" max="32" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="rest-count">休み数（休み）:</label>
+                    <input type="number" id="rest-count" value="3" min="0" max="16" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="offset-setting">オフセット（ms）:</label>
+                    <input type="number" id="offset-setting" value="0" min="-1000" max="1000" step="1"
+                        class="setting-input">
+                </div>
+            </div>
+            <button class="start-button" id="startPracticeBtn">
+                <span class="button-text">練習開始</span>
+                <div class="button-decoration"></div>
+            </button>
+
+        </div>
+    </div>
+    <div class="practice-screen">
+        <!-- 上部の情報エリア -->
+        <div class="info-area">
+            <div class="player-info">
+                <div class="settings-display">
+                    <div class="setting-row">
+                        <div class="setting-item">
+                            <span class="setting-label">BPM:</span>
+                            <span class="setting-value" id="current-bpm">120</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">音符:</span>
+                            <span class="setting-value" id="current-note">16分音符</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">連打:</span>
+                            <span class="setting-value" id="current-ren">5連</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-item">
+                            <span class="setting-label">休み:</span>
+                            <span class="setting-value" id="current-rest">3</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">オフセット:</span>
+                            <span class="setting-value" id="current-offset">0ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="song-info">
+                <div class="song-title">あんずの太鼓練習ツール</div>
+            </div>
+        </div>
+
+        <!-- メインのゲームエリア -->
+        <div class="game-area">
+            <!-- コンボ表示用の茶色いカバー -->
+            <div class="combo-cover">
+                <div class="combo-display">
+                    <div class="combo-number" id="comboDisplay">0</div>
+                    <div class="combo-label">コンボ</div>
+                </div>
+            </div>
+
+            <!-- 音符が右から左に流れるエリア -->
+            <div class="note-lane">
+                <div class="note-container" id="noteContainer">
+                    <!-- 音符がここに動的に追加される -->
+                </div>
+            </div>
+
+            <!-- 判定ライン（左端） -->
+            <div class="judgment-line">
+                <div class="judgment-circle">
+                    <div class="judgment-inner"></div>
+                </div>
+            </div>
+
+
+        </div>
+
+
+
+        <!-- コントロールエリア -->
+        <div class="control-area">
+            <button class="back-button" onclick="backToTitle()">タイトルに戻る</button>
+        </div>
+    </div>
+
+    <script src="practice.js"></script>
+</body>
+
+</html>
