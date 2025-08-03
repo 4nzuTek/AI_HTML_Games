@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太鼓の達人 練習画面</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥁</text></svg>">
+    <link rel="stylesheet" href="practice.css">
+</head>
+
+<body>
+    <div class="practice-screen">
+        <!-- 上部の情報エリア -->
+        <div class="info-area">
+            <div class="player-info">
+                <div class="player-name">はじめてのドンだー</div>
+                <div class="score-info">
+                    <span class="score-value" id="score">0</span>
+                </div>
+                <div class="combo-info">
+                    <span class="combo-value" id="combo">0</span>
+                    <span class="combo-text">コンボ</span>
+                </div>
+            </div>
+            <div class="song-info">
+                <div class="song-title">まいにちがドンダフル</div>
+                <div class="song-subtitle">ナムコオリジナル</div>
+            </div>
+        </div>
+
+        <!-- メインのゲームエリア -->
+        <div class="game-area">
+            <!-- 音符が右から左に流れるエリア -->
+            <div class="note-lane">
+                <div class="note-container" id="noteContainer">
+                    <!-- 音符がここに動的に追加される -->
+                </div>
+            </div>
+
+            <!-- 判定ライン（左端） -->
+            <div class="judgment-line">
+                <div class="judgment-circle">
+                    <div class="judgment-inner"></div>
+                </div>
+            </div>
+
+
+        </div>
+
+        <!-- 下部の背景エリア -->
+        <div class="background-area">
+            <div class="background-decoration">
+                <div class="yatai">大たこ入り たこ焼</div>
+            </div>
+        </div>
+
+        <!-- コントロールエリア -->
+        <div class="control-area">
+            <button class="back-button" onclick="backToTitle()">タイトルに戻る</button>
+        </div>
+    </div>
+
+    <script src="practice.js"></script>
+</body>
+
+</html>

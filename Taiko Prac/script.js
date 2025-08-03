@@ -8,9 +8,9 @@ function startPractice() {
 
     setTimeout(() => {
         button.style.transform = 'scale(1)';
-        // ここで練習画面に遷移する予定
+        // 練習画面に遷移
         console.log('練習開始ボタンがクリックされました');
-        alert('練習画面は現在開発中です。もうしばらくお待ちください！');
+        window.location.href = 'practice.html';
     }, 150);
 }
 

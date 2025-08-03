@@ -1,0 +1,338 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: #000;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.practice-screen {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(to bottom, #000 0%, #1a1a1a 50%, #000 100%);
+}
+
+/* 上部情報エリア */
+.info-area {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: linear-gradient(90deg, #DC143C 0%, #B22222 100%);
+    color: white;
+    font-weight: 700;
+    border-bottom: 3px solid #FFD700;
+}
+
+.player-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.player-name {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: #FFD700;
+}
+
+.score-info {
+    font-size: 2rem;
+    font-weight: 900;
+}
+
+.combo-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.combo-value {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #FFD700;
+}
+
+.combo-text {
+    font-size: 0.9rem;
+    color: white;
+}
+
+.song-info {
+    text-align: right;
+}
+
+.song-title {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: #FFD700;
+}
+
+.song-subtitle {
+    font-size: 0.9rem;
+    color: white;
+}
+
+/* ゲームエリア */
+.game-area {
+    flex: 1;
+    position: relative;
+    background: #1a1a1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 音符レーン */
+.note-lane {
+    position: relative;
+    width: 1920px;
+    /* 画面幅の30% */
+    height: 30%;
+    background: linear-gradient(90deg, #8B4513 0%, #A0522D 50%, #8B4513 100%);
+    border-radius: 10px;
+    border: 3px solid #654321;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.note-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+/* 音符 */
+.note {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 1.8rem;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    transition: transform 0.1s ease;
+    z-index: 10;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.note.don {
+    background: linear-gradient(45deg, #DC143C, #B22222);
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 20px rgba(220, 20, 60, 0.6), 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.note.ka {
+    background: linear-gradient(45deg, #4169E1, #1E90FF);
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 20px rgba(65, 105, 225, 0.6), 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.note.hit {
+    transform: scale(1.3);
+    opacity: 0.9;
+}
+
+/* ノーツの判定線 */
+.note-judgment-line {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: #FF0000;
+    z-index: 15;
+    box-shadow: 0 0 5px currentColor;
+    transition: background-color 0.1s ease;
+}
+
+/* 判定ライン（レーンの左端） */
+.judgment-line {
+    position: absolute;
+    left: 100px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100px;
+    height: 100px;
+    z-index: 15;
+}
+
+.judgment-circle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, rgba(255, 215, 0, 0.2) 70%, transparent 100%);
+    border: 4px solid #FFD700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+.judgment-inner {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, rgba(255, 215, 0, 0.1) 100%);
+    border: 2px solid #FFD700;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(1.05);
+    }
+}
+
+
+
+
+
+/* 背景エリア */
+.background-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 150px;
+    background: linear-gradient(to top, #8B4513 0%, #A0522D 100%);
+    z-index: 1;
+}
+
+.background-decoration {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.yatai {
+    background: #DC143C;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-weight: 700;
+    border: 2px solid #FFD700;
+}
+
+/* コントロールエリア */
+.control-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    z-index: 20;
+}
+
+.back-button {
+    background: linear-gradient(45deg, #DC143C, #B22222);
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(220, 20, 60, 0.4);
+}
+
+.back-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(220, 20, 60, 0.6);
+    background: linear-gradient(45deg, #FF1493, #DC143C);
+}
+
+.back-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(220, 20, 60, 0.4);
+}
+
+/* 判定表示 */
+.judgment {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #FFD700;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    z-index: 25;
+    animation: judgmentFade 0.5s ease-out forwards;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 0.3rem 0.6rem;
+    border-radius: 5px;
+    border: 2px solid #FFD700;
+}
+
+@keyframes judgmentFade {
+    0% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) scale(1.2);
+    }
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+    .info-area {
+        padding: 0.8rem 1rem;
+    }
+
+    .player-name {
+        font-size: 1rem;
+    }
+
+    .score-info {
+        font-size: 1.5rem;
+    }
+
+    .song-title {
+        font-size: 1.1rem;
+    }
+
+    .note {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+
+
+    .control-area {
+        padding: 0.8rem 1rem;
+    }
+
+    .back-button {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+    }
+}
