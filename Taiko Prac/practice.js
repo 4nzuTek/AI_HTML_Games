@@ -10,13 +10,14 @@ class TaikoPractice {
         const urlParams = new URLSearchParams(window.location.search);
         const bpm = parseInt(urlParams.get('bpm')) || 120;
         const noteType = urlParams.get('noteType') || '16th';
-        const patternType = urlParams.get('patternType') || '3-1';
+        const renCount = parseInt(urlParams.get('renCount')) || 4;
+        const restCount = parseInt(urlParams.get('restCount')) || 1;
+        const offset = parseInt(urlParams.get('offset'));
 
         this.score = 0;
         this.combo = 0;
         this.bpm = bpm;
         this.noteType = noteType;
-        this.patternType = patternType;
         this.noteSpeed = 400; // 音符が流れる速度（ピクセル/秒）
 
         // 音符の種類に応じて間隔を設定
@@ -44,9 +45,16 @@ class TaikoPractice {
 
         // 音声設定
         this.audioContext = null;
-        this.audioOffset = AUDIO_OFFSET; // 音のオフセットを保存
+        this.audioOffset = isNaN(offset) ? AUDIO_OFFSET : offset; // オフセットを保存
         this.beatsToReach = BEATS_TO_REACH; // ノーツ到達拍数を保存
         this.initAudio();
+
+        this.renCount = renCount;
+        this.restCount = restCount;
+        this.cycleCount = 0; // 連打・休みサイクル用カウンター
+        // メトロノーム用タイマー
+        this.metronomeLastTime = 0;
+        this.metronomeInterval = (60 / this.bpm) * 1000; // 4分音符（拍）ごと
 
         this.init();
     }
@@ -67,10 +75,10 @@ class TaikoPractice {
         }
     }
 
-    // 連打パターンに応じてノーツ生成を制御
+    // 連打数・休み数に基づいてノーツ生成を制御
     shouldGenerateNote() {
-        const [generateCount, skipCount] = this.patternType.split('-').map(Number);
-        return this.sixteenthNoteCount < generateCount;
+        // cycleCountが連打数未満のときだけノーツ生成
+        return this.cycleCount < this.renCount;
     }
 
     // BPMに応じてノーツ生成タイミングを調整
@@ -233,6 +241,7 @@ class TaikoPractice {
     startGame() {
         this.isPlaying = true;
         this.lastNoteTime = Date.now();
+        this.metronomeLastTime = this.lastNoteTime; // メトロノームも初期化
         this.gameLoop();
     }
 
@@ -244,24 +253,25 @@ class TaikoPractice {
         // FPS計測
         this.updateFPS();
 
-        // 統一されたタイミング管理
+        // 拍ごとにメトロノーム音を鳴らす
+        if (currentTime - this.metronomeLastTime >= this.metronomeInterval) {
+            setTimeout(() => {
+                this.playBeatSound();
+            }, this.audioOffset);
+            this.metronomeLastTime += this.metronomeInterval;
+        }
+
+        // ノーツ生成タイミング管理
         const adjustedInterval = this.getAdjustedNoteInterval();
         if (currentTime - this.lastNoteTime >= adjustedInterval) {
-            // 連打パターンに応じてノーツ生成
+            // 連打数・休み数に応じてノーツ生成
             if (this.shouldGenerateNote()) {
                 this.createNote();
             }
-
-            // ビート音の再生（固定オフセット）
-            if (this.shouldGenerateNote()) {
-                setTimeout(() => {
-                    this.playBeatSound();
-                }, this.audioOffset);
-            }
-
+            // サイクルカウンターを進める
+            this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
             // 正確なタイミングを保つため、次の音符のタイミングを計算
             this.lastNoteTime += adjustedInterval;
-            this.sixteenthNoteCount = (this.sixteenthNoteCount + 1) % 4; // 0-3でループ
         }
 
         // 音符の移動
@@ -516,11 +526,11 @@ class TaikoPractice {
 
         // 判定とタイミングを組み合わせて表示
         if (offsetMs > 0) {
-            return `${judgment}\n+${offsetMs}ms`; // 判定ラインより後（右側）
+            return `${judgment}\n-${offsetMs}ms`; // 早押し（+ms）
         } else if (offsetMs < 0) {
-            return `${judgment}\n${offsetMs}ms`; // 判定ラインより前（左側）
+            return `${judgment}\n+${-offsetMs}ms`; // 遅押し（-ms）
         } else {
-            return `${judgment}\n0ms`; // 完全に一致
+            return `${judgment}\n0ms`;
         }
     }
 
@@ -639,6 +649,7 @@ class TaikoPractice {
         this.bpm = newBpm;
         this.noteInterval = this.calculateNoteInterval(); // 音符の間隔を再計算
         this.calculateNoteSpeed(); // スピードを再計算
+        this.metronomeInterval = (60 / this.bpm) * 1000; // メトロノームも再計算
         // BPMを変更しました
     }
 

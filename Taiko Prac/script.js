@@ -9,7 +9,9 @@ function startPractice() {
     const params = new URLSearchParams({
         bpm: settings.bpm,
         noteType: settings.noteType,
-        patternType: settings.patternType
+        renCount: settings.renCount,
+        restCount: settings.restCount,
+        offset: settings.offset
     });
 
     // ボタンのアニメーション効果
@@ -28,12 +30,16 @@ function startPractice() {
 function getPracticeSettings() {
     const bpm = parseInt(document.getElementById('bpm-setting').value) || 120;
     const noteType = document.getElementById('note-type').value || '16th';
-    const patternType = document.getElementById('pattern-type').value || '3-1';
+    const renCount = parseInt(document.getElementById('ren-count').value) || 4;
+    const restCount = parseInt(document.getElementById('rest-count').value) || 1;
+    const offset = parseInt(document.getElementById('offset-setting').value) || 400;
 
     return {
         bpm: bpm,
         noteType: noteType,
-        patternType: patternType
+        renCount: renCount,
+        restCount: restCount,
+        offset: offset
     };
 }
 
@@ -50,7 +56,9 @@ function loadSettings() {
         const settings = JSON.parse(saved);
         document.getElementById('bpm-setting').value = settings.bpm || 120;
         document.getElementById('note-type').value = settings.noteType || '16th';
-        document.getElementById('pattern-type').value = settings.patternType || '3-1';
+        document.getElementById('ren-count').value = settings.renCount || 4;
+        document.getElementById('rest-count').value = settings.restCount || 1;
+        document.getElementById('offset-setting').value = settings.offset || 400;
     }
 }
 
@@ -64,7 +72,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // 設定変更時に自動保存
     document.getElementById('bpm-setting').addEventListener('change', saveSettings);
     document.getElementById('note-type').addEventListener('change', saveSettings);
-    document.getElementById('pattern-type').addEventListener('change', saveSettings);
+    document.getElementById('ren-count').addEventListener('change', saveSettings);
+    document.getElementById('rest-count').addEventListener('change', saveSettings);
+    document.getElementById('offset-setting').addEventListener('change', saveSettings);
 
     // キーボードショートカットの設定
     document.addEventListener('keydown', function (event) {

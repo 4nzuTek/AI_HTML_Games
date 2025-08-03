@@ -29,15 +29,18 @@
                         <option value="4th">4分音符</option>
                     </select>
                 </div>
-
                 <div class="setting-group">
-                    <label for="pattern-type">連打パターン:</label>
-                    <select id="pattern-type" class="setting-input">
-                        <option value="3-1">3連打（4つ目スキップ）</option>
-                        <option value="2-2">2連打（3,4つ目スキップ）</option>
-                        <option value="1-3">1連打（2,3,4つ目スキップ）</option>
-                        <option value="4-0">4連打（全音符）</option>
-                    </select>
+                    <label for="ren-count">連打数（○○連）:</label>
+                    <input type="number" id="ren-count" value="4" min="1" max="32" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="rest-count">休み数（休み）:</label>
+                    <input type="number" id="rest-count" value="1" min="0" max="16" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="offset-setting">オフセット（ms）:</label>
+                    <input type="number" id="offset-setting" value="400" min="-1000" max="1000" step="1"
+                        class="setting-input">
                 </div>
             </div>
 
