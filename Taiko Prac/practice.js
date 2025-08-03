@@ -57,7 +57,6 @@ class TaikoPractice {
         this.audioOffset = offset; // オフセットを保存
         this.beatsToReach = BEATS_TO_REACH; // ノーツ到達拍数を保存
         this.metronomeVolume = 0.5; // メトロノームの音量（0.0-1.0）
-        this.currentAudioSource = null; // 現在再生中の音声ソース
         this.initAudio();
 
         this.renCount = renCount;
@@ -66,6 +65,10 @@ class TaikoPractice {
         // メトロノーム用タイマー
         this.metronomeLastTime = 0;
         this.metronomeInterval = (60 / this.bpm) * 1000; // 4分音符（拍）ごと
+
+        // キーリピート防止用
+        this.lastKeyPressTime = 0;
+        this.keyPressCooldown = 5; // 5msのクールダウン
 
         this.init();
     }
@@ -153,8 +156,8 @@ class TaikoPractice {
             // 音声データを設定
             source.buffer = this.metronomeAudioBuffer;
 
-            // 音量設定
-            gainNode.gain.setValueAtTime(this.metronomeVolume, this.audioContext.currentTime);
+            // 音量設定（メトロノーム音を少し小さくして太鼓の音とバランスを取る）
+            gainNode.gain.setValueAtTime(this.metronomeVolume * 0.7, this.audioContext.currentTime);
 
             // 接続
             source.connect(gainNode);
@@ -162,6 +165,11 @@ class TaikoPractice {
 
             // メトロノーム音を再生
             source.start(0);
+
+            // 音声再生完了後にクリーンアップ
+            source.onended = () => {
+                // クリーンアップは不要
+            };
         } catch (error) {
             console.error('メトロノーム音の再生に失敗:', error);
         }
@@ -180,14 +188,8 @@ class TaikoPractice {
                 return;
             }
 
-            // 既存の音声ソースを停止（重複再生防止）
-            if (this.currentAudioSource) {
-                try {
-                    this.currentAudioSource.stop();
-                } catch (e) {
-                    // 既に停止している場合は無視
-                }
-            }
+            // 現在の時間を取得
+            const currentTime = this.audioContext.currentTime;
 
             // AudioBufferSourceNodeを作成
             const source = this.audioContext.createBufferSource();
@@ -197,21 +199,18 @@ class TaikoPractice {
             source.buffer = audioBuffer;
 
             // 音量設定
-            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.3, currentTime);
 
             // 接続
             source.connect(gainNode);
             gainNode.connect(this.audioContext.destination);
 
-            // 現在の音声ソースを保存
-            this.currentAudioSource = source;
-
             // 太鼓の音はオフセットなしで即座に再生
-            source.start(0);
+            source.start(currentTime);
 
             // 音声再生完了後にクリーンアップ
             source.onended = () => {
-                this.currentAudioSource = null;
+                // クリーンアップは不要（メトロノーム音に影響しない）
             };
         } catch (error) {
             console.error('太鼓の音の再生に失敗:', error);
@@ -272,8 +271,19 @@ class TaikoPractice {
 
         // キーボードイベントハンドラーを作成
         this.keydownHandler = (e) => {
+            // キーリピート防止
+            const currentTime = Date.now();
+            if (currentTime - this.lastKeyPressTime < this.keyPressCooldown) {
+                return;
+            }
+
             if (e.code === 'KeyF' || e.code === 'KeyJ') {
                 e.preventDefault();
+
+                // キーリピート防止のため、repeatフラグをチェック
+                if (e.repeat) {
+                    return;
+                }
 
                 // 音声コンテキストを開始（ブラウザの制限により必要）
                 if (this.audioContext && this.audioContext.state === 'suspended') {
@@ -287,8 +297,16 @@ class TaikoPractice {
                 this.flashJudgmentCircle('#FF4444');
 
                 this.handleTaikoClick('don');
+
+                // 最後のキー押下時間を更新
+                this.lastKeyPressTime = currentTime;
             } else if (e.code === 'KeyD' || e.code === 'KeyK') {
                 e.preventDefault();
+
+                // キーリピート防止のため、repeatフラグをチェック
+                if (e.repeat) {
+                    return;
+                }
 
                 // 音声コンテキストを開始（ブラウザの制限により必要）
                 if (this.audioContext && this.audioContext.state === 'suspended') {
@@ -302,6 +320,9 @@ class TaikoPractice {
                 this.flashJudgmentCircle('#4444FF');
 
                 this.handleTaikoClick('ka');
+
+                // 最後のキー押下時間を更新
+                this.lastKeyPressTime = currentTime;
             } else if (e.code === 'ArrowLeft') {
                 // 左矢印でオフセットを-5ms
                 this.audioOffset -= 5;
@@ -536,15 +557,20 @@ class TaikoPractice {
     }
 
     hitNote(note, type) {
-        note.hit = true;
-        note.element.classList.add('hit');
+        // 判定に応じてヒットエフェクトを即座に開始（ラグを最小化）
+        const judgment = this.getJudgment(note);
+        if (judgment !== '不可') {
+            // 良・可の場合は右上に飛ぶエフェクトを即座に開始
+            note.hit = true;
+            note.element.classList.add('hit');
+            this.startHitEffect(note);
+        }
 
         // 判定表示（数値）
         const judgmentText = this.getJudgmentText(note);
         this.showJudgment(judgmentText);
 
         // スコア加算
-        const judgment = this.getJudgment(note);
         this.addScore(judgment);
 
         // 判定に応じてコンボを処理
@@ -556,23 +582,18 @@ class TaikoPractice {
             this.combo++;
         }
         this.updateCombo();
-
-        // ヒットエフェクトを開始
-        this.startHitEffect(note);
     }
 
     startHitEffect(note) {
-        // ノーツの移動を停止（hitフラグで判定）
-        note.hit = true;
-
         // 初期状態を設定
+        let translateX = 0;
         let translateY = 0;
         let opacity = 1.0;
-        const duration = 200; // 0.2秒
-        const startTime = Date.now();
+        const duration = 150; // 0.15秒（さらに高速化）
+        const startTime = performance.now(); // より高精度なタイマーを使用
 
         const animate = () => {
-            const elapsed = Date.now() - startTime;
+            const elapsed = performance.now() - startTime;
             const progress = elapsed / duration;
 
             if (progress >= 1) {
@@ -581,20 +602,24 @@ class TaikoPractice {
                 return;
             }
 
-            // 上にぴょこっと上がる（0pxから-30pxへ）
-            translateY = -30 * progress;
+            // 右上に吹っ飛ぶ（X: 0pxから+600px、Y: 0pxから-400px）
+            translateX = 1200 * progress;
+            translateY = -800 * progress;
             // 透明度を1.0から0.0に減少
             opacity = 1.0 - progress;
 
-            // スタイルを適用（スケールはそのまま1.0）
-            note.element.style.transform = `translateY(calc(-50% + ${translateY}px)) scale(1.0)`;
+            // スタイルを適用（右上に高速で移動）
+            note.element.style.transform = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(1.0)`;
             note.element.style.opacity = opacity;
 
             requestAnimationFrame(animate);
         };
 
-        animate();
+        // 即座にアニメーション開始
+        requestAnimationFrame(animate);
     }
+
+
 
     getJudgment(note) {
         // ノーツの中心位置を直接使用
@@ -681,10 +706,22 @@ class TaikoPractice {
         // 枠線を削除
         judgmentElement.style.border = 'none';
 
+        // 固定幅を設定（+100msが入るサイズ）
+        judgmentElement.style.width = '120px';
+        judgmentElement.style.textAlign = 'center';
+
         // 2行表示（判定とタイミングを分けて表示）
         if (judgment.includes('\n')) {
             const lines = judgment.split('\n');
-            judgmentElement.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
+            judgmentElement.innerHTML = lines.map(line => {
+                // 2行目（誤差表示）は小さく、ボールドにしない
+                if (line.includes('ms')) {
+                    return `<div style="font-size: 0.8em; font-weight: normal;">${line}</div>`;
+                } else {
+                    // 1行目（判定）は2倍サイズ、ボールド、上にぴょこっとアニメーション
+                    return `<div style="font-size: 2em; font-weight: bold; animation: judgmentPop 0.1s ease-out forwards;">${line}</div>`;
+                }
+            }).join('');
         } else {
             judgmentElement.textContent = judgment;
         }
@@ -832,6 +869,9 @@ class TaikoPractice {
         const comboElement = document.createElement('div');
         comboElement.className = 'combo-message';
         comboElement.textContent = message;
+
+        // コンボカバーをノーツより手前に表示するため、z-indexを設定
+        comboElement.style.zIndex = '2000000';
 
         // 判定ラインの上、精度チップよりも上に表示
         const judgmentLine = document.querySelector('.judgment-line');
@@ -1088,24 +1128,4 @@ window.addEventListener('DOMContentLoaded', async function () {
     const backBtn = document.querySelector('.back-button');
     if (backBtn) backBtn.onclick = backToTitleUnified;
 });
-// メトロノーム音をダウンロードする関数
-function downloadMetronome() {
-    try {
-        // 実際のWAVファイルをダウンロード
-        const a = document.createElement('a');
-        a.href = 'Assets/SFX/metronome.wav';
-        a.download = 'metronome.wav';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        console.log('メトロノーム音をダウンロードしました');
-    } catch (error) {
-        console.error('メトロノーム音のダウンロードに失敗:', error);
-        alert('メトロノーム音のダウンロードに失敗しました');
-    }
-}
-
-
-
 // ===== ここまで統合UI用の追加コード =====

@@ -249,7 +249,7 @@ body {
     border: 3px solid #654321;
     border-right: none;
     box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5), 5px 0 15px rgba(0, 0, 0, 0.3);
-    z-index: 10;
+    z-index: 2000000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -435,35 +435,12 @@ body {
     box-shadow: 0 2px 4px rgba(220, 20, 60, 0.4);
 }
 
-.download-button {
-    background: linear-gradient(45deg, #4169E1, #1E90FF);
-    color: white;
-    border: none;
-    padding: 0.8rem 1.5rem;
-    font-size: 1rem;
-    font-weight: 700;
-    border-radius: 25px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 8px rgba(65, 105, 225, 0.4);
-    margin-left: 1rem;
-}
 
-.download-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(65, 105, 225, 0.6);
-    background: linear-gradient(45deg, #1E90FF, #4169E1);
-}
-
-.download-button:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(65, 105, 225, 0.4);
-}
 
 /* 判定表示 */
 .judgment {
     position: absolute;
-    top: -80px;
+    top: -110px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 1.5rem;
@@ -525,7 +502,7 @@ body {
     font-weight: 900;
     color: #FF1493;
     text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.9);
-    z-index: 30;
+    z-index: 2000000;
     text-align: center;
     white-space: nowrap;
     animation: comboPulse 0.5s ease-out;
@@ -545,6 +522,16 @@ body {
     100% {
         transform: translateX(-50%) scale(1);
         opacity: 1;
+    }
+}
+
+@keyframes judgmentPop {
+    0% {
+        transform: translateY(20px);
+    }
+
+    100% {
+        transform: translateY(0px);
     }
 }
 
@@ -594,9 +581,5 @@ body {
         font-size: 0.9rem;
     }
 
-    .download-button {
-        padding: 0.6rem 1.2rem;
-        font-size: 0.9rem;
-        margin-left: 0.5rem;
-    }
+
 }
