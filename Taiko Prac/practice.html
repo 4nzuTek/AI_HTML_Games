@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>太鼓の達人 練習画面</title>
+    <title>あんずの太鼓練習ツール</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥁</text></svg>">
     <link rel="stylesheet" href="practice.css">
@@ -13,8 +13,7 @@
 <body>
     <div class="title-screen">
         <div class="title-container">
-            <h1 class="main-title">太鼓の達人</h1>
-            <h2 class="sub-title">練習ツール</h2>
+            <h1 class="main-title">あんずの太鼓練習ツール</h1>
             <div class="practice-settings">
                 <div class="setting-group">
                     <label for="bpm-setting">BPM:</label>
@@ -49,27 +48,42 @@
                 <span class="button-text">練習開始</span>
                 <div class="button-decoration"></div>
             </button>
-            <div class="footer">
-                <p>ブラウザで楽しむ太鼓の達人練習ツール</p>
-            </div>
+
         </div>
     </div>
     <div class="practice-screen">
         <!-- 上部の情報エリア -->
         <div class="info-area">
             <div class="player-info">
-                <div class="player-name">はじめてのドンだー</div>
-                <div class="score-info">
-                    <span class="score-value" id="score">0</span>
-                </div>
-                <div class="combo-info">
-                    <span class="combo-value" id="combo">0</span>
-                    <span class="combo-text">コンボ</span>
+                <div class="settings-display">
+                    <div class="setting-row">
+                        <div class="setting-item">
+                            <span class="setting-label">BPM:</span>
+                            <span class="setting-value" id="current-bpm">120</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">音符:</span>
+                            <span class="setting-value" id="current-note">16分音符</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">連打:</span>
+                            <span class="setting-value" id="current-ren">5連</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-item">
+                            <span class="setting-label">休み:</span>
+                            <span class="setting-value" id="current-rest">3</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">オフセット:</span>
+                            <span class="setting-value" id="current-offset">0ms</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="song-info">
-                <div class="song-title">まいにちがドンダフル</div>
-                <div class="song-subtitle">ナムコオリジナル</div>
+                <div class="song-title">あんずの太鼓練習ツール</div>
             </div>
         </div>
 

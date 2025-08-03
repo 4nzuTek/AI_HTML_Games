@@ -33,10 +33,7 @@ class TaikoPractice {
         this.lastNoteTime = 0;
         this.noteSerial = 0; // ノーツ生成ごとにインクリメント
 
-        // FPS計測用
-        this.frameCount = 0;
-        this.lastFpsTime = 0;
-        this.currentFps = 0;
+        // フレーム時間管理（FPS計測は削除）
         this.lastFrameTime = 0; // 前回のフレームの開始時間
 
         // タブ非アクティブ時の時間管理
@@ -124,20 +121,8 @@ class TaikoPractice {
 
 
     updateFPS() {
-        this.frameCount++;
-        const currentTime = Date.now();
-
-        // 1秒ごとにFPSを更新
-        if (currentTime - this.lastFpsTime >= 1000) {
-            this.currentFps = this.frameCount;
-            this.frameCount = 0;
-            this.lastFpsTime = currentTime;
-
-            // FPSとオフセットを画面上に表示
-            if (this.fpsElement) {
-                this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
-            }
-        }
+        // FPS表示は削除
+        // この関数は残しておくが、何もしない
     }
 
     initAudio() {
@@ -229,10 +214,20 @@ class TaikoPractice {
     }
 
     init() {
+        // スコアとコンボの要素は存在しない場合があるため、nullチェック付きで初期化
         this.scoreElement = document.getElementById('score');
         this.comboElement = document.getElementById('combo');
         this.comboDisplayElement = document.getElementById('comboDisplay');
         this.noteContainer = document.getElementById('noteContainer');
+
+        // 初期化時にコンボ表示を非表示にする
+        if (this.comboDisplayElement) {
+            this.comboDisplayElement.textContent = '';
+        }
+        const comboLabel = document.querySelector('.combo-label');
+        if (comboLabel) {
+            comboLabel.style.display = 'none';
+        }
 
         // FPS表示要素を作成
         this.createFpsDisplay();
@@ -247,25 +242,8 @@ class TaikoPractice {
     }
 
     createFpsDisplay() {
-        // デバッグ用：FPS表示作成時のaudioOffset値を確認
-        console.log('createFpsDisplay - this.audioOffset:', this.audioOffset, 'Type:', typeof this.audioOffset);
-
-        // FPS表示要素を作成
-        this.fpsElement = document.createElement('div');
-        this.fpsElement.id = 'fps-display';
-        this.fpsElement.style.position = 'fixed';
-        this.fpsElement.style.top = '10px';
-        this.fpsElement.style.right = '10px';
-        this.fpsElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        this.fpsElement.style.color = 'white';
-        this.fpsElement.style.padding = '5px 10px';
-        this.fpsElement.style.borderRadius = '5px';
-        this.fpsElement.style.fontFamily = 'monospace';
-        this.fpsElement.style.fontSize = '14px';
-        this.fpsElement.style.zIndex = '1000';
-        this.fpsElement.textContent = 'FPS: 0 | Offset: ' + this.audioOffset + 'ms';
-
-        document.body.appendChild(this.fpsElement);
+        // FPS表示は削除
+        // この関数は残しておくが、何もしない
     }
 
     setupEventListeners() {
@@ -346,6 +324,10 @@ class TaikoPractice {
                 if (this.fpsElement) {
                     this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
                 }
+            } else if (e.code === 'Escape') {
+                // Escキーでタイトルに戻る
+                e.preventDefault();
+                backToTitleUnified();
             }
         };
 
@@ -375,15 +357,22 @@ class TaikoPractice {
             this.metronomeLastTime = this.lastNoteTime; // メトロノームも初期化
 
             // 最初のメトロノーム音を鳴らす
-            setTimeout(() => {
-                this.playBeatSound();
-            }, this.audioOffset);
+            this.playBeatSound();
 
-            // 最初のノーツを生成
-            if (this.shouldGenerateNote()) {
-                this.createNote();
+            // 最初のノーツを生成（オフセットが正の場合は遅らせる）
+            if (this.audioOffset > 0) {
+                setTimeout(() => {
+                    if (this.shouldGenerateNote()) {
+                        this.createNote();
+                    }
+                    this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                }, this.audioOffset);
+            } else {
+                if (this.shouldGenerateNote()) {
+                    this.createNote();
+                }
+                this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
             }
-            this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
 
             // ゲームループを開始
             this.gameLoop();
@@ -402,13 +391,18 @@ class TaikoPractice {
         const currentTime = Date.now() - this.totalPauseTime;
 
         // FPS計測
-        this.updateFPS();
+        // FPS更新は削除
 
         // 拍ごとにメトロノーム音を鳴らす（最初の1000msは除外）
         if (currentTime >= 1000 && currentTime - this.metronomeLastTime >= this.metronomeInterval) {
-            setTimeout(() => {
+            // オフセットが負の場合はメトロノームを遅くする
+            if (this.audioOffset < 0) {
+                setTimeout(() => {
+                    this.playBeatSound();
+                }, -this.audioOffset);
+            } else {
                 this.playBeatSound();
-            }, this.audioOffset);
+            }
             this.metronomeLastTime += this.metronomeInterval;
         }
 
@@ -416,12 +410,22 @@ class TaikoPractice {
         if (currentTime >= 1000) {
             const adjustedInterval = this.getAdjustedNoteInterval();
             if (currentTime - this.lastNoteTime >= adjustedInterval) {
-                // 連打数・休み数に応じてノーツ生成
-                if (this.shouldGenerateNote()) {
-                    this.createNote();
+                // 連打数・休み数に応じてノーツ生成（オフセットが正の場合は遅らせる）
+                if (this.audioOffset > 0) {
+                    setTimeout(() => {
+                        if (this.shouldGenerateNote()) {
+                            this.createNote();
+                        }
+                        // サイクルカウンターを進める
+                        this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                    }, this.audioOffset);
+                } else {
+                    if (this.shouldGenerateNote()) {
+                        this.createNote();
+                    }
+                    // サイクルカウンターを進める
+                    this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
                 }
-                // サイクルカウンターを進める
-                this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
                 // 正確なタイミングを保つため、次の音符のタイミングを計算
                 this.lastNoteTime += adjustedInterval;
             }
@@ -788,15 +792,35 @@ class TaikoPractice {
     }
 
     updateScore() {
-        this.scoreElement.textContent = this.score.toLocaleString();
+        // スコア表示要素が存在する場合のみ更新
+        if (this.scoreElement) {
+            this.scoreElement.textContent = this.score.toLocaleString();
+        }
     }
 
     updateCombo() {
-        this.comboElement.textContent = this.combo;
+        // コンボ表示要素が存在する場合のみ更新
+        if (this.comboElement) {
+            this.comboElement.textContent = this.combo;
+        }
 
-        // 新しいコンボ表示要素も更新
+        // 新しいコンボ表示要素も更新（9コンボまでは非表示）
         if (this.comboDisplayElement) {
-            this.comboDisplayElement.textContent = this.combo;
+            if (this.combo <= 9) {
+                this.comboDisplayElement.textContent = '';
+            } else {
+                this.comboDisplayElement.textContent = this.combo;
+            }
+        }
+
+        // 「コンボ」テキストも9コンボまでは非表示
+        const comboLabel = document.querySelector('.combo-label');
+        if (comboLabel) {
+            if (this.combo <= 9) {
+                comboLabel.style.display = 'none';
+            } else {
+                comboLabel.style.display = 'block';
+            }
         }
 
         // 50、100、200、300、400以降の100の倍数のコンボの時だけ表示
@@ -1074,11 +1098,16 @@ function loadSettings() {
                 offsetElement.value = settings.offset || 0;
                 offsetElement.setAttribute('value', settings.offset || 0);
             }
+
+            // 設定表示を更新
+            updateSettingsDisplay();
         } catch (error) {
             console.error('設定の読み込みに失敗しました:', error);
         }
     } else {
         console.log('loadSettings - 保存された設定が見つかりません。デフォルト値を使用します。');
+        // デフォルト値でも設定表示を更新
+        updateSettingsDisplay();
     }
 }
 // UI切り替え
@@ -1090,6 +1119,34 @@ function showPracticeScreen() {
     document.querySelector('.title-screen').style.display = 'none';
     document.querySelector('.practice-screen').style.display = '';
 }
+// 設定表示を更新する関数
+function updateSettingsDisplay() {
+    const settings = getPracticeSettings();
+
+    // 音符の種類の表示名を取得
+    const noteTypeNames = {
+        '24th': '24分音符',
+        '16th': '16分音符',
+        '12th': '12分音符',
+        '8th': '8分音符',
+        '6th': '6分音符',
+        '4th': '4分音符'
+    };
+
+    // 設定表示要素を更新
+    const bpmElement = document.getElementById('current-bpm');
+    const noteElement = document.getElementById('current-note');
+    const renElement = document.getElementById('current-ren');
+    const restElement = document.getElementById('current-rest');
+    const offsetElement = document.getElementById('current-offset');
+
+    if (bpmElement) bpmElement.textContent = settings.bpm;
+    if (noteElement) noteElement.textContent = noteTypeNames[settings.noteType] || settings.noteType;
+    if (renElement) renElement.textContent = `${settings.renCount}連`;
+    if (restElement) restElement.textContent = settings.restCount;
+    if (offsetElement) offsetElement.textContent = `${settings.offset}ms`;
+}
+
 // 練習開始
 function startPracticeUnified() {
     saveSettings();
@@ -1109,13 +1166,22 @@ function startPracticeUnified() {
         window.taikoGame.cleanup();
     }
 
-    // スコア・コンボをリセット
+    // スコア・コンボをリセット（要素が存在する場合のみ）
     const scoreElement = document.getElementById('score');
     const comboElement = document.getElementById('combo');
     const comboDisplayElement = document.getElementById('comboDisplay');
     if (scoreElement) scoreElement.textContent = '0';
     if (comboElement) comboElement.textContent = '0';
-    if (comboDisplayElement) comboDisplayElement.textContent = '0';
+    if (comboDisplayElement) comboDisplayElement.textContent = '';
+
+    // コンボ表示を非表示にする
+    const comboLabel = document.querySelector('.combo-label');
+    if (comboLabel) {
+        comboLabel.style.display = 'none';
+    }
+
+    // 設定表示を更新
+    updateSettingsDisplay();
 
     // TaikoPracticeインスタンスを新規生成し直す
     window.taikoGame = new TaikoPractice(settings);
@@ -1128,16 +1194,25 @@ function backToTitleUnified() {
     }
     showTitleScreen();
 }
-// 設定変更時に自動保存
+// 設定変更時に自動保存と表示更新
 ['bpm-setting', 'note-type', 'ren-count', 'rest-count', 'offset-setting'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
         // changeイベント（値が確定した時）
-        el.addEventListener('change', saveSettings);
+        el.addEventListener('change', () => {
+            saveSettings();
+            updateSettingsDisplay();
+        });
         // inputイベント（入力中も保存）
-        el.addEventListener('input', saveSettings);
+        el.addEventListener('input', () => {
+            saveSettings();
+            updateSettingsDisplay();
+        });
         // blurイベント（フォーカスが外れた時）
-        el.addEventListener('blur', saveSettings);
+        el.addEventListener('blur', () => {
+            saveSettings();
+            updateSettingsDisplay();
+        });
     }
 });
 // ボタンイベント
@@ -1157,5 +1232,13 @@ window.addEventListener('DOMContentLoaded', async function () {
     // 練習画面の「タイトルに戻る」ボタンも統合用に上書き
     const backBtn = document.querySelector('.back-button');
     if (backBtn) backBtn.onclick = backToTitleUnified;
+
+    // タイトル画面でスペースキーで練習開始
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && document.querySelector('.title-screen').style.display !== 'none') {
+            e.preventDefault();
+            startPracticeUnified();
+        }
+    });
 });
 // ===== ここまで統合UI用の追加コード =====
