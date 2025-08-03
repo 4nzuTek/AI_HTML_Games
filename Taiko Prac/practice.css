@@ -356,32 +356,7 @@ body {
 
 
 
-/* 背景エリア */
-.background-area {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 150px;
-    background: linear-gradient(to top, #8B4513 0%, #A0522D 100%);
-    z-index: 1;
-}
 
-.background-decoration {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-}
-
-.yatai {
-    background: #DC143C;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 10px;
-    font-weight: 700;
-    border: 2px solid #FFD700;
-}
 
 /* コントロールエリア */
 .control-area {

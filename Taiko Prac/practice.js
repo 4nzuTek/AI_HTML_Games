@@ -384,11 +384,21 @@ class TaikoPractice {
             // ノーツの中心位置を直接使用
             const noteCenterX = note.centerX;
 
-            if (noteCenterX < this.judgmentLineX - 300) { // 判定ラインの300px手前
-                // ノーツ削除情報（削除）
+            // 判定ラインを過ぎた距離を計算
+            const distancePastLine = this.judgmentLineX - noteCenterX;
 
-                // ノーツが左端まで行って消える時に不可を表示
+            // 距離をミリ秒に変換
+            const timePastLine = this.convertDistanceToMs(distancePastLine);
+
+            // +100msを過ぎたら不可判定を表示（ノーツは削除しない）
+            if (timePastLine > 100 && !note.missed) {
+                // ノーツが判定ラインを+100ms過ぎたら不可を表示
                 this.missNote();
+                note.missed = true; // 不可判定済みフラグを設定
+            }
+
+            // 画面左端まで行ったら削除
+            if (noteCenterX < -100) {
                 note.element.remove();
                 return false;
             }
@@ -719,47 +729,47 @@ function getPracticeSettings() {
 function saveSettings() {
     const settings = getPracticeSettings();
     localStorage.setItem('taikoPracticeSettings', JSON.stringify(settings));
+    console.log('設定を保存しました:', settings);
 }
 function loadSettings() {
-    // デバッグ用：localStorageをクリアしてデフォルト値から開始
-    localStorage.removeItem('taikoPracticeSettings');
-    console.log('loadSettings - localStorage cleared, using default values');
-
-    // 以下はlocalStorageから復元する処理だが、クリアしたので実行されない
+    // localStorageから保存された設定を読み込む
     const saved = localStorage.getItem('taikoPracticeSettings');
     if (saved) {
-        const settings = JSON.parse(saved);
+        try {
+            const settings = JSON.parse(saved);
+            console.log('loadSettings - 保存された設定を読み込みました:', settings);
 
-        // デバッグ用：localStorageから読み込んだ値を確認
-        console.log('loadSettings - saved settings:', settings);
+            const bpmElement = document.getElementById('bpm-setting');
+            const noteTypeElement = document.getElementById('note-type');
+            const renCountElement = document.getElementById('ren-count');
+            const restCountElement = document.getElementById('rest-count');
+            const offsetElement = document.getElementById('offset-setting');
 
-        const bpmElement = document.getElementById('bpm-setting');
-        const noteTypeElement = document.getElementById('note-type');
-        const renCountElement = document.getElementById('ren-count');
-        const restCountElement = document.getElementById('rest-count');
-        const offsetElement = document.getElementById('offset-setting');
-
-        if (bpmElement) {
-            bpmElement.value = settings.bpm || 120;
-            bpmElement.setAttribute('value', settings.bpm || 120);
+            if (bpmElement) {
+                bpmElement.value = settings.bpm || 120;
+                bpmElement.setAttribute('value', settings.bpm || 120);
+            }
+            if (noteTypeElement) {
+                noteTypeElement.value = settings.noteType || '16th';
+                noteTypeElement.setAttribute('value', settings.noteType || '16th');
+            }
+            if (renCountElement) {
+                renCountElement.value = settings.renCount || 4;
+                renCountElement.setAttribute('value', settings.renCount || 4);
+            }
+            if (restCountElement) {
+                restCountElement.value = settings.restCount || 1;
+                restCountElement.setAttribute('value', settings.restCount || 1);
+            }
+            if (offsetElement) {
+                offsetElement.value = settings.offset || 0;
+                offsetElement.setAttribute('value', settings.offset || 0);
+            }
+        } catch (error) {
+            console.error('設定の読み込みに失敗しました:', error);
         }
-        if (noteTypeElement) {
-            noteTypeElement.value = settings.noteType || '16th';
-            noteTypeElement.setAttribute('value', settings.noteType || '16th');
-        }
-        if (renCountElement) {
-            renCountElement.value = settings.renCount || 4;
-            renCountElement.setAttribute('value', settings.renCount || 4);
-        }
-        if (restCountElement) {
-            restCountElement.value = settings.restCount || 1;
-            restCountElement.setAttribute('value', settings.restCount || 1);
-        }
-        if (offsetElement) {
-            offsetElement.value = settings.offset || 0;
-            offsetElement.setAttribute('value', settings.offset || 0);
-            console.log('loadSettings - offset element after setting:', offsetElement.value, 'attribute:', offsetElement.getAttribute('value'));
-        }
+    } else {
+        console.log('loadSettings - 保存された設定が見つかりません。デフォルト値を使用します。');
     }
 }
 // UI切り替え
@@ -811,7 +821,14 @@ function backToTitleUnified() {
 // 設定変更時に自動保存
 ['bpm-setting', 'note-type', 'ren-count', 'rest-count', 'offset-setting'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('change', saveSettings);
+    if (el) {
+        // changeイベント（値が確定した時）
+        el.addEventListener('change', saveSettings);
+        // inputイベント（入力中も保存）
+        el.addEventListener('input', saveSettings);
+        // blurイベント（フォーカスが外れた時）
+        el.addEventListener('blur', saveSettings);
+    }
 });
 // ボタンイベント
 window.addEventListener('DOMContentLoaded', function () {
