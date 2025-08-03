@@ -5,8 +5,8 @@ class TaikoPractice {
         // 設定値を引数から受け取る
         const bpm = settings?.bpm || 120;
         const noteType = settings?.noteType || '16th';
-        const renCount = settings?.renCount || 4;
-        const restCount = settings?.restCount || 1;
+        const renCount = settings?.renCount || 5;
+        const restCount = settings?.restCount !== undefined ? settings.restCount : 3;
         const offset = settings?.offset !== undefined ? settings.offset : 0; // 0msも正しく受け取る
 
         // デバッグ用：コンストラクタでの設定値を確認
@@ -23,8 +23,8 @@ class TaikoPractice {
         this.noteType = noteType;
         this.noteSpeed = 400; // 音符が流れる速度（ピクセル/秒）
 
-        // 音符の種類に応じて間隔を設定
-        this.noteInterval = this.calculateNoteInterval();
+        // 音符の種類に応じて間隔を設定（実際のゲームループではgetAdjustedNoteInterval()を使用）
+        this.noteInterval = this.getAdjustedNoteInterval();
 
         this.notes = [];
         this.isPlaying = false;
@@ -73,21 +73,7 @@ class TaikoPractice {
         this.init();
     }
 
-    // 音符の種類に応じて間隔を計算
-    calculateNoteInterval() {
-        const baseInterval = (60 / this.bpm) * 1000; // 4分音符の間隔
 
-        switch (this.noteType) {
-            case '16th':
-                return baseInterval / 4; // 16分音符
-            case '8th':
-                return baseInterval / 2; // 8分音符
-            case '4th':
-                return baseInterval; // 4分音符
-            default:
-                return baseInterval / 4; // デフォルトは16分音符
-        }
-    }
 
     // 連打数・休み数に基づいてノーツ生成を制御
     shouldGenerateNote() {
@@ -99,11 +85,36 @@ class TaikoPractice {
     getAdjustedNoteInterval() {
         // 基準BPM（120）での間隔を基準とする
         const baseBpm = 120;
-        const baseInterval = (60 / baseBpm) * 1000 / 4; // 16分音符の基準間隔
+        const baseInterval = (60 / baseBpm) * 1000; // 4分音符の基準間隔
+
+        // 音符の種類に応じて基準間隔を調整
+        let noteTypeMultiplier;
+        switch (this.noteType) {
+            case '24th':
+                noteTypeMultiplier = 1 / 6; // 24分音符
+                break;
+            case '16th':
+                noteTypeMultiplier = 1 / 4; // 16分音符
+                break;
+            case '12th':
+                noteTypeMultiplier = 1 / 3; // 12分音符（3連符）
+                break;
+            case '8th':
+                noteTypeMultiplier = 1 / 2; // 8分音符
+                break;
+            case '6th':
+                noteTypeMultiplier = 2 / 3; // 6分音符（3連符）
+                break;
+            case '4th':
+                noteTypeMultiplier = 1; // 4分音符
+                break;
+            default:
+                noteTypeMultiplier = 1 / 4; // デフォルトは16分音符
+        }
 
         // BPMの比率に応じて間隔を調整
         const bpmRatio = this.bpm / baseBpm;
-        const adjustedInterval = baseInterval / bpmRatio;
+        const adjustedInterval = (baseInterval * noteTypeMultiplier) / bpmRatio;
 
         return adjustedInterval;
     }
@@ -1012,8 +1023,8 @@ async function loadGlobalAudioFiles() {
 function getPracticeSettings() {
     const bpm = parseInt(document.getElementById('bpm-setting').value) || 120;
     const noteType = document.getElementById('note-type').value || '16th';
-    const renCount = parseInt(document.getElementById('ren-count').value) || 4;
-    const restCount = parseInt(document.getElementById('rest-count').value) || 1;
+    const renCount = parseInt(document.getElementById('ren-count').value) || 5;
+    const restCount = parseInt(document.getElementById('rest-count').value) || 3;
     const offset = parseInt(document.getElementById('offset-setting').value) || 0;
 
     // デバッグ用：HTMLのinput要素から取得した値を確認
@@ -1052,12 +1063,12 @@ function loadSettings() {
                 noteTypeElement.setAttribute('value', settings.noteType || '16th');
             }
             if (renCountElement) {
-                renCountElement.value = settings.renCount || 4;
-                renCountElement.setAttribute('value', settings.renCount || 4);
+                renCountElement.value = settings.renCount || 5;
+                renCountElement.setAttribute('value', settings.renCount || 5);
             }
             if (restCountElement) {
-                restCountElement.value = settings.restCount || 1;
-                restCountElement.setAttribute('value', settings.restCount || 1);
+                restCountElement.value = settings.restCount !== undefined ? settings.restCount : 3;
+                restCountElement.setAttribute('value', settings.restCount !== undefined ? settings.restCount : 3);
             }
             if (offsetElement) {
                 offsetElement.value = settings.offset || 0;

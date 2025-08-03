@@ -23,18 +23,21 @@
                 <div class="setting-group">
                     <label for="note-type">音符の種類:</label>
                     <select id="note-type" class="setting-input">
-                        <option value="16th">16分音符</option>
+                        <option value="24th">24分音符（3連符）</option>
+                        <option value="16th" selected>16分音符</option>
+                        <option value="12th">12分音符（3連符）</option>
                         <option value="8th">8分音符</option>
+                        <option value="6th">6分音符（3連符）</option>
                         <option value="4th">4分音符</option>
                     </select>
                 </div>
                 <div class="setting-group">
                     <label for="ren-count">連打数（○○連）:</label>
-                    <input type="number" id="ren-count" value="4" min="1" max="32" class="setting-input">
+                    <input type="number" id="ren-count" value="5" min="1" max="32" class="setting-input">
                 </div>
                 <div class="setting-group">
                     <label for="rest-count">休み数（休み）:</label>
-                    <input type="number" id="rest-count" value="1" min="0" max="16" class="setting-input">
+                    <input type="number" id="rest-count" value="3" min="0" max="16" class="setting-input">
                 </div>
                 <div class="setting-group">
                     <label for="offset-setting">オフセット（ms）:</label>
