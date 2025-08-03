@@ -3,8 +3,8 @@
 class TaikoPractice {
     constructor() {
         // 定数設定
-        const AUDIO_OFFSET = 450; // 音の再生オフセット（ミリ秒、マイナスで早く再生）
-        const BEATS_TO_REACH = 4; // ノーツが判定ラインに到達するまでの拍数
+        const AUDIO_OFFSET = 400; // 音の再生オフセット（ミリ秒、マイナスで早く再生）
+        const BEATS_TO_REACH = 8; // ノーツが判定ラインに到達するまでの拍数
 
         // URLパラメータから設定を読み込み
         const urlParams = new URLSearchParams(window.location.search);
@@ -27,6 +27,7 @@ class TaikoPractice {
         this.noteIndex = 0;
         this.sixteenthNoteCount = 0; // 16分音符のカウンター（0-3）
         this.lastNoteTime = 0;
+        this.noteSerial = 0; // ノーツ生成ごとにインクリメント
 
         // FPS計測用
         this.frameCount = 0;
@@ -72,6 +73,23 @@ class TaikoPractice {
         return this.sixteenthNoteCount < generateCount;
     }
 
+    // BPMに応じてノーツ生成タイミングを調整
+    getAdjustedNoteInterval() {
+        // 基準BPM（120）での間隔を基準とする
+        const baseBpm = 120;
+        const baseInterval = (60 / baseBpm) * 1000 / 4; // 16分音符の基準間隔
+
+        // BPMの比率に応じて間隔を調整
+        const bpmRatio = this.bpm / baseBpm;
+        const adjustedInterval = baseInterval / bpmRatio;
+
+        return adjustedInterval;
+    }
+
+
+
+
+
     updateFPS() {
         this.frameCount++;
         const currentTime = Date.now();
@@ -82,11 +100,9 @@ class TaikoPractice {
             this.frameCount = 0;
             this.lastFpsTime = currentTime;
 
-            // FPSをコンソールに表示（削除）
-
-            // 画面上のFPS表示を更新
+            // FPSとオフセットを画面上に表示
             if (this.fpsElement) {
-                this.fpsElement.textContent = `FPS: ${this.currentFps}`;
+                this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
             }
         }
     }
@@ -161,7 +177,7 @@ class TaikoPractice {
         this.fpsElement.style.fontFamily = 'monospace';
         this.fpsElement.style.fontSize = '14px';
         this.fpsElement.style.zIndex = '1000';
-        this.fpsElement.textContent = 'FPS: 0';
+        this.fpsElement.textContent = 'FPS: 0 | Offset: ' + this.audioOffset + 'ms';
 
         document.body.appendChild(this.fpsElement);
     }
@@ -193,6 +209,18 @@ class TaikoPractice {
                 this.flashJudgmentCircle('#4444FF');
 
                 this.handleTaikoClick('ka');
+            } else if (e.code === 'ArrowLeft') {
+                // 左矢印でオフセットを-5ms
+                this.audioOffset -= 5;
+                if (this.fpsElement) {
+                    this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
+                }
+            } else if (e.code === 'ArrowRight') {
+                // 右矢印でオフセットを+5ms
+                this.audioOffset += 5;
+                if (this.fpsElement) {
+                    this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
+                }
             }
         });
 
@@ -217,22 +245,22 @@ class TaikoPractice {
         this.updateFPS();
 
         // 統一されたタイミング管理
-        if (currentTime - this.lastNoteTime >= this.noteInterval) {
+        const adjustedInterval = this.getAdjustedNoteInterval();
+        if (currentTime - this.lastNoteTime >= adjustedInterval) {
             // 連打パターンに応じてノーツ生成
             if (this.shouldGenerateNote()) {
                 this.createNote();
             }
 
-            // ビート音の再生（4分音符の開始時のみ）
-            if (this.sixteenthNoteCount === 0) {
-                // オフセット遅延してビート音を再生
+            // ビート音の再生（固定オフセット）
+            if (this.shouldGenerateNote()) {
                 setTimeout(() => {
                     this.playBeatSound();
                 }, this.audioOffset);
             }
 
             // 正確なタイミングを保つため、次の音符のタイミングを計算
-            this.lastNoteTime += this.noteInterval;
+            this.lastNoteTime += adjustedInterval;
             this.sixteenthNoteCount = (this.sixteenthNoteCount + 1) % 4; // 0-3でループ
         }
 
@@ -261,6 +289,9 @@ class TaikoPractice {
         note.style.left = '1920px'; // 画面右端から開始（ノーツの中心が画面右端に来るように）
         note.style.top = '50%';
         note.style.transform = 'translateY(-50%)';
+        // 連番をz-indexに使う（新しいノーツほどz-indexが小さい）
+        note.style.zIndex = String(1000000 - this.noteSerial);
+        this.noteSerial++;
 
         this.noteContainer.appendChild(note);
 
@@ -282,27 +313,8 @@ class TaikoPractice {
         this.notes.forEach(note => {
             // ヒットしたノーツは移動しない
             if (!note.hit) {
-                // 残り距離を計算
-                const remainingDistance = note.centerX - this.judgmentLineX;
-
-                // 残り時間を計算（設定された拍数で到達する予定）
-                const secondsPerBeat = 60 / this.bpm;
-                const totalTime = this.beatsToReach * secondsPerBeat;
-
-                // ノーツが生成されてからの経過時間を計算
-                const noteAge = (currentTime - note.createdAt) / 1000;
-                const remainingTime = totalTime - noteAge;
-
-                // このフレームでの移動量を計算
-                let deltaX;
-                if (remainingTime > 0 && remainingDistance > 0) {
-                    // 残り時間と残り距離から、このフレームでの移動量を計算
-                    const speedForThisFrame = remainingDistance / remainingTime;
-                    deltaX = speedForThisFrame * (deltaTime / 1000);
-                } else {
-                    // フォールバック: 通常のスピード計算
-                    deltaX = (this.noteSpeed * deltaTime) / 1000;
-                }
+                // このフレームでの移動量を計算（固定速度を使用）
+                const deltaX = (this.noteSpeed * deltaTime) / 1000;
 
                 note.centerX -= deltaX; // 左に移動
                 note.element.style.left = `${note.centerX - 40}px`; // ノーツの中心から40px左（ノーツの左端）
