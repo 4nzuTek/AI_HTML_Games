@@ -356,10 +356,27 @@ class TaikoPractice {
 
     startGame() {
         this.isPlaying = true;
-        this.lastNoteTime = Date.now();
-        this.metronomeLastTime = this.lastNoteTime; // メトロノームも初期化
         this.totalPauseTime = 0; // 一時停止時間をリセット
-        this.gameLoop();
+
+        // 1000ms後に最初のノーツ生成とメトロノーム再生を開始
+        setTimeout(() => {
+            this.lastNoteTime = Date.now();
+            this.metronomeLastTime = this.lastNoteTime; // メトロノームも初期化
+
+            // 最初のメトロノーム音を鳴らす
+            setTimeout(() => {
+                this.playBeatSound();
+            }, this.audioOffset);
+
+            // 最初のノーツを生成
+            if (this.shouldGenerateNote()) {
+                this.createNote();
+            }
+            this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+
+            // ゲームループを開始
+            this.gameLoop();
+        }, 1000);
     }
 
     gameLoop() {
@@ -376,25 +393,27 @@ class TaikoPractice {
         // FPS計測
         this.updateFPS();
 
-        // 拍ごとにメトロノーム音を鳴らす
-        if (currentTime - this.metronomeLastTime >= this.metronomeInterval) {
+        // 拍ごとにメトロノーム音を鳴らす（最初の1000msは除外）
+        if (currentTime >= 1000 && currentTime - this.metronomeLastTime >= this.metronomeInterval) {
             setTimeout(() => {
                 this.playBeatSound();
             }, this.audioOffset);
             this.metronomeLastTime += this.metronomeInterval;
         }
 
-        // ノーツ生成タイミング管理
-        const adjustedInterval = this.getAdjustedNoteInterval();
-        if (currentTime - this.lastNoteTime >= adjustedInterval) {
-            // 連打数・休み数に応じてノーツ生成
-            if (this.shouldGenerateNote()) {
-                this.createNote();
+        // ノーツ生成タイミング管理（最初の1000msは除外）
+        if (currentTime >= 1000) {
+            const adjustedInterval = this.getAdjustedNoteInterval();
+            if (currentTime - this.lastNoteTime >= adjustedInterval) {
+                // 連打数・休み数に応じてノーツ生成
+                if (this.shouldGenerateNote()) {
+                    this.createNote();
+                }
+                // サイクルカウンターを進める
+                this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                // 正確なタイミングを保つため、次の音符のタイミングを計算
+                this.lastNoteTime += adjustedInterval;
             }
-            // サイクルカウンターを進める
-            this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
-            // 正確なタイミングを保つため、次の音符のタイミングを計算
-            this.lastNoteTime += adjustedInterval;
         }
 
         // 音符の移動
@@ -792,7 +811,7 @@ class TaikoPractice {
 
                 // 速度計算用：判定ラインの左端位置（ノーツが到達する位置）
                 const lineWidth = lineRect.width;
-                this.judgmentLineX = circleCenterX - (lineWidth / 1.5);
+                this.judgmentLineX = circleCenterX - (lineWidth / 2) + (lineWidth / 2);
 
                 // 判定計算用：円の中心位置（視覚的な判定基準）
                 this.judgmentCenterX = circleCenterX;
