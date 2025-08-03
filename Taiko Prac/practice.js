@@ -15,7 +15,7 @@ class TaikoPractice {
 
         // 定数設定
         const AUDIO_OFFSET = 400; // 音の再生オフセット（ミリ秒、マイナスで早く再生）
-        const BEATS_TO_REACH = 8; // ノーツが判定ラインに到達するまでの拍数
+        const BEATS_TO_REACH = 6; // ノーツが判定ラインに到達するまでの拍数
 
         this.score = 0;
         this.combo = 0;
@@ -39,6 +39,11 @@ class TaikoPractice {
         this.currentFps = 0;
         this.lastFrameTime = 0; // 前回のフレームの開始時間
 
+        // タブ非アクティブ時の時間管理
+        this.isTabActive = true; // タブがアクティブかどうか
+        this.pauseStartTime = 0; // 一時停止開始時間
+        this.totalPauseTime = 0; // 累積一時停止時間
+
         // 判定ライン設定（一か所で管理）
         this.judgmentLineX = 50; // 判定ラインの円の中心X座標（judgment-circleの中心）
         this.judgmentRange = 60; // 判定範囲
@@ -50,6 +55,7 @@ class TaikoPractice {
         this.audioContext = null;
         this.audioOffset = offset; // オフセットを保存
         this.beatsToReach = BEATS_TO_REACH; // ノーツ到達拍数を保存
+        this.metronomeVolume = 0.5; // メトロノームの音量（0.0-1.0）
         this.initAudio();
 
         this.renCount = renCount;
@@ -120,9 +126,14 @@ class TaikoPractice {
 
     initAudio() {
         try {
-            // Web Audio APIの初期化
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            // 音声システムを初期化しました
+            // グローバルにロードされた音声コンテキストとバッファを使用
+            this.audioContext = globalAudioContext;
+            this.donAudioBuffer = globalDonAudioBuffer;
+            this.katsuAudioBuffer = globalKatsuAudioBuffer;
+
+            if (!this.audioContext || !this.donAudioBuffer || !this.katsuAudioBuffer) {
+                console.warn('グローバル音声ファイルがまだロードされていません');
+            }
         } catch (error) {
             console.error('音声システムの初期化に失敗:', error);
         }
@@ -140,9 +151,9 @@ class TaikoPractice {
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime); // 800Hz
 
-            // 音量エンベロープ設定
+            // 音量エンベロープ設定（インスタンス変数を使用）
             gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
+            gainNode.gain.linearRampToValueAtTime(this.metronomeVolume, this.audioContext.currentTime + 0.01);
             gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
 
             // 接続
@@ -154,6 +165,40 @@ class TaikoPractice {
             oscillator.stop(this.audioContext.currentTime + 0.1);
         } catch (error) {
             console.error('ビート音の再生に失敗:', error);
+        }
+    }
+
+    playTaikoSound(type) {
+        if (!this.audioContext || !this.donAudioBuffer || !this.katsuAudioBuffer) return;
+
+        try {
+            let audioBuffer;
+            if (type === 'don') {
+                audioBuffer = this.donAudioBuffer;
+            } else if (type === 'ka') {
+                audioBuffer = this.katsuAudioBuffer;
+            } else {
+                return;
+            }
+
+            // AudioBufferSourceNodeを作成
+            const source = this.audioContext.createBufferSource();
+            const gainNode = this.audioContext.createGain();
+
+            // 音声データを設定
+            source.buffer = audioBuffer;
+
+            // 音量設定
+            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+
+            // 接続
+            source.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+
+            // 太鼓の音はオフセットなしで即座に再生
+            source.start(0);
+        } catch (error) {
+            console.error('太鼓の音の再生に失敗:', error);
         }
     }
 
@@ -197,8 +242,19 @@ class TaikoPractice {
     }
 
     setupEventListeners() {
-        // キーボードイベント
-        document.addEventListener('keydown', (e) => {
+        // 既存のイベントリスナーを削除（重複防止）
+        if (this.keydownHandler) {
+            document.removeEventListener('keydown', this.keydownHandler);
+        }
+        if (this.resizeHandler) {
+            window.removeEventListener('resize', this.resizeHandler);
+        }
+        if (this.visibilityHandler) {
+            document.removeEventListener('visibilitychange', this.visibilityHandler);
+        }
+
+        // キーボードイベントハンドラーを作成
+        this.keydownHandler = (e) => {
             if (e.code === 'KeyF' || e.code === 'KeyJ') {
                 e.preventDefault();
 
@@ -206,6 +262,9 @@ class TaikoPractice {
                 if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
+
+                // 太鼓の音を再生（ドン）
+                this.playTaikoSound('don');
 
                 // 判定円の色を一瞬変える（ドン用：赤）
                 this.flashJudgmentCircle('#FF4444');
@@ -218,6 +277,9 @@ class TaikoPractice {
                 if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
+
+                // 太鼓の音を再生（カツ）
+                this.playTaikoSound('ka');
 
                 // 判定円の色を一瞬変える（カツ用：青）
                 this.flashJudgmentCircle('#4444FF');
@@ -236,25 +298,42 @@ class TaikoPractice {
                     this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
                 }
             }
-        });
+        };
+
+        // イベントリスナーを登録
+        document.addEventListener('keydown', this.keydownHandler);
 
         // ウィンドウサイズ変更時に判定ラインの位置を更新
-        window.addEventListener('resize', () => {
+        this.resizeHandler = () => {
             this.updateJudgmentLinePosition();
-        });
+        };
+        window.addEventListener('resize', this.resizeHandler);
+
+        // タブの可視性変更イベントを監視
+        this.visibilityHandler = () => {
+            this.handleVisibilityChange();
+        };
+        document.addEventListener('visibilitychange', this.visibilityHandler);
     }
 
     startGame() {
         this.isPlaying = true;
         this.lastNoteTime = Date.now();
         this.metronomeLastTime = this.lastNoteTime; // メトロノームも初期化
+        this.totalPauseTime = 0; // 一時停止時間をリセット
         this.gameLoop();
     }
 
     gameLoop() {
         if (!this.isPlaying) return;
 
-        const currentTime = Date.now();
+        // タブが非アクティブの場合は一時停止
+        if (!this.isTabActive) {
+            requestAnimationFrame(() => this.gameLoop());
+            return;
+        }
+
+        const currentTime = Date.now() - this.totalPauseTime;
 
         // FPS計測
         this.updateFPS();
@@ -540,11 +619,11 @@ class TaikoPractice {
         const offsetMs = this.convertDistanceToMs(distance);
         const judgment = this.getJudgment(note);
 
-        // 判定とタイミングを組み合わせて表示
+        // 判定とタイミングを組み合わせて表示（2行表示）
         if (offsetMs > 0) {
-            return `${judgment}\n-${offsetMs}ms`; // 早押し（+ms）
+            return `${judgment}\n-${offsetMs}ms`; // 早押し
         } else if (offsetMs < 0) {
-            return `${judgment}\n+${-offsetMs}ms`; // 遅押し（-ms）
+            return `${judgment}\n+${-offsetMs}ms`; // 遅押し
         } else {
             return `${judgment}\n0ms`;
         }
@@ -561,29 +640,25 @@ class TaikoPractice {
         // 判定文字列から判定部分を抽出（改行前の部分）
         const judgmentType = judgment.split('\n')[0];
 
-        // 判定に応じて色と枠の色を設定
+        // 判定に応じて色を設定（枠線なし）
         let colorClass = '';
-        let borderColor = '#FFD700'; // デフォルト（黄色）
 
         if (judgmentType === '良') {
             colorClass = 'judgment-good';
-            borderColor = '#FFD700'; // 黄色
         } else if (judgmentType === '可') {
             colorClass = 'judgment-acceptable';
-            borderColor = '#FFFFFF'; // 白
         } else if (judgmentType === '不可') {
             colorClass = 'judgment-bad';
-            borderColor = '#4169E1'; // 青
         }
 
         if (colorClass) {
             judgmentElement.classList.add(colorClass);
         }
 
-        // 枠の色を動的に設定
-        judgmentElement.style.borderColor = borderColor;
+        // 枠線を削除
+        judgmentElement.style.border = 'none';
 
-        // 改行がある場合は分割して表示、ない場合はそのまま表示
+        // 2行表示（判定とタイミングを分けて表示）
         if (judgment.includes('\n')) {
             const lines = judgment.split('\n');
             judgmentElement.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
@@ -619,7 +694,7 @@ class TaikoPractice {
     missNote() {
         this.combo = 0;
         this.updateCombo();
-        this.showJudgment('不可');
+        this.showJudgment('不可\n+100ms');
     }
 
     updateScore() {
@@ -628,6 +703,11 @@ class TaikoPractice {
 
     updateCombo() {
         this.comboElement.textContent = this.combo;
+
+        // 50、100、200、300、400以降の100の倍数のコンボの時だけ表示
+        if ((this.combo === 50) || (this.combo >= 100 && this.combo % 100 === 0)) {
+            this.showComboMessage(`${this.combo}コンボ！`);
+        }
     }
 
     updateJudgmentLinePosition() {
@@ -707,9 +787,82 @@ class TaikoPractice {
             }, 100); // 100ms後にフェード開始
         }
     }
+
+    showComboMessage(message) {
+        // 既存のコンボメッセージを削除
+        const existingMessages = document.querySelectorAll('.combo-message');
+        existingMessages.forEach(element => element.remove());
+
+        const comboElement = document.createElement('div');
+        comboElement.className = 'combo-message';
+        comboElement.textContent = message;
+
+        // 判定ラインの上、精度チップよりも上に表示
+        const judgmentLine = document.querySelector('.judgment-line');
+        if (judgmentLine) {
+            judgmentLine.appendChild(comboElement);
+        } else {
+            document.body.appendChild(comboElement);
+        }
+
+        // 1.5秒後に自動削除
+        setTimeout(() => {
+            comboElement.remove();
+        }, 1500);
+    }
+
+    // タブの可視性変更を処理
+    handleVisibilityChange() {
+        if (document.hidden) {
+            // タブが非アクティブになった時
+            this.isTabActive = false;
+            this.pauseStartTime = Date.now();
+            console.log('タブが非アクティブになりました。ゲームを一時停止します。');
+        } else {
+            // タブがアクティブになった時
+            this.isTabActive = true;
+            if (this.pauseStartTime > 0) {
+                // 一時停止時間を累積に加算
+                const pauseDuration = Date.now() - this.pauseStartTime;
+                this.totalPauseTime += pauseDuration;
+                this.pauseStartTime = 0;
+                console.log(`タブがアクティブになりました。一時停止時間: ${pauseDuration}ms`);
+            }
+        }
+    }
 }
 
 // ===== ここから統合UI用の追加コード =====
+// グローバル音声管理
+let globalAudioContext = null;
+let globalDonAudioBuffer = null;
+let globalKatsuAudioBuffer = null;
+
+// 音声ファイルをグローバルにロード
+async function loadGlobalAudioFiles() {
+    try {
+        // Web Audio APIの初期化
+        globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // DonとKatsuの音声ファイルを読み込み
+        const donResponse = await fetch('Assets/SFX/Don.wav');
+        const katsuResponse = await fetch('Assets/SFX/Katsu.wav');
+
+        const donArrayBuffer = await donResponse.arrayBuffer();
+        const katsuArrayBuffer = await katsuResponse.arrayBuffer();
+
+        // AudioBufferに変換
+        globalDonAudioBuffer = await globalAudioContext.decodeAudioData(donArrayBuffer);
+        globalKatsuAudioBuffer = await globalAudioContext.decodeAudioData(katsuArrayBuffer);
+
+        console.log('グローバル音声ファイルの読み込みが完了しました');
+        return true;
+    } catch (error) {
+        console.error('グローバル音声ファイルの読み込みに失敗:', error);
+        return false;
+    }
+}
+
 // 設定の保存・復元
 function getPracticeSettings() {
     const bpm = parseInt(document.getElementById('bpm-setting').value) || 120;
@@ -790,9 +943,17 @@ function startPracticeUnified() {
     console.log('Practice settings:', settings);
     console.log('Offset value:', settings.offset, 'Type:', typeof settings.offset);
 
+    // 音声コンテキストを再開（ブラウザの制限により必要）
+    if (globalAudioContext && globalAudioContext.state === 'suspended') {
+        globalAudioContext.resume();
+    }
+
     // 既存のゲーム状態を完全リセット
     if (window.taikoGame) {
         window.taikoGame.isPlaying = false;
+
+
+
         // 既存のノーツをすべて削除
         const noteContainer = document.getElementById('noteContainer');
         if (noteContainer) {
@@ -831,7 +992,16 @@ function backToTitleUnified() {
     }
 });
 // ボタンイベント
-window.addEventListener('DOMContentLoaded', function () {
+window.addEventListener('DOMContentLoaded', async function () {
+    // タイトル画面で音声ファイルをロード
+    console.log('音声ファイルをロード中...');
+    const audioLoaded = await loadGlobalAudioFiles();
+    if (audioLoaded) {
+        console.log('音声ファイルのロードが完了しました');
+    } else {
+        console.error('音声ファイルのロードに失敗しました');
+    }
+
     loadSettings();
     showTitleScreen();
     document.getElementById('startPracticeBtn').onclick = startPracticeUnified;
