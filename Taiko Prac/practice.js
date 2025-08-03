@@ -1,18 +1,21 @@
 // 太鼓の達人練習画面 - メインスクリプト
 
 class TaikoPractice {
-    constructor() {
+    constructor(settings) {
+        // 設定値を引数から受け取る
+        const bpm = settings?.bpm || 120;
+        const noteType = settings?.noteType || '16th';
+        const renCount = settings?.renCount || 4;
+        const restCount = settings?.restCount || 1;
+        const offset = settings?.offset !== undefined ? settings.offset : 0; // 0msも正しく受け取る
+
+        // デバッグ用：コンストラクタでの設定値を確認
+        console.log('TaikoPractice constructor - settings:', settings);
+        console.log('TaikoPractice constructor - offset:', offset, 'Type:', typeof offset);
+
         // 定数設定
         const AUDIO_OFFSET = 400; // 音の再生オフセット（ミリ秒、マイナスで早く再生）
         const BEATS_TO_REACH = 8; // ノーツが判定ラインに到達するまでの拍数
-
-        // URLパラメータから設定を読み込み
-        const urlParams = new URLSearchParams(window.location.search);
-        const bpm = parseInt(urlParams.get('bpm')) || 120;
-        const noteType = urlParams.get('noteType') || '16th';
-        const renCount = parseInt(urlParams.get('renCount')) || 4;
-        const restCount = parseInt(urlParams.get('restCount')) || 1;
-        const offset = parseInt(urlParams.get('offset'));
 
         this.score = 0;
         this.combo = 0;
@@ -45,7 +48,7 @@ class TaikoPractice {
 
         // 音声設定
         this.audioContext = null;
-        this.audioOffset = isNaN(offset) ? AUDIO_OFFSET : offset; // オフセットを保存
+        this.audioOffset = offset; // オフセットを保存
         this.beatsToReach = BEATS_TO_REACH; // ノーツ到達拍数を保存
         this.initAudio();
 
@@ -172,6 +175,9 @@ class TaikoPractice {
     }
 
     createFpsDisplay() {
+        // デバッグ用：FPS表示作成時のaudioOffset値を確認
+        console.log('createFpsDisplay - this.audioOffset:', this.audioOffset, 'Type:', typeof this.audioOffset);
+
         // FPS表示要素を作成
         this.fpsElement = document.createElement('div');
         this.fpsElement.id = 'fps-display';
@@ -343,27 +349,27 @@ class TaikoPractice {
         /*
         // ノーツの中心位置を直接使用
         const noteCenterX = note.centerX;
-
+        
         // 判定線の要素を取得または作成
         let judgmentLine = note.element.querySelector('.note-judgment-line');
         if (!judgmentLine) {
-            judgmentLine = document.createElement('div');
-            judgmentLine.className = 'note-judgment-line';
-            note.element.appendChild(judgmentLine);
+        judgmentLine = document.createElement('div');
+        judgmentLine.className = 'note-judgment-line';
+        note.element.appendChild(judgmentLine);
         }
-
+        
         // 判定線の位置を設定（ノーツの中心からの相対位置）
         judgmentLine.style.left = `${40 + (noteCenterX - this.judgmentLineX)}px`;
-
+        
         // 判定精度に応じて色を変更
         if (Math.abs(noteCenterX - this.judgmentLineX) <= this.judgmentPerfect) {
-            judgmentLine.style.backgroundColor = '#00FF00'; // 緑（PERFECT）
+        judgmentLine.style.backgroundColor = '#00FF00'; // 緑（PERFECT）
         } else if (Math.abs(noteCenterX - this.judgmentLineX) <= this.judgmentGreat) {
-            judgmentLine.style.backgroundColor = '#FFFF00'; // 黄（GREAT）
+        judgmentLine.style.backgroundColor = '#FFFF00'; // 黄（GREAT）
         } else if (Math.abs(noteCenterX - this.judgmentLineX) <= this.judgmentGood) {
-            judgmentLine.style.backgroundColor = '#FFA500'; // 橙（GOOD）
+        judgmentLine.style.backgroundColor = '#FFA500'; // 橙（GOOD）
         } else {
-            judgmentLine.style.backgroundColor = '#FF0000'; // 赤（BAD）
+        judgmentLine.style.backgroundColor = '#FF0000'; // 赤（BAD）
         }
         */
     }
@@ -693,20 +699,127 @@ class TaikoPractice {
     }
 }
 
-// タイトルに戻る関数
-function backToTitle() {
-    window.location.href = 'index.html';
+// ===== ここから統合UI用の追加コード =====
+// 設定の保存・復元
+function getPracticeSettings() {
+    const bpm = parseInt(document.getElementById('bpm-setting').value) || 120;
+    const noteType = document.getElementById('note-type').value || '16th';
+    const renCount = parseInt(document.getElementById('ren-count').value) || 4;
+    const restCount = parseInt(document.getElementById('rest-count').value) || 1;
+    const offset = parseInt(document.getElementById('offset-setting').value) || 0;
+
+    // デバッグ用：HTMLのinput要素から取得した値を確認
+    const offsetElement = document.getElementById('offset-setting');
+    console.log('getPracticeSettings - offset input element:', offsetElement);
+    console.log('getPracticeSettings - offset input value:', offsetElement?.value, 'Type:', typeof offsetElement?.value);
+    console.log('getPracticeSettings - parsed offset:', offset, 'Type:', typeof offset);
+
+    return { bpm, noteType, renCount, restCount, offset };
 }
+function saveSettings() {
+    const settings = getPracticeSettings();
+    localStorage.setItem('taikoPracticeSettings', JSON.stringify(settings));
+}
+function loadSettings() {
+    // デバッグ用：localStorageをクリアしてデフォルト値から開始
+    localStorage.removeItem('taikoPracticeSettings');
+    console.log('loadSettings - localStorage cleared, using default values');
 
-// ページ読み込み時の初期化
-document.addEventListener('DOMContentLoaded', function () {
-    // 太鼓の達人練習画面が読み込まれました
+    // 以下はlocalStorageから復元する処理だが、クリアしたので実行されない
+    const saved = localStorage.getItem('taikoPracticeSettings');
+    if (saved) {
+        const settings = JSON.parse(saved);
 
-    // 練習ゲームを開始
-    const game = new TaikoPractice();
+        // デバッグ用：localStorageから読み込んだ値を確認
+        console.log('loadSettings - saved settings:', settings);
 
-    // グローバル変数として保存（デバッグ用）
-    window.taikoGame = game;
+        const bpmElement = document.getElementById('bpm-setting');
+        const noteTypeElement = document.getElementById('note-type');
+        const renCountElement = document.getElementById('ren-count');
+        const restCountElement = document.getElementById('rest-count');
+        const offsetElement = document.getElementById('offset-setting');
 
-    // コンソールからBPM変更をテストできるように（削除）
+        if (bpmElement) {
+            bpmElement.value = settings.bpm || 120;
+            bpmElement.setAttribute('value', settings.bpm || 120);
+        }
+        if (noteTypeElement) {
+            noteTypeElement.value = settings.noteType || '16th';
+            noteTypeElement.setAttribute('value', settings.noteType || '16th');
+        }
+        if (renCountElement) {
+            renCountElement.value = settings.renCount || 4;
+            renCountElement.setAttribute('value', settings.renCount || 4);
+        }
+        if (restCountElement) {
+            restCountElement.value = settings.restCount || 1;
+            restCountElement.setAttribute('value', settings.restCount || 1);
+        }
+        if (offsetElement) {
+            offsetElement.value = settings.offset || 0;
+            offsetElement.setAttribute('value', settings.offset || 0);
+            console.log('loadSettings - offset element after setting:', offsetElement.value, 'attribute:', offsetElement.getAttribute('value'));
+        }
+    }
+}
+// UI切り替え
+function showTitleScreen() {
+    document.querySelector('.title-screen').style.display = '';
+    document.querySelector('.practice-screen').style.display = 'none';
+}
+function showPracticeScreen() {
+    document.querySelector('.title-screen').style.display = 'none';
+    document.querySelector('.practice-screen').style.display = '';
+}
+// 練習開始
+function startPracticeUnified() {
+    saveSettings();
+    const settings = getPracticeSettings();
+
+    // デバッグ用：設定値を確認
+    console.log('Practice settings:', settings);
+    console.log('Offset value:', settings.offset, 'Type:', typeof settings.offset);
+
+    // 既存のゲーム状態を完全リセット
+    if (window.taikoGame) {
+        window.taikoGame.isPlaying = false;
+        // 既存のノーツをすべて削除
+        const noteContainer = document.getElementById('noteContainer');
+        if (noteContainer) {
+            noteContainer.innerHTML = '';
+        }
+        // 判定表示をクリア
+        const judgments = document.querySelectorAll('.judgment');
+        judgments.forEach(el => el.remove());
+    }
+
+    // スコア・コンボをリセット
+    const scoreElement = document.getElementById('score');
+    const comboElement = document.getElementById('combo');
+    if (scoreElement) scoreElement.textContent = '0';
+    if (comboElement) comboElement.textContent = '0';
+
+    // TaikoPracticeインスタンスを新規生成し直す
+    window.taikoGame = new TaikoPractice(settings);
+    showPracticeScreen();
+}
+// 練習終了（タイトルに戻る）
+function backToTitleUnified() {
+    if (window.taikoGame) window.taikoGame.isPlaying = false;
+    showTitleScreen();
+}
+// 設定変更時に自動保存
+['bpm-setting', 'note-type', 'ren-count', 'rest-count', 'offset-setting'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', saveSettings);
 });
+// ボタンイベント
+window.addEventListener('DOMContentLoaded', function () {
+    loadSettings();
+    showTitleScreen();
+    document.getElementById('startPracticeBtn').onclick = startPracticeUnified;
+    // 練習画面の「タイトルに戻る」ボタンも統合用に上書き
+    const backBtn = document.querySelector('.back-button');
+    if (backBtn) backBtn.onclick = backToTitleUnified;
+});
+// ===== ここまで統合UI用の追加コード =====

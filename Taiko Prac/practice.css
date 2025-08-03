@@ -13,6 +13,151 @@ body {
     overflow: hidden;
 }
 
+/* タイトル画面用スタイル */
+.title-screen {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #DC143C 0%, #FFD700 100%);
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+}
+
+.title-container {
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 20px;
+    padding: 2.5rem 2.5rem 2rem 2.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 340px;
+    max-width: 95vw;
+}
+
+.main-title {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #FFD700;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.1em;
+    text-shadow: 2px 2px 8px #B22222;
+}
+
+.sub-title {
+    font-size: 1.2rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.practice-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    width: 100%;
+}
+
+.setting-group {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    font-size: 1rem;
+    color: #fff;
+}
+
+.setting-input {
+    padding: 0.3rem 0.7rem;
+    border-radius: 8px;
+    border: 1px solid #FFD700;
+    font-size: 1rem;
+    background: #222;
+    color: #FFD700;
+    font-weight: 700;
+    outline: none;
+    transition: border 0.2s;
+}
+
+.setting-input:focus {
+    border: 2px solid #DC143C;
+}
+
+.start-button {
+    background: linear-gradient(45deg, #FFD700, #DC143C);
+    color: #fff;
+    border: none;
+    padding: 1rem 2.5rem;
+    font-size: 1.2rem;
+    font-weight: 900;
+    border-radius: 30px;
+    cursor: pointer;
+    margin-top: 1.2rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 4px 16px rgba(220, 20, 60, 0.3);
+    position: relative;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.start-button:hover {
+    background: linear-gradient(45deg, #FFEC8B, #FF1493);
+    transform: translateY(-2px) scale(1.04);
+}
+
+.button-text {
+    position: relative;
+    z-index: 2;
+}
+
+.button-decoration {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 8px;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #FFD700 0%, #DC143C 100%);
+    opacity: 0.3;
+    z-index: 1;
+}
+
+.footer {
+    margin-top: 0.5rem;
+    color: #FFD700;
+    font-size: 0.95rem;
+    text-align: center;
+    text-shadow: 1px 1px 4px #B22222;
+}
+
+@media (max-width: 600px) {
+    .title-container {
+        padding: 1.2rem 0.5rem 1rem 0.5rem;
+        min-width: 0;
+    }
+
+    .main-title {
+        font-size: 1.3rem;
+    }
+
+    .sub-title {
+        font-size: 0.9rem;
+    }
+
+    .practice-settings {
+        gap: 0.5rem;
+    }
+
+    .start-button {
+        font-size: 1rem;
+        padding: 0.7rem 1.2rem;
+    }
+}
+
 .practice-screen {
     width: 100vw;
     height: 100vh;

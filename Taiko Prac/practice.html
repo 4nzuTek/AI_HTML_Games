@@ -11,6 +11,46 @@
 </head>
 
 <body>
+    <div class="title-screen">
+        <div class="title-container">
+            <h1 class="main-title">太鼓の達人</h1>
+            <h2 class="sub-title">練習ツール</h2>
+            <div class="practice-settings">
+                <div class="setting-group">
+                    <label for="bpm-setting">BPM:</label>
+                    <input type="number" id="bpm-setting" value="120" min="60" max="300" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="note-type">音符の種類:</label>
+                    <select id="note-type" class="setting-input">
+                        <option value="16th">16分音符</option>
+                        <option value="8th">8分音符</option>
+                        <option value="4th">4分音符</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="ren-count">連打数（○○連）:</label>
+                    <input type="number" id="ren-count" value="4" min="1" max="32" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="rest-count">休み数（休み）:</label>
+                    <input type="number" id="rest-count" value="1" min="0" max="16" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="offset-setting">オフセット（ms）:</label>
+                    <input type="number" id="offset-setting" value="0" min="-1000" max="1000" step="1"
+                        class="setting-input">
+                </div>
+            </div>
+            <button class="start-button" id="startPracticeBtn">
+                <span class="button-text">練習開始</span>
+                <div class="button-decoration"></div>
+            </button>
+            <div class="footer">
+                <p>ブラウザで楽しむ太鼓の達人練習ツール</p>
+            </div>
+        </div>
+    </div>
     <div class="practice-screen">
         <!-- 上部の情報エリア -->
         <div class="info-area">
