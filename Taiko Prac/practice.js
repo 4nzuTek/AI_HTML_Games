@@ -47,8 +47,7 @@ class TaikoPractice {
             this.frameCount = 0;
             this.lastFpsTime = currentTime;
 
-            // FPSをコンソールに表示
-            console.log(`現在のFPS: ${this.currentFps}`);
+            // FPSをコンソールに表示（削除）
 
             // 画面上のFPS表示を更新
             if (this.fpsElement) {
@@ -61,7 +60,7 @@ class TaikoPractice {
         try {
             // Web Audio APIの初期化
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('音声システムを初期化しました');
+            // 音声システムを初期化しました
         } catch (error) {
             console.error('音声システムの初期化に失敗:', error);
         }
@@ -135,7 +134,7 @@ class TaikoPractice {
     setupEventListeners() {
         // キーボードイベント
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' || e.code === 'Enter') {
+            if (e.code === 'KeyF' || e.code === 'KeyJ') {
                 e.preventDefault();
 
                 // 音声コンテキストを開始（ブラウザの制限により必要）
@@ -143,7 +142,22 @@ class TaikoPractice {
                     this.audioContext.resume();
                 }
 
-                this.handleTaikoClick();
+                // 判定円の色を一瞬変える（ドン用：赤）
+                this.flashJudgmentCircle('#FF4444');
+
+                this.handleTaikoClick('don');
+            } else if (e.code === 'KeyD' || e.code === 'KeyK') {
+                e.preventDefault();
+
+                // 音声コンテキストを開始（ブラウザの制限により必要）
+                if (this.audioContext && this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                // 判定円の色を一瞬変える（カツ用：青）
+                this.flashJudgmentCircle('#4444FF');
+
+                this.handleTaikoClick('ka');
             }
         });
 
@@ -304,17 +318,9 @@ class TaikoPractice {
             const noteCenterX = note.centerX;
 
             if (noteCenterX < this.judgmentLineX - 300) { // 判定ラインの300px手前
-                console.log(`=== ノーツ削除情報 ===`);
-                console.log(`ノーツタイプ: ${note.type}`);
-                console.log(`ノーツ中心座標: ${note.centerX}`);
-                console.log(`表示位置 left: ${note.element.style.left}`);
-                console.log(`中心位置: ${noteCenterX}px`);
-                console.log(`判定ライン位置: ${this.judgmentLineX}px`);
-                console.log(`判定ラインとの差: ${noteCenterX - this.judgmentLineX}px`);
-                console.log(`削除理由: 判定ラインを過ぎた`);
-                console.log(`ヒット状態: ${note.hit ? 'ヒット済み' : '未ヒット'}`);
-                console.log(`====================`);
+                // ノーツ削除情報（削除）
 
+                // ノーツが左端まで行って消える時に不可を表示
                 this.missNote();
                 note.element.remove();
                 return false;
@@ -323,21 +329,26 @@ class TaikoPractice {
         });
     }
 
-    handleTaikoClick() {
+    handleTaikoClick(type) {
         // 判定
-        this.checkJudgment();
+        this.checkJudgment(type);
     }
 
-    checkJudgment() {
+    checkJudgment(type) {
         let hitNote = null;
         let closestDistance = Infinity;
+
+        // 100msに対応する判定範囲を計算
+        const judgmentRangeMs = 100;
+        const judgmentRangePixels = this.convertMsToDistance(judgmentRangeMs);
 
         for (let note of this.notes) {
             // ノーツの中心位置を直接使用
             const noteCenterX = note.centerX;
             const distance = Math.abs(noteCenterX - this.judgmentLineX);
 
-            if (distance <= this.judgmentRange && !note.hit) {
+            // ノーツのタイプと入力タイプが一致し、判定範囲内で、まだヒットしていない場合
+            if (note.type === type && distance <= judgmentRangePixels && !note.hit) {
                 if (distance < closestDistance) {
                     hitNote = note;
                     closestDistance = distance;
@@ -346,13 +357,12 @@ class TaikoPractice {
         }
 
         if (hitNote) {
-            this.hitNote(hitNote);
-        } else {
-            this.showJudgment('MISS');
+            this.hitNote(hitNote, type);
         }
+        // missの表示は削除（removePassedNotesで表示する）
     }
 
-    hitNote(note) {
+    hitNote(note, type) {
         note.hit = true;
         note.element.classList.add('hit');
 
@@ -412,18 +422,17 @@ class TaikoPractice {
         const noteCenterX = note.centerX;
         const distance = noteCenterX - this.judgmentLineX; // 前後のずれを計算
 
-        if (Math.abs(distance) <= this.judgmentPerfect) return 'PERFECT';
-        if (Math.abs(distance) <= this.judgmentGreat) return 'GREAT';
-        if (Math.abs(distance) <= this.judgmentGood) return 'GOOD';
+        // 距離をミリ秒に変換
+        const offsetMs = this.convertDistanceToMs(distance);
+
+        // 新しい判定基準（33ms, 66ms, 100ms）
+        if (Math.abs(offsetMs) <= 33) return '良';
+        if (Math.abs(offsetMs) <= 66) return '可';
+        if (Math.abs(offsetMs) <= 100) return '不可';
         return 'BAD';
     }
 
-    getJudgmentText(note) {
-        // ノーツの中心位置を直接使用
-        const noteCenterX = note.centerX;
-        const distance = noteCenterX - this.judgmentLineX; // 前後のずれを計算
-
-        // 距離をミリ秒に変換
+    convertDistanceToMs(distance) {
         // 4拍で判定ラインに到達するので、1拍あたりの移動距離を計算
         const beatsToReach = 4;
         const secondsPerBeat = 60 / this.bpm;
@@ -432,21 +441,80 @@ class TaikoPractice {
         const pixelsPerSecond = totalDistance / totalTime;
         const millisecondsPerPixel = 1000 / pixelsPerSecond;
 
-        const offsetMs = Math.round(distance * millisecondsPerPixel);
+        return Math.round(distance * millisecondsPerPixel);
+    }
 
+    convertMsToDistance(milliseconds) {
+        // 4拍で判定ラインに到達するので、1拍あたりの移動距離を計算
+        const beatsToReach = 4;
+        const secondsPerBeat = 60 / this.bpm;
+        const totalTime = beatsToReach * secondsPerBeat;
+        const totalDistance = 1920 - this.judgmentLineX; // 生成位置から判定ラインまでの距離
+        const pixelsPerSecond = totalDistance / totalTime;
+        const pixelsPerMillisecond = pixelsPerSecond / 1000;
+
+        return Math.round(milliseconds * pixelsPerMillisecond);
+    }
+
+    getJudgmentText(note) {
+        // ノーツの中心位置を直接使用
+        const noteCenterX = note.centerX;
+        const distance = noteCenterX - this.judgmentLineX; // 前後のずれを計算
+
+        // 距離をミリ秒に変換
+        const offsetMs = this.convertDistanceToMs(distance);
+        const judgment = this.getJudgment(note);
+
+        // 判定とタイミングを組み合わせて表示
         if (offsetMs > 0) {
-            return `+${offsetMs}ms`; // 判定ラインより後（右側）
+            return `${judgment}\n+${offsetMs}ms`; // 判定ラインより後（右側）
         } else if (offsetMs < 0) {
-            return `${offsetMs}ms`; // 判定ラインより前（左側）
+            return `${judgment}\n${offsetMs}ms`; // 判定ラインより前（左側）
         } else {
-            return '0ms'; // 完全に一致
+            return `${judgment}\n0ms`; // 完全に一致
         }
     }
 
     showJudgment(judgment) {
+        // 既存の判定チップを削除
+        const existingJudgments = document.querySelectorAll('.judgment');
+        existingJudgments.forEach(element => element.remove());
+
         const judgmentElement = document.createElement('div');
         judgmentElement.className = 'judgment';
-        judgmentElement.textContent = judgment;
+
+        // 判定文字列から判定部分を抽出（改行前の部分）
+        const judgmentType = judgment.split('\n')[0];
+
+        // 判定に応じて色と枠の色を設定
+        let colorClass = '';
+        let borderColor = '#FFD700'; // デフォルト（黄色）
+
+        if (judgmentType === '良') {
+            colorClass = 'judgment-good';
+            borderColor = '#FFD700'; // 黄色
+        } else if (judgmentType === '可') {
+            colorClass = 'judgment-acceptable';
+            borderColor = '#FFFFFF'; // 白
+        } else if (judgmentType === '不可') {
+            colorClass = 'judgment-bad';
+            borderColor = '#4169E1'; // 青
+        }
+
+        if (colorClass) {
+            judgmentElement.classList.add(colorClass);
+        }
+
+        // 枠の色を動的に設定
+        judgmentElement.style.borderColor = borderColor;
+
+        // 改行がある場合は分割して表示、ない場合はそのまま表示
+        if (judgment.includes('\n')) {
+            const lines = judgment.split('\n');
+            judgmentElement.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
+        } else {
+            judgmentElement.textContent = judgment;
+        }
 
         // 判定ラインの上に表示
         const judgmentLine = document.querySelector('.judgment-line');
@@ -463,9 +531,9 @@ class TaikoPractice {
 
     addScore(judgment) {
         const scoreMap = {
-            'PERFECT': 1000,
-            'GREAT': 500,
-            'GOOD': 100,
+            '良': 1000,
+            '可': 500,
+            '不可': 100,
             'BAD': 50
         };
 
@@ -476,7 +544,7 @@ class TaikoPractice {
     missNote() {
         this.combo = 0;
         this.updateCombo();
-        this.showJudgment('MISS');
+        this.showJudgment('不可');
     }
 
     updateScore() {
@@ -501,7 +569,7 @@ class TaikoPractice {
 
                 // judgment-circleの中心位置を計算
                 this.judgmentLineX = circleRect.left - gameRect.left + circleRect.width / 2;
-                console.log(`判定ラインの位置: ${this.judgmentLineX}px (動的取得)`);
+                // 判定ラインの位置を動的取得
 
                 // 判定ラインの位置が変更されたらスピードを再計算
                 this.calculateNoteSpeed();
@@ -513,7 +581,7 @@ class TaikoPractice {
         } else {
             // 要素が見つからない場合は固定値を使用
             this.judgmentLineX = 50;
-            console.log('判定ライン要素が見つかりません。固定値を使用: 50px');
+            // 判定ライン要素が見つかりません。固定値を使用: 50px
             this.calculateNoteSpeed();
         }
     }
@@ -522,7 +590,7 @@ class TaikoPractice {
         this.bpm = newBpm;
         this.noteInterval = (60 / this.bpm) * 1000; // 音符の間隔（ミリ秒）を更新
         this.calculateNoteSpeed(); // スピードを再計算
-        console.log(`BPMを${newBpm}に変更しました`);
+        // BPMを変更しました
     }
 
     calculateNoteSpeed() {
@@ -538,8 +606,31 @@ class TaikoPractice {
         // 必要なスピード（ピクセル/秒）
         this.noteSpeed = distance / totalTime;
 
-        console.log(`BPM: ${this.bpm}, 4拍時間: ${totalTime}秒, 距離: ${distance}px, スピード: ${this.noteSpeed}px/秒`);
-        console.log(`ノーツ生成位置: ${noteStartX}px, ジャッジライン位置: ${this.judgmentLineX}px`);
+        // BPMとスピード計算情報（削除）
+    }
+
+    flashJudgmentCircle(color) {
+        const judgmentCircle = document.querySelector('.judgment-circle');
+        if (judgmentCircle) {
+            // 既存のタイマーをクリア
+            if (this.flashTimer) {
+                clearTimeout(this.flashTimer);
+            }
+
+            // 元の色を保存（初回のみ）
+            if (!this.originalBackground) {
+                this.originalBackground = judgmentCircle.style.background || 'radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, rgba(255, 215, 0, 0.2) 70%, transparent 100%)';
+            }
+
+            // 色を変更
+            judgmentCircle.style.background = color;
+            judgmentCircle.style.transition = 'background 0.3s ease-out';
+
+            // 少し待ってからフェードで戻す
+            this.flashTimer = setTimeout(() => {
+                judgmentCircle.style.background = this.originalBackground;
+            }, 100); // 100ms後にフェード開始
+        }
     }
 }
 
@@ -550,7 +641,7 @@ function backToTitle() {
 
 // ページ読み込み時の初期化
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('太鼓の達人練習画面が読み込まれました');
+    // 太鼓の達人練習画面が読み込まれました
 
     // 練習ゲームを開始
     const game = new TaikoPractice();
@@ -558,6 +649,5 @@ document.addEventListener('DOMContentLoaded', function () {
     // グローバル変数として保存（デバッグ用）
     window.taikoGame = game;
 
-    // コンソールからBPM変更をテストできるように
-    console.log('BPM変更テスト: window.taikoGame.setBPM(120) などで実行してください');
+    // コンソールからBPM変更をテストできるように（削除）
 });
