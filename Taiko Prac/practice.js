@@ -45,7 +45,8 @@ class TaikoPractice {
         this.totalPauseTime = 0; // 累積一時停止時間
 
         // 判定ライン設定（一か所で管理）
-        this.judgmentLineX = 50; // 判定ラインの円の中心X座標（judgment-circleの中心）
+        this.judgmentLineX = 50; // 速度計算用：判定ラインの左端位置
+        this.judgmentCenterX = 50; // 判定計算用：円の中心位置
         this.judgmentRange = 60; // 判定範囲
         this.judgmentPerfect = 5; // PERFECT判定範囲（より厳密に）
         this.judgmentGreat = 15; // GREAT判定範囲
@@ -56,6 +57,7 @@ class TaikoPractice {
         this.audioOffset = offset; // オフセットを保存
         this.beatsToReach = BEATS_TO_REACH; // ノーツ到達拍数を保存
         this.metronomeVolume = 0.5; // メトロノームの音量（0.0-1.0）
+        this.currentAudioSource = null; // 現在再生中の音声ソース
         this.initAudio();
 
         this.renCount = renCount;
@@ -130,6 +132,7 @@ class TaikoPractice {
             this.audioContext = globalAudioContext;
             this.donAudioBuffer = globalDonAudioBuffer;
             this.katsuAudioBuffer = globalKatsuAudioBuffer;
+            this.metronomeAudioBuffer = globalMetronomeAudioBuffer;
 
             if (!this.audioContext || !this.donAudioBuffer || !this.katsuAudioBuffer) {
                 console.warn('グローバル音声ファイルがまだロードされていません');
@@ -140,31 +143,27 @@ class TaikoPractice {
     }
 
     playBeatSound() {
-        if (!this.audioContext) return;
+        if (!this.audioContext || !this.metronomeAudioBuffer) return;
 
         try {
-            // オシレーターを作成（高音の「ぴ」音）
-            const oscillator = this.audioContext.createOscillator();
+            // AudioBufferSourceNodeを作成
+            const source = this.audioContext.createBufferSource();
             const gainNode = this.audioContext.createGain();
 
-            // 音色設定
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime); // 800Hz
+            // 音声データを設定
+            source.buffer = this.metronomeAudioBuffer;
 
-            // 音量エンベロープ設定（インスタンス変数を使用）
-            gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(this.metronomeVolume, this.audioContext.currentTime + 0.01);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
+            // 音量設定
+            gainNode.gain.setValueAtTime(this.metronomeVolume, this.audioContext.currentTime);
 
             // 接続
-            oscillator.connect(gainNode);
+            source.connect(gainNode);
             gainNode.connect(this.audioContext.destination);
 
-            // 音を再生
-            oscillator.start(this.audioContext.currentTime);
-            oscillator.stop(this.audioContext.currentTime + 0.1);
+            // メトロノーム音を再生
+            source.start(0);
         } catch (error) {
-            console.error('ビート音の再生に失敗:', error);
+            console.error('メトロノーム音の再生に失敗:', error);
         }
     }
 
@@ -181,6 +180,15 @@ class TaikoPractice {
                 return;
             }
 
+            // 既存の音声ソースを停止（重複再生防止）
+            if (this.currentAudioSource) {
+                try {
+                    this.currentAudioSource.stop();
+                } catch (e) {
+                    // 既に停止している場合は無視
+                }
+            }
+
             // AudioBufferSourceNodeを作成
             const source = this.audioContext.createBufferSource();
             const gainNode = this.audioContext.createGain();
@@ -195,8 +203,16 @@ class TaikoPractice {
             source.connect(gainNode);
             gainNode.connect(this.audioContext.destination);
 
+            // 現在の音声ソースを保存
+            this.currentAudioSource = source;
+
             // 太鼓の音はオフセットなしで即座に再生
             source.start(0);
+
+            // 音声再生完了後にクリーンアップ
+            source.onended = () => {
+                this.currentAudioSource = null;
+            };
         } catch (error) {
             console.error('太鼓の音の再生に失敗:', error);
         }
@@ -205,6 +221,7 @@ class TaikoPractice {
     init() {
         this.scoreElement = document.getElementById('score');
         this.comboElement = document.getElementById('combo');
+        this.comboDisplayElement = document.getElementById('comboDisplay');
         this.noteContainer = document.getElementById('noteContainer');
 
         // FPS表示要素を作成
@@ -501,7 +518,7 @@ class TaikoPractice {
         for (let note of this.notes) {
             // ノーツの中心位置を直接使用
             const noteCenterX = note.centerX;
-            const distance = Math.abs(noteCenterX - this.judgmentLineX);
+            const distance = Math.abs(noteCenterX - this.judgmentCenterX); // 円の中心基準で判定
 
             // ノーツのタイプと入力タイプが一致し、判定範囲内で、まだヒットしていない場合
             if (note.type === type && distance <= judgmentRangePixels && !note.hit) {
@@ -530,8 +547,14 @@ class TaikoPractice {
         const judgment = this.getJudgment(note);
         this.addScore(judgment);
 
-        // コンボ加算
-        this.combo++;
+        // 判定に応じてコンボを処理
+        if (judgment === '不可') {
+            // 不可の場合はコンボをリセット
+            this.combo = 0;
+        } else {
+            // 良・可の場合はコンボを加算
+            this.combo++;
+        }
         this.updateCombo();
 
         // ヒットエフェクトを開始
@@ -576,7 +599,7 @@ class TaikoPractice {
     getJudgment(note) {
         // ノーツの中心位置を直接使用
         const noteCenterX = note.centerX;
-        const distance = noteCenterX - this.judgmentLineX; // 前後のずれを計算
+        const distance = noteCenterX - this.judgmentCenterX; // 前後のずれを計算（円の中心基準）
 
         // 距離をミリ秒に変換
         const offsetMs = this.convertDistanceToMs(distance);
@@ -613,7 +636,7 @@ class TaikoPractice {
     getJudgmentText(note) {
         // ノーツの中心位置を直接使用
         const noteCenterX = note.centerX;
-        const distance = noteCenterX - this.judgmentLineX; // 前後のずれを計算
+        const distance = noteCenterX - this.judgmentCenterX; // 前後のずれを計算（円の中心基準）
 
         // 距離をミリ秒に変換
         const offsetMs = this.convertDistanceToMs(distance);
@@ -704,6 +727,11 @@ class TaikoPractice {
     updateCombo() {
         this.comboElement.textContent = this.combo;
 
+        // 新しいコンボ表示要素も更新
+        if (this.comboDisplayElement) {
+            this.comboDisplayElement.textContent = this.combo;
+        }
+
         // 50、100、200、300、400以降の100の倍数のコンボの時だけ表示
         if ((this.combo === 50) || (this.combo >= 100 && this.combo % 100 === 0)) {
             this.showComboMessage(`${this.combo}コンボ！`);
@@ -723,19 +751,27 @@ class TaikoPractice {
                 const gameRect = gameArea.getBoundingClientRect();
 
                 // judgment-circleの中心位置を計算
-                this.judgmentLineX = circleRect.left - gameRect.left + circleRect.width / 2;
-                // 判定ラインの位置を動的取得
+                const circleCenterX = circleRect.left - gameRect.left + circleRect.width / 2;
+
+                // 速度計算用：判定ラインの左端位置（ノーツが到達する位置）
+                const lineWidth = lineRect.width;
+                this.judgmentLineX = circleCenterX - (lineWidth / 1.5);
+
+                // 判定計算用：円の中心位置（視覚的な判定基準）
+                this.judgmentCenterX = circleCenterX;
 
                 // 判定ラインの位置が変更されたらスピードを再計算
                 this.calculateNoteSpeed();
             } catch (error) {
                 console.error('判定ラインの位置取得でエラー:', error);
                 this.judgmentLineX = 50; // フォールバック値
+                this.judgmentCenterX = 50; // フォールバック値
                 this.calculateNoteSpeed();
             }
         } else {
             // 要素が見つからない場合は固定値を使用
             this.judgmentLineX = 50;
+            this.judgmentCenterX = 50;
             // 判定ライン要素が見つかりません。固定値を使用: 50px
             this.calculateNoteSpeed();
         }
@@ -830,6 +866,52 @@ class TaikoPractice {
             }
         }
     }
+
+    // ゲームインスタンスを完全にクリーンアップするメソッド
+    cleanup() {
+        // ゲームループを停止
+        this.isPlaying = false;
+
+        // イベントリスナーを削除
+        if (this.keydownHandler) {
+            document.removeEventListener('keydown', this.keydownHandler);
+            this.keydownHandler = null;
+        }
+        if (this.resizeHandler) {
+            window.removeEventListener('resize', this.resizeHandler);
+            this.resizeHandler = null;
+        }
+        if (this.visibilityHandler) {
+            document.removeEventListener('visibilitychange', this.visibilityHandler);
+            this.visibilityHandler = null;
+        }
+
+        // FPS表示要素を削除
+        if (this.fpsElement) {
+            this.fpsElement.remove();
+            this.fpsElement = null;
+        }
+
+        // 既存のノーツをすべて削除
+        if (this.notes) {
+            this.notes.forEach(note => {
+                if (note.element && note.element.parentNode) {
+                    note.element.remove();
+                }
+            });
+            this.notes = [];
+        }
+
+        // 判定表示をクリア
+        const judgments = document.querySelectorAll('.judgment');
+        judgments.forEach(el => el.remove());
+
+        // コンボメッセージをクリア
+        const comboMessages = document.querySelectorAll('.combo-message');
+        comboMessages.forEach(el => el.remove());
+
+        console.log('ゲームインスタンスのクリーンアップが完了しました');
+    }
 }
 
 // ===== ここから統合UI用の追加コード =====
@@ -837,6 +919,7 @@ class TaikoPractice {
 let globalAudioContext = null;
 let globalDonAudioBuffer = null;
 let globalKatsuAudioBuffer = null;
+let globalMetronomeAudioBuffer = null;
 
 // 音声ファイルをグローバルにロード
 async function loadGlobalAudioFiles() {
@@ -844,16 +927,19 @@ async function loadGlobalAudioFiles() {
         // Web Audio APIの初期化
         globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-        // DonとKatsuの音声ファイルを読み込み
+        // Don、Katsu、メトロノームの音声ファイルを読み込み
         const donResponse = await fetch('Assets/SFX/Don.wav');
         const katsuResponse = await fetch('Assets/SFX/Katsu.wav');
+        const metronomeResponse = await fetch('Assets/SFX/metronome.wav');
 
         const donArrayBuffer = await donResponse.arrayBuffer();
         const katsuArrayBuffer = await katsuResponse.arrayBuffer();
+        const metronomeArrayBuffer = await metronomeResponse.arrayBuffer();
 
         // AudioBufferに変換
         globalDonAudioBuffer = await globalAudioContext.decodeAudioData(donArrayBuffer);
         globalKatsuAudioBuffer = await globalAudioContext.decodeAudioData(katsuArrayBuffer);
+        globalMetronomeAudioBuffer = await globalAudioContext.decodeAudioData(metronomeArrayBuffer);
 
         console.log('グローバル音声ファイルの読み込みが完了しました');
         return true;
@@ -950,25 +1036,16 @@ function startPracticeUnified() {
 
     // 既存のゲーム状態を完全リセット
     if (window.taikoGame) {
-        window.taikoGame.isPlaying = false;
-
-
-
-        // 既存のノーツをすべて削除
-        const noteContainer = document.getElementById('noteContainer');
-        if (noteContainer) {
-            noteContainer.innerHTML = '';
-        }
-        // 判定表示をクリア
-        const judgments = document.querySelectorAll('.judgment');
-        judgments.forEach(el => el.remove());
+        window.taikoGame.cleanup();
     }
 
     // スコア・コンボをリセット
     const scoreElement = document.getElementById('score');
     const comboElement = document.getElementById('combo');
+    const comboDisplayElement = document.getElementById('comboDisplay');
     if (scoreElement) scoreElement.textContent = '0';
     if (comboElement) comboElement.textContent = '0';
+    if (comboDisplayElement) comboDisplayElement.textContent = '0';
 
     // TaikoPracticeインスタンスを新規生成し直す
     window.taikoGame = new TaikoPractice(settings);
@@ -976,7 +1053,9 @@ function startPracticeUnified() {
 }
 // 練習終了（タイトルに戻る）
 function backToTitleUnified() {
-    if (window.taikoGame) window.taikoGame.isPlaying = false;
+    if (window.taikoGame) {
+        window.taikoGame.cleanup();
+    }
     showTitleScreen();
 }
 // 設定変更時に自動保存
@@ -1009,4 +1088,24 @@ window.addEventListener('DOMContentLoaded', async function () {
     const backBtn = document.querySelector('.back-button');
     if (backBtn) backBtn.onclick = backToTitleUnified;
 });
+// メトロノーム音をダウンロードする関数
+function downloadMetronome() {
+    try {
+        // 実際のWAVファイルをダウンロード
+        const a = document.createElement('a');
+        a.href = 'Assets/SFX/metronome.wav';
+        a.download = 'metronome.wav';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        console.log('メトロノーム音をダウンロードしました');
+    } catch (error) {
+        console.error('メトロノーム音のダウンロードに失敗:', error);
+        alert('メトロノーム音のダウンロードに失敗しました');
+    }
+}
+
+
+
 // ===== ここまで統合UI用の追加コード =====

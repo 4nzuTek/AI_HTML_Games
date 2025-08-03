@@ -72,6 +72,14 @@
 
         <!-- メインのゲームエリア -->
         <div class="game-area">
+            <!-- コンボ表示用の茶色いカバー -->
+            <div class="combo-cover">
+                <div class="combo-display">
+                    <div class="combo-number" id="comboDisplay">0</div>
+                    <div class="combo-label">コンボ</div>
+                </div>
+            </div>
+
             <!-- 音符が右から左に流れるエリア -->
             <div class="note-lane">
                 <div class="note-container" id="noteContainer">
@@ -94,6 +102,7 @@
         <!-- コントロールエリア -->
         <div class="control-area">
             <button class="back-button" onclick="backToTitle()">タイトルに戻る</button>
+            <button class="download-button" onclick="downloadMetronome()">メトロノーム音をダウンロード</button>
         </div>
     </div>
 

@@ -236,6 +236,48 @@ body {
     align-items: center;
 }
 
+/* コンボ表示用の茶色いカバー */
+.combo-cover {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 250px;
+    height: 200px;
+    background: linear-gradient(90deg, #8B4513 0%, #A0522D 50%, #8B4513 100%);
+    border-radius: 10px 0 0 10px;
+    border: 3px solid #654321;
+    border-right: none;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5), 5px 0 15px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.combo-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #FFD700;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.combo-number {
+    font-size: 3rem;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.combo-label {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #FFF;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 /* 音符レーン */
 .note-lane {
     position: relative;
@@ -393,6 +435,31 @@ body {
     box-shadow: 0 2px 4px rgba(220, 20, 60, 0.4);
 }
 
+.download-button {
+    background: linear-gradient(45deg, #4169E1, #1E90FF);
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(65, 105, 225, 0.4);
+    margin-left: 1rem;
+}
+
+.download-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(65, 105, 225, 0.6);
+    background: linear-gradient(45deg, #1E90FF, #4169E1);
+}
+
+.download-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(65, 105, 225, 0.4);
+}
+
 /* 判定表示 */
 .judgment {
     position: absolute;
@@ -505,7 +572,18 @@ body {
         font-size: 1rem;
     }
 
+    .combo-cover {
+        width: 200px;
+        height: 150px;
+    }
 
+    .combo-number {
+        font-size: 2rem;
+    }
+
+    .combo-label {
+        font-size: 1rem;
+    }
 
     .control-area {
         padding: 0.8rem 1rem;
@@ -514,5 +592,11 @@ body {
     .back-button {
         padding: 0.6rem 1.2rem;
         font-size: 0.9rem;
+    }
+
+    .download-button {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+        margin-left: 0.5rem;
     }
 }
