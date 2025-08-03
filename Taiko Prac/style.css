@@ -54,6 +54,56 @@ body {
     letter-spacing: 0.05em;
 }
 
+/* 練習設定のスタイル */
+.practice-settings {
+    background: rgba(139, 69, 19, 0.1);
+    padding: 1.5rem;
+    border-radius: 15px;
+    margin-bottom: 2rem;
+    border: 2px solid rgba(139, 69, 19, 0.3);
+}
+
+.setting-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
+}
+
+.setting-group:last-child {
+    margin-bottom: 0;
+}
+
+.setting-group label {
+    font-weight: 700;
+    color: #8B4513;
+    font-size: 1rem;
+    min-width: 120px;
+    text-align: left;
+}
+
+.setting-input {
+    padding: 0.5rem 1rem;
+    border: 2px solid #CD853F;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: white;
+    color: #8B4513;
+    min-width: 150px;
+    transition: all 0.3s ease;
+}
+
+.setting-input:focus {
+    outline: none;
+    border-color: #DC143C;
+    box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.2);
+}
+
+.setting-input:hover {
+    border-color: #A0522D;
+}
+
 
 
 .start-button {

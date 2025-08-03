@@ -4,17 +4,29 @@ class TaikoPractice {
     constructor() {
         // 定数設定
         const AUDIO_OFFSET = 450; // 音の再生オフセット（ミリ秒、マイナスで早く再生）
+        const BEATS_TO_REACH = 4; // ノーツが判定ラインに到達するまでの拍数
+
+        // URLパラメータから設定を読み込み
+        const urlParams = new URLSearchParams(window.location.search);
+        const bpm = parseInt(urlParams.get('bpm')) || 120;
+        const noteType = urlParams.get('noteType') || '16th';
+        const patternType = urlParams.get('patternType') || '3-1';
 
         this.score = 0;
         this.combo = 0;
-        this.bpm = 120;
+        this.bpm = bpm;
+        this.noteType = noteType;
+        this.patternType = patternType;
         this.noteSpeed = 400; // 音符が流れる速度（ピクセル/秒）
-        this.noteInterval = (60 / this.bpm) * 1000; // 音符の間隔（ミリ秒）
+
+        // 音符の種類に応じて間隔を設定
+        this.noteInterval = this.calculateNoteInterval();
+
         this.notes = [];
         this.isPlaying = false;
         this.noteIndex = 0;
+        this.sixteenthNoteCount = 0; // 16分音符のカウンター（0-3）
         this.lastNoteTime = 0;
-        this.lastBeatTime = 0; // ビート音の最後の時間
 
         // FPS計測用
         this.frameCount = 0;
@@ -32,9 +44,32 @@ class TaikoPractice {
         // 音声設定
         this.audioContext = null;
         this.audioOffset = AUDIO_OFFSET; // 音のオフセットを保存
+        this.beatsToReach = BEATS_TO_REACH; // ノーツ到達拍数を保存
         this.initAudio();
 
         this.init();
+    }
+
+    // 音符の種類に応じて間隔を計算
+    calculateNoteInterval() {
+        const baseInterval = (60 / this.bpm) * 1000; // 4分音符の間隔
+
+        switch (this.noteType) {
+            case '16th':
+                return baseInterval / 4; // 16分音符
+            case '8th':
+                return baseInterval / 2; // 8分音符
+            case '4th':
+                return baseInterval; // 4分音符
+            default:
+                return baseInterval / 4; // デフォルトは16分音符
+        }
+    }
+
+    // 連打パターンに応じてノーツ生成を制御
+    shouldGenerateNote() {
+        const [generateCount, skipCount] = this.patternType.split('-').map(Number);
+        return this.sixteenthNoteCount < generateCount;
     }
 
     updateFPS() {
@@ -181,19 +216,24 @@ class TaikoPractice {
         // FPS計測
         this.updateFPS();
 
-        // 新しい音符を生成
+        // 統一されたタイミング管理
         if (currentTime - this.lastNoteTime >= this.noteInterval) {
-            this.createNote();
-            this.lastNoteTime = currentTime;
-        }
+            // 連打パターンに応じてノーツ生成
+            if (this.shouldGenerateNote()) {
+                this.createNote();
+            }
 
-        // BPMに合わせてビート音を再生
-        if (currentTime - this.lastBeatTime >= this.noteInterval) {
-            // オフセット遅延してビート音を再生
-            setTimeout(() => {
-                this.playBeatSound();
-            }, this.audioOffset);
-            this.lastBeatTime = currentTime;
+            // ビート音の再生（4分音符の開始時のみ）
+            if (this.sixteenthNoteCount === 0) {
+                // オフセット遅延してビート音を再生
+                setTimeout(() => {
+                    this.playBeatSound();
+                }, this.audioOffset);
+            }
+
+            // 正確なタイミングを保つため、次の音符のタイミングを計算
+            this.lastNoteTime += this.noteInterval;
+            this.sixteenthNoteCount = (this.sixteenthNoteCount + 1) % 4; // 0-3でループ
         }
 
         // 音符の移動
@@ -212,7 +252,7 @@ class TaikoPractice {
 
     createNote() {
         const noteTypes = ['don', 'ka'];
-        const noteType = noteTypes[this.noteIndex % 2]; // ドンとカツを交互に
+        const noteType = noteTypes[Math.floor(Math.random() * 2)]; // ドンとカツをランダムに
         const noteText = noteType === 'don' ? 'ドン' : 'カツ';
 
         const note = document.createElement('div');
@@ -232,7 +272,7 @@ class TaikoPractice {
             createdAt: Date.now() // ノーツの生成時間を記録
         });
 
-        this.noteIndex++;
+        // this.noteIndex++; // ランダム生成のため不要
     }
 
     updateNotes(currentTime) {
@@ -245,10 +285,9 @@ class TaikoPractice {
                 // 残り距離を計算
                 const remainingDistance = note.centerX - this.judgmentLineX;
 
-                // 残り時間を計算（4拍で到達する予定）
-                const beatsToReach = 4;
+                // 残り時間を計算（設定された拍数で到達する予定）
                 const secondsPerBeat = 60 / this.bpm;
-                const totalTime = beatsToReach * secondsPerBeat;
+                const totalTime = this.beatsToReach * secondsPerBeat;
 
                 // ノーツが生成されてからの経過時間を計算
                 const noteAge = (currentTime - note.createdAt) / 1000;
@@ -387,9 +426,9 @@ class TaikoPractice {
         note.hit = true;
 
         // 初期状態を設定
-        let scale = 1.0;
+        let translateY = 0;
         let opacity = 1.0;
-        const duration = 500; // 500ms
+        const duration = 200; // 0.2秒
         const startTime = Date.now();
 
         const animate = () => {
@@ -402,13 +441,13 @@ class TaikoPractice {
                 return;
             }
 
-            // スケールを1.0から2.0に拡大
-            scale = 1.0 + progress;
+            // 上にぴょこっと上がる（0pxから-30pxへ）
+            translateY = -30 * progress;
             // 透明度を1.0から0.0に減少
             opacity = 1.0 - progress;
 
-            // スタイルを適用
-            note.element.style.transform = `translateY(-50%) scale(${scale})`;
+            // スタイルを適用（スケールはそのまま1.0）
+            note.element.style.transform = `translateY(calc(-50% + ${translateY}px)) scale(1.0)`;
             note.element.style.opacity = opacity;
 
             requestAnimationFrame(animate);
@@ -433,10 +472,9 @@ class TaikoPractice {
     }
 
     convertDistanceToMs(distance) {
-        // 4拍で判定ラインに到達するので、1拍あたりの移動距離を計算
-        const beatsToReach = 4;
+        // 設定された拍数で判定ラインに到達するので、1拍あたりの移動距離を計算
         const secondsPerBeat = 60 / this.bpm;
-        const totalTime = beatsToReach * secondsPerBeat;
+        const totalTime = this.beatsToReach * secondsPerBeat;
         const totalDistance = 1920 - this.judgmentLineX; // 生成位置から判定ラインまでの距離
         const pixelsPerSecond = totalDistance / totalTime;
         const millisecondsPerPixel = 1000 / pixelsPerSecond;
@@ -445,10 +483,9 @@ class TaikoPractice {
     }
 
     convertMsToDistance(milliseconds) {
-        // 4拍で判定ラインに到達するので、1拍あたりの移動距離を計算
-        const beatsToReach = 4;
+        // 設定された拍数で判定ラインに到達するので、1拍あたりの移動距離を計算
         const secondsPerBeat = 60 / this.bpm;
-        const totalTime = beatsToReach * secondsPerBeat;
+        const totalTime = this.beatsToReach * secondsPerBeat;
         const totalDistance = 1920 - this.judgmentLineX; // 生成位置から判定ラインまでの距離
         const pixelsPerSecond = totalDistance / totalTime;
         const pixelsPerMillisecond = pixelsPerSecond / 1000;
@@ -588,16 +625,15 @@ class TaikoPractice {
 
     setBPM(newBpm) {
         this.bpm = newBpm;
-        this.noteInterval = (60 / this.bpm) * 1000; // 音符の間隔（ミリ秒）を更新
+        this.noteInterval = this.calculateNoteInterval(); // 音符の間隔を再計算
         this.calculateNoteSpeed(); // スピードを再計算
         // BPMを変更しました
     }
 
     calculateNoteSpeed() {
-        // 4拍でジャッジラインに到達するスピードを計算
-        const beatsToReach = 4; // 4拍
+        // 設定された拍数でジャッジラインに到達するスピードを計算
         const secondsPerBeat = 60 / this.bpm; // 1拍あたりの秒数
-        const totalTime = beatsToReach * secondsPerBeat; // 4拍分の時間
+        const totalTime = this.beatsToReach * secondsPerBeat; // 設定された拍数分の時間
 
         // ノーツの移動距離（ノーツ生成位置からジャッジラインまで）
         const noteStartX = 1920; // ノーツの生成位置（画面右端）

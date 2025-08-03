@@ -2,21 +2,69 @@
 
 // 練習開始ボタンのクリックイベント
 function startPractice() {
+    // 設定を取得
+    const settings = getPracticeSettings();
+
+    // 設定をURLパラメータとして渡す
+    const params = new URLSearchParams({
+        bpm: settings.bpm,
+        noteType: settings.noteType,
+        patternType: settings.patternType
+    });
+
     // ボタンのアニメーション効果
     const button = document.querySelector('.start-button');
     button.style.transform = 'scale(0.95)';
 
     setTimeout(() => {
         button.style.transform = 'scale(1)';
-        // 練習画面に遷移
+        // 練習画面に遷移（設定付き）
         console.log('練習開始ボタンがクリックされました');
-        window.location.href = 'practice.html';
+        window.location.href = `practice.html?${params.toString()}`;
     }, 150);
+}
+
+// 練習設定を取得
+function getPracticeSettings() {
+    const bpm = parseInt(document.getElementById('bpm-setting').value) || 120;
+    const noteType = document.getElementById('note-type').value || '16th';
+    const patternType = document.getElementById('pattern-type').value || '3-1';
+
+    return {
+        bpm: bpm,
+        noteType: noteType,
+        patternType: patternType
+    };
+}
+
+// 設定を保存
+function saveSettings() {
+    const settings = getPracticeSettings();
+    localStorage.setItem('taikoPracticeSettings', JSON.stringify(settings));
+}
+
+// 設定を読み込み
+function loadSettings() {
+    const saved = localStorage.getItem('taikoPracticeSettings');
+    if (saved) {
+        const settings = JSON.parse(saved);
+        document.getElementById('bpm-setting').value = settings.bpm || 120;
+        document.getElementById('note-type').value = settings.noteType || '16th';
+        document.getElementById('pattern-type').value = settings.patternType || '3-1';
+    }
 }
 
 // ページ読み込み時の初期化
 document.addEventListener('DOMContentLoaded', function () {
     console.log('太鼓の達人練習ツールが読み込まれました');
+
+    // 保存された設定を読み込み
+    loadSettings();
+
+    // 設定変更時に自動保存
+    document.getElementById('bpm-setting').addEventListener('change', saveSettings);
+    document.getElementById('note-type').addEventListener('change', saveSettings);
+    document.getElementById('pattern-type').addEventListener('change', saveSettings);
 
     // キーボードショートカットの設定
     document.addEventListener('keydown', function (event) {

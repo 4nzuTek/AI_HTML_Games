@@ -14,7 +14,32 @@
             <h1 class="main-title">太鼓の達人</h1>
             <h2 class="sub-title">練習ツール</h2>
 
+            <!-- 練習設定 -->
+            <div class="practice-settings">
+                <div class="setting-group">
+                    <label for="bpm-setting">BPM:</label>
+                    <input type="number" id="bpm-setting" value="120" min="60" max="300" class="setting-input">
+                </div>
 
+                <div class="setting-group">
+                    <label for="note-type">音符の種類:</label>
+                    <select id="note-type" class="setting-input">
+                        <option value="16th">16分音符</option>
+                        <option value="8th">8分音符</option>
+                        <option value="4th">4分音符</option>
+                    </select>
+                </div>
+
+                <div class="setting-group">
+                    <label for="pattern-type">連打パターン:</label>
+                    <select id="pattern-type" class="setting-input">
+                        <option value="3-1">3連打（4つ目スキップ）</option>
+                        <option value="2-2">2連打（3,4つ目スキップ）</option>
+                        <option value="1-3">1連打（2,3,4つ目スキップ）</option>
+                        <option value="4-0">4連打（全音符）</option>
+                    </select>
+                </div>
+            </div>
 
             <button class="start-button" onclick="startPractice()">
                 <span class="button-text">練習開始</span>
