@@ -630,7 +630,7 @@ class TaikoPractice {
     createGuideLine() {
         const line = document.createElement('div');
         line.className = 'guide-line';
-        line.style.left = '1920px';
+        line.style.transform = `translateX(1920px)`;
         this.noteContainer.appendChild(line);
 
         this.lines.push({
@@ -663,7 +663,7 @@ class TaikoPractice {
         this.lines.forEach(line => {
             const deltaX = (this.noteSpeed * deltaTime) / 1000;
             line.centerX -= deltaX;
-            line.element.style.left = `${line.centerX - 1}px`;
+            line.element.style.transform = `translateX(${line.centerX - 1}px)`;
         });
 
         this.lastFrameTime = currentTime; // 現在のフレーム時間を更新
@@ -983,8 +983,8 @@ class TaikoPractice {
         const thisNoteScore = Math.round(noteScore);
         this.score += thisNoteScore;
         this.updateScore();
-        // 直近100ノーツのスコアを更新（運指情報も渡す）
-        this.updateRecentScore(judgment, keyGroup, renPos);
+        // 直近100ノーツのスコアを更新（実際に加算されたスコアを渡す）
+        this.updateRecentScore(judgment, keyGroup, renPos, thisNoteScore);
         // 10ノーツ区間バッファに「このノーツで加算したスコア」をpush
         if (!this.scoreGraphBuffer) this.scoreGraphBuffer = [];
         this.scoreGraphBuffer.push(thisNoteScore);
@@ -999,11 +999,12 @@ class TaikoPractice {
     }
 
     // 直近100ノーツのスコア算出機能
-    updateRecentScore(judgment, keyGroup, renPos) {
+    updateRecentScore(judgment, keyGroup, renPos, actualScore) {
         this.recentNotes.push({
             judgment: judgment,
             keyGroup: keyGroup,
             renPos: renPos,
+            score: actualScore,
             timestamp: Date.now()
         });
         if (this.recentNotes.length > 100) {
@@ -1018,43 +1019,9 @@ class TaikoPractice {
             this.updateRecentScoreDisplay();
             return;
         }
-        let totalScore = 0;
-        for (let i = 0; i < this.recentNotes.length; i++) {
-            const note = this.recentNotes[i];
-            let noteScore = 10000;
-            let multiplier = 1.0;
-            switch (note.judgment) {
-                case '良':
-                    multiplier = 1.0;
-                    break;
-                case '可':
-                    multiplier = 0.7;
-                    break;
-                case '不可':
-                    multiplier = 0.0;
-                    break;
-                default:
-                    multiplier = 0.0;
-                    break;
-            }
-            // 運指チェック（renPos基準）
-            if (note.keyGroup && note.renPos > 0) {
-                const isOddHit = note.renPos % 2 === 1;
-                const isEvenHit = note.renPos % 2 === 0;
-                if ((isOddHit && note.keyGroup === 'DF') || (isEvenHit && note.keyGroup === 'JK')) {
-                    multiplier *= 0.8;
-                }
-            }
-            if (i > 0) {
-                const prevNote = this.recentNotes[i - 1];
-                if (note.keyGroup === prevNote.keyGroup) {
-                    multiplier *= 0.5;
-                }
-            }
-            noteScore *= multiplier;
-            totalScore += noteScore;
-        }
-        this.recentScore = Math.round(totalScore);
+        // 実際に加算されたスコアの合計を計算
+        const totalScore = this.recentNotes.reduce((sum, note) => sum + (note.score || 0), 0);
+        this.recentScore = totalScore;
         this.updateRecentScoreDisplay();
     }
 
@@ -1170,7 +1137,7 @@ class TaikoPractice {
         this.updateCombo();
         this.showJudgment('不可\n+100ms');
         this.updateScoreChip('不可', null, 0);
-        this.updateRecentScore('不可', null);
+        this.updateRecentScore('不可', null, 0, 0);
         // 10ノーツ区間バッファにも0点を追加
         if (!this.scoreGraphBuffer) this.scoreGraphBuffer = [];
         this.scoreGraphBuffer.push(0);
