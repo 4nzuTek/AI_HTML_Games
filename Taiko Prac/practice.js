@@ -138,6 +138,8 @@ class TaikoPractice {
         this.noteInterval = this.getAdjustedNoteInterval();
 
         this.notes = [];
+        this.lines = []; // ガイドライン表示用
+        this.lastLineTime = 0; // 最後にガイドラインを生成した時間
         this.isPlaying = false;
         this.noteIndex = 0;
         this.sixteenthNoteCount = 0; // 16分音符のカウンター（0-3）
@@ -350,6 +352,13 @@ class TaikoPractice {
         this.comboElement = document.getElementById('combo');
         this.comboDisplayElement = document.getElementById('comboDisplay');
         this.noteContainer = document.getElementById('noteContainer');
+        // 既存のガイドラインをリセット
+        if (this.noteContainer) {
+            const oldLines = this.noteContainer.querySelectorAll('.guide-line');
+            oldLines.forEach(el => el.remove());
+        }
+        this.lines = [];
+        this.lastLineTime = 0;
 
         // 初期化時にコンボ表示を非表示にする
         if (this.comboDisplayElement) {
@@ -461,10 +470,13 @@ class TaikoPractice {
         // 1000ms後に最初のノーツ生成とメトロノーム再生を開始
         setTimeout(() => {
             this.lastNoteTime = Date.now();
+            this.lastLineTime = this.lastNoteTime;
             this.metronomeLastTime = this.lastNoteTime; // メトロノームも初期化
 
             // 最初のメトロノーム音を鳴らす
             this.playBeatSound();
+            // 最初のガイドラインを生成
+            this.createGuideLine();
 
             // 最初のノーツを生成（オフセットが正の場合は遅らせる）
             if (this.audioOffset > 0) {
@@ -553,6 +565,17 @@ class TaikoPractice {
                 }
                 // 正確なタイミングを保つため、次の音符のタイミングを計算
                 this.lastNoteTime += adjustedInterval;
+
+                // === ガイドライン生成（常に4分間隔） ===
+                const beatInterval = this.metronomeInterval; // 4分音符(一拍)
+                while (currentTime - this.lastLineTime >= beatInterval) {
+                    if (this.audioOffset > 0) {
+                        setTimeout(() => this.createGuideLine(), this.audioOffset);
+                    } else {
+                        this.createGuideLine();
+                    }
+                    this.lastLineTime += beatInterval;
+                }
             }
         }
 
@@ -561,6 +584,7 @@ class TaikoPractice {
 
         // 判定ラインを過ぎた音符の削除
         this.removePassedNotes();
+        this.removePassedLines();
 
         // 定期的に判定ラインの位置を確認（1秒に1回）
         if (currentTime % 1000 < 16) { // 約1秒ごと
@@ -602,6 +626,19 @@ class TaikoPractice {
         });
     }
 
+    // 拍ごとのガイドラインを生成
+    createGuideLine() {
+        const line = document.createElement('div');
+        line.className = 'guide-line';
+        line.style.left = '1920px';
+        this.noteContainer.appendChild(line);
+
+        this.lines.push({
+            element: line,
+            centerX: 1920
+        });
+    }
+
     updateNotes(currentTime) {
         // 実際のフレーム間隔を使用してdeltaTimeを計算
         const deltaTime = this.lastFrameTime > 0 ? (currentTime - this.lastFrameTime) : 16.67; // 初回は16.67msを使用
@@ -621,6 +658,14 @@ class TaikoPractice {
                 this.updateJudgmentLine(note);
             }
         });
+
+        // ガイドラインを移動
+        this.lines.forEach(line => {
+            const deltaX = (this.noteSpeed * deltaTime) / 1000;
+            line.centerX -= deltaX;
+            line.element.style.left = `${line.centerX - 1}px`;
+        });
+
         this.lastFrameTime = currentTime; // 現在のフレーム時間を更新
     }
 
@@ -680,6 +725,16 @@ class TaikoPractice {
             // 画面左端まで行ったら削除
             if (noteCenterX < -100) {
                 note.element.remove();
+                return false;
+            }
+            return true;
+        });
+    }
+
+    removePassedLines() {
+        this.lines = this.lines.filter(line => {
+            if (line.centerX < -100) {
+                line.element.remove();
                 return false;
             }
             return true;
@@ -1301,6 +1356,16 @@ class TaikoPractice {
 
     // ゲームインスタンスを完全にクリーンアップするメソッド
     cleanup() {
+        // ガイドラインを削除
+        if (this.lines) {
+            this.lines.forEach(line => {
+                if (line.element && line.element.parentNode) {
+                    line.element.remove();
+                }
+            });
+            this.lines = [];
+        }
+        this.lastLineTime = 0;
         // ゲームループを停止
         this.isPlaying = false;
 
