@@ -472,13 +472,23 @@ class TaikoPractice {
                     if (this.shouldGenerateNote()) {
                         this.createNote();
                     }
-                    this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                    // サイクルカウンターを進める（休み0の場合は連打数で区切る）
+                    if (this.restCount === 0) {
+                        this.cycleCount = (this.cycleCount + 1) % this.renCount;
+                    } else {
+                        this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                    }
                 }, this.audioOffset);
             } else {
                 if (this.shouldGenerateNote()) {
                     this.createNote();
                 }
-                this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                // サイクルカウンターを進める（休み0の場合は連打数で区切る）
+                if (this.restCount === 0) {
+                    this.cycleCount = (this.cycleCount + 1) % this.renCount;
+                } else {
+                    this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                }
             }
 
             // ゲームループを開始
@@ -523,15 +533,23 @@ class TaikoPractice {
                         if (this.shouldGenerateNote()) {
                             this.createNote();
                         }
-                        // サイクルカウンターを進める
-                        this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                        // サイクルカウンターを進める（休み0の場合は連打数で区切る）
+                        if (this.restCount === 0) {
+                            this.cycleCount = (this.cycleCount + 1) % this.renCount;
+                        } else {
+                            this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                        }
                     }, this.audioOffset);
                 } else {
                     if (this.shouldGenerateNote()) {
                         this.createNote();
                     }
-                    // サイクルカウンターを進める
-                    this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                    // サイクルカウンターを進める（休み0の場合は連打数で区切る）
+                    if (this.restCount === 0) {
+                        this.cycleCount = (this.cycleCount + 1) % this.renCount;
+                    } else {
+                        this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
+                    }
                 }
                 // 正確なタイミングを保つため、次の音符のタイミングを計算
                 this.lastNoteTime += adjustedInterval;
@@ -1394,6 +1412,11 @@ class TaikoPractice {
         // 1ノーツあたりの時間
         const noteDuration = beatDuration * noteTypeMultiplier;
 
+        // 休み0の場合は連打が永遠に続くので、連打数分の時間を返す
+        if (this.restCount === 0) {
+            return noteDuration * this.renCount;
+        }
+
         // 1セクションの長さ（連打数 + 休み数）
         const sectionNoteCount = this.renCount + this.restCount;
         const sectionDuration = noteDuration * sectionNoteCount;
@@ -1509,7 +1532,8 @@ function getPracticeSettings() {
     const bpm = parseInt(document.getElementById('bpm-setting').value) || 120;
     const noteType = document.getElementById('note-type').value || '16th';
     const renCount = parseInt(document.getElementById('ren-count').value) || 5;
-    const restCount = parseInt(document.getElementById('rest-count').value) || 3;
+    const restCountValue = document.getElementById('rest-count').value;
+    const restCount = restCountValue !== '' ? parseInt(restCountValue) : 3;
     const offset = parseInt(document.getElementById('offset-setting').value) || 0;
 
     // デバッグ用：HTMLのinput要素から取得した値を確認
