@@ -1,0 +1,47 @@
+[
+  {
+    "id": "beginner",
+    "name": "初級者",
+    "bpm": 120,
+    "noteType": "8th",
+    "renCount": 7,
+    "restCount": 9,
+    "offset": 0
+  },
+  {
+    "id": "intermediate",
+    "name": "中級者",
+    "bpm": 120,
+    "noteType": "16th",
+    "renCount": 5,
+    "restCount": 3,
+    "offset": 0
+  },
+  {
+    "id": "advanced",
+    "name": "上級者",
+    "bpm": 180,
+    "noteType": "16th",
+    "renCount": 7,
+    "restCount": 9,
+    "offset": 0
+  },
+  {
+    "id": "expert",
+    "name": "エキスパート",
+    "bpm": 160,
+    "noteType": "12th",
+    "renCount": 8,
+    "restCount": 4,
+    "offset": 0
+  },
+  {
+    "id": "custom",
+    "name": "カスタム",
+    "bpm": 120,
+    "noteType": "16th",
+    "renCount": 5,
+    "restCount": 3,
+    "offset": 0
+  }
+]

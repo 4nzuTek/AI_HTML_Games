@@ -1,17 +1,102 @@
 // 太鼓の達人練習画面 - メインスクリプト
 
+// プリセット定義
+let PRESETS = {};
+
+// presets.jsonを読み込む関数
+async function loadPresetsFromJson() {
+    try {
+        const response = await fetch('presets.json');
+        if (!response.ok) throw new Error('プリセットJSONの取得に失敗しました');
+        const json = await response.json();
+        // idをキーにしたオブジェクトへ変換
+        PRESETS = {};
+        json.forEach(preset => {
+            PRESETS[preset.id] = {
+                name: preset.name,
+                bpm: preset.bpm,
+                noteType: preset.noteType,
+                renCount: preset.renCount,
+                restCount: preset.restCount,
+                offset: preset.offset
+            };
+        });
+    } catch (e) {
+        console.error('プリセットの読み込みエラー:', e);
+    }
+}
+
+// プリセットごとの最高スコア管理
+class PresetScoreManager {
+    constructor() {
+        this.loadScores();
+    }
+
+    getScoreKey(presetId) {
+        return `taiko_preset_score_${presetId}`;
+    }
+
+    getScore(presetId) {
+        const key = this.getScoreKey(presetId);
+        const saved = localStorage.getItem(key);
+        return saved ? parseInt(saved) : 0;
+    }
+
+    setScore(presetId, score) {
+        const key = this.getScoreKey(presetId);
+        const currentBest = this.getScore(presetId);
+        if (score > currentBest) {
+            localStorage.setItem(key, score.toString());
+            return true; // 新しい記録
+        }
+        return false; // 記録更新なし
+    }
+
+    loadScores() {
+        // 初期化時に全プリセットのスコアを読み込み
+        Object.keys(PRESETS).forEach(presetId => {
+            this.getScore(presetId);
+        });
+    }
+}
+
+// グローバルスコアマネージャー
+const presetScoreManager = new PresetScoreManager();
+
+// 直近100ノーツの最高記録管理
+class RecentScoreManager {
+    getScoreKey(presetId) {
+        return `taiko_recent_score_best_${presetId}`;
+    }
+    getScore(presetId) {
+        const key = this.getScoreKey(presetId);
+        const saved = localStorage.getItem(key);
+        return saved ? parseInt(saved) : 0;
+    }
+    setScore(presetId, score) {
+        const key = this.getScoreKey(presetId);
+        const currentBest = this.getScore(presetId);
+        if (score > currentBest) {
+            localStorage.setItem(key, score.toString());
+            return true;
+        }
+        return false;
+    }
+}
+const recentScoreManager = new RecentScoreManager();
+
 class TaikoPractice {
     constructor(settings) {
         // 設定値を引数から受け取る
         const bpm = settings?.bpm || 120;
         const noteType = settings?.noteType || '16th';
         const renCount = settings?.renCount || 5;
-        const restCount = settings?.restCount !== undefined ? settings.restCount : 3;
+        const restCount = settings.restCount !== undefined ? settings.restCount : 3;
         const offset = settings?.offset !== undefined ? settings.offset : 0; // 0msも正しく受け取る
 
         // デバッグ用：コンストラクタでの設定値を確認
-        console.log('TaikoPractice constructor - settings:', settings);
-        console.log('TaikoPractice constructor - offset:', offset, 'Type:', typeof offset);
+        // console.log('TaikoPractice constructor - settings:', settings);
+        // console.log('TaikoPractice constructor - offset:', offset, 'Type:', typeof offset);
 
         // 定数設定
         const AUDIO_OFFSET = 400; // 音の再生オフセット（ミリ秒、マイナスで早く再生）
@@ -66,6 +151,16 @@ class TaikoPractice {
         // キーリピート防止用（最適化）
         this.lastKeyPressTime = 0;
         this.keyPressCooldown = 2; // 2msのクールダウン（より反応性を向上）
+
+        // スコア算出機能用の変数
+        this.recentNotes = []; // 直近100ノーツの記録
+        this.recentScore = 0; // 直近100ノーツのスコア
+        this.currentPreset = 'custom'; // 現在のプリセット
+
+        this.renPos = 1; // 連打サイクル内の打数（1始まり）
+
+        this.scoreGraphHistory = [];
+        this.scoreGraphBuffer = [];
 
         this.init();
     }
@@ -142,8 +237,8 @@ class TaikoPractice {
                 }
 
                 // 低遅延設定を確認
-                console.log('音声コンテキスト状態:', this.audioContext.state);
-                console.log('音声コンテキストサンプルレート:', this.audioContext.sampleRate);
+                // console.log('音声コンテキスト状態:', this.audioContext.state);
+                // console.log('音声コンテキストサンプルレート:', this.audioContext.sampleRate);
             }
         } catch (error) {
             console.error('音声システムの初期化に失敗:', error);
@@ -267,74 +362,48 @@ class TaikoPractice {
 
         // キーボードイベントハンドラーを作成（最適化版）
         this.keydownHandler = (e) => {
-            // キーリピート防止（最小限のチェック）
-            const currentTime = performance.now(); // より高精度なタイマーを使用
+            const currentTime = performance.now();
             if (currentTime - this.lastKeyPressTime < this.keyPressCooldown) {
                 return;
             }
-
-            if (e.code === 'KeyF' || e.code === 'KeyJ') {
+            // JKグループ
+            if (e.code === 'KeyJ' || e.code === 'KeyK') {
                 e.preventDefault();
-
-                // キーリピート防止のため、repeatフラグをチェック
-                if (e.repeat) {
-                    return;
-                }
-
-                // 音声コンテキストを開始（最優先で実行）
+                if (e.repeat) return;
                 if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
-
-                // 太鼓の音を再生（ドン）- 最優先で実行
-                this.playTaikoSound('don');
-
-                // 判定円の色を一瞬変える（ドン用：赤）- 非同期で実行
-                requestAnimationFrame(() => this.flashJudgmentCircle('#FF4444'));
-
-                // 判定処理（非同期で実行）
-                requestAnimationFrame(() => this.handleTaikoClick('don'));
-
-                // 最後のキー押下時間を更新
+                // J: ドン, K: カツ
+                const noteType = e.code === 'KeyJ' ? 'don' : 'ka';
+                this.playTaikoSound(noteType);
+                const color = noteType === 'don' ? '#FF4444' : '#4444FF';
+                requestAnimationFrame(() => this.flashJudgmentCircle(color));
+                requestAnimationFrame(() => this.handleTaikoClick(noteType, 'JK'));
                 this.lastKeyPressTime = currentTime;
-            } else if (e.code === 'KeyD' || e.code === 'KeyK') {
+            } else if (e.code === 'KeyD' || e.code === 'KeyF') {
                 e.preventDefault();
-
-                // キーリピート防止のため、repeatフラグをチェック
-                if (e.repeat) {
-                    return;
-                }
-
-                // 音声コンテキストを開始（最優先で実行）
+                if (e.repeat) return;
                 if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
-
-                // 太鼓の音を再生（カツ）- 最優先で実行
-                this.playTaikoSound('ka');
-
-                // 判定円の色を一瞬変える（カツ用：青）- 非同期で実行
-                requestAnimationFrame(() => this.flashJudgmentCircle('#4444FF'));
-
-                // 判定処理（非同期で実行）
-                requestAnimationFrame(() => this.handleTaikoClick('ka'));
-
-                // 最後のキー押下時間を更新
+                // D: カツ, F: ドン
+                const noteType = e.code === 'KeyD' ? 'ka' : 'don';
+                this.playTaikoSound(noteType);
+                const color = noteType === 'don' ? '#FF4444' : '#4444FF';
+                requestAnimationFrame(() => this.flashJudgmentCircle(color));
+                requestAnimationFrame(() => this.handleTaikoClick(noteType, 'DF'));
                 this.lastKeyPressTime = currentTime;
             } else if (e.code === 'ArrowLeft') {
-                // 左矢印でオフセットを-5ms
                 this.audioOffset -= 5;
                 if (this.fpsElement) {
                     this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
                 }
             } else if (e.code === 'ArrowRight') {
-                // 右矢印でオフセットを+5ms
                 this.audioOffset += 5;
                 if (this.fpsElement) {
                     this.fpsElement.textContent = `FPS: ${this.currentFps} | Offset: ${this.audioOffset}ms`;
                 }
             } else if (e.code === 'Escape') {
-                // Escキーでタイトルに戻る
                 e.preventDefault();
                 backToTitleUnified();
             }
@@ -471,15 +540,19 @@ class TaikoPractice {
 
         this.noteContainer.appendChild(note);
 
+        // 連打サイクル内の打数を記録
+        const renPos = this.renPos;
+        this.renPos++;
+        if (this.renPos > this.renCount) this.renPos = 1;
+
         this.notes.push({
             element: note,
             type: noteType,
             centerX: 1920, // ノーツの中心X座標（画面右端から開始）
             hit: false,
-            createdAt: Date.now() // ノーツの生成時間を記録
+            createdAt: Date.now(), // ノーツの生成時間を記録
+            renPos: renPos // 連打サイクル内の打数
         });
-
-        // this.noteIndex++; // ランダム生成のため不要
     }
 
     updateNotes(currentTime) {
@@ -566,25 +639,19 @@ class TaikoPractice {
         });
     }
 
-    handleTaikoClick(type) {
-        // 判定
-        this.checkJudgment(type);
+    handleTaikoClick(type, keyGroup) {
+        // 判定（運指情報も渡す）
+        this.checkJudgment(type, keyGroup);
     }
 
-    checkJudgment(type) {
+    checkJudgment(type, keyGroup) {
         let hitNote = null;
         let closestDistance = Infinity;
-
-        // 100msに対応する判定範囲を計算
         const judgmentRangeMs = 100;
         const judgmentRangePixels = this.convertMsToDistance(judgmentRangeMs);
-
         for (let note of this.notes) {
-            // ノーツの中心位置を直接使用
             const noteCenterX = note.centerX;
-            const distance = Math.abs(noteCenterX - this.judgmentCenterX); // 円の中心基準で判定
-
-            // ノーツのタイプと入力タイプが一致し、判定範囲内で、まだヒットしていない場合
+            const distance = Math.abs(noteCenterX - this.judgmentCenterX);
             if (note.type === type && distance <= judgmentRangePixels && !note.hit) {
                 if (distance < closestDistance) {
                     hitNote = note;
@@ -592,39 +659,34 @@ class TaikoPractice {
                 }
             }
         }
-
         if (hitNote) {
-            this.hitNote(hitNote, type);
+            this.hitNote(hitNote, type, keyGroup);
         }
-        // missの表示は削除（removePassedNotesで表示する）
     }
 
-    hitNote(note, type) {
-        // 判定に応じてヒットエフェクトを即座に開始（ラグを最小化）
+    hitNote(note, type, keyGroup) {
         const judgment = this.getJudgment(note);
+        // === 詳細ログ ===
+        // console.log('[判定ログ]', { ... }); // ←削除
+        // === ここまで ===
         if (judgment !== '不可') {
-            // 良・可の場合は右上に飛ぶエフェクトを即座に開始
             note.hit = true;
             note.element.classList.add('hit');
             this.startHitEffect(note);
         }
-
-        // 判定表示（数値）
         const judgmentText = this.getJudgmentText(note);
         this.showJudgment(judgmentText);
-
-        // スコア加算
-        this.addScore(judgment);
-
-        // 判定に応じてコンボを処理
-        if (judgment === '不可') {
-            // 不可の場合はコンボをリセット
-            this.combo = 0;
-        } else {
-            // 良・可の場合はコンボを加算
+        this.addScore(judgment, keyGroup, note.renPos);
+        if (judgment !== '不可') {
             this.combo++;
+        } else {
+            this.combo = 0;
         }
+        this.updateScoreChip(judgment, keyGroup, note.renPos);
         this.updateCombo();
+
+        // 連打セクション終了時に運指判定をチェック
+        this.checkFingeringSection(keyGroup, note.renPos);
     }
 
     startHitEffect(note) {
@@ -782,22 +844,240 @@ class TaikoPractice {
         }, 500);
     }
 
-    addScore(judgment) {
-        const scoreMap = {
-            '良': 1000,
-            '可': 500,
-            '不可': 100,
-            'BAD': 50
-        };
-
-        this.score += scoreMap[judgment] || 0;
+    addScore(judgment, keyGroup, renPos) {
+        // 直近100ノーツと同じロジックでスコア計算
+        let noteScore = 10000;
+        let multiplier = 1.0;
+        switch (judgment) {
+            case '良':
+                multiplier = 1.0;
+                break;
+            case '可':
+                multiplier = 0.7;
+                break;
+            case '不可':
+                multiplier = 0.0;
+                break;
+            default:
+                multiplier = 0.0;
+                break;
+        }
+        // 運指ペナルティ
+        if (keyGroup && renPos > 0) {
+            const isOddHit = renPos % 2 === 1;
+            const isEvenHit = renPos % 2 === 0;
+            if ((isOddHit && keyGroup === 'DF') || (isEvenHit && keyGroup === 'JK')) {
+                multiplier *= 0.8;
+            }
+        }
+        // 連続ペナルティ
+        if (this.recentNotes.length > 0) {
+            const prevNote = this.recentNotes[this.recentNotes.length - 1];
+            if (prevNote && keyGroup === prevNote.keyGroup && renPos !== 1) {
+                multiplier *= 0.5;
+            }
+        }
+        noteScore *= multiplier;
+        const thisNoteScore = Math.round(noteScore);
+        this.score += thisNoteScore;
         this.updateScore();
+        // 直近100ノーツのスコアを更新（運指情報も渡す）
+        this.updateRecentScore(judgment, keyGroup, renPos);
+        // 10ノーツ区間バッファに「このノーツで加算したスコア」をpush
+        if (!this.scoreGraphBuffer) this.scoreGraphBuffer = [];
+        this.scoreGraphBuffer.push(thisNoteScore);
+        if (this.scoreGraphBuffer.length === 10) {
+            let sectionScore = this.scoreGraphBuffer.reduce((a, b) => a + b, 0);
+            this.scoreGraphHistory.push({ total: this.score, diff: sectionScore });
+            if (this.scoreGraphHistory.length > 20) this.scoreGraphHistory.shift();
+            this.scoreGraphBuffer = [];
+            drawScoreGraph(this.scoreGraphHistory);
+            console.log(`[10ノーツ区間スコア] #${this.scoreGraphHistory.length}: ${sectionScore}点 (累計: ${this.score}点)`);
+        }
+    }
+
+    // 直近100ノーツのスコア算出機能
+    updateRecentScore(judgment, keyGroup, renPos) {
+        this.recentNotes.push({
+            judgment: judgment,
+            keyGroup: keyGroup,
+            renPos: renPos,
+            timestamp: Date.now()
+        });
+        if (this.recentNotes.length > 100) {
+            this.recentNotes.shift();
+        }
+        this.calculateRecentScore();
+    }
+
+    calculateRecentScore() {
+        if (this.recentNotes.length === 0) {
+            this.recentScore = 0;
+            this.updateRecentScoreDisplay();
+            return;
+        }
+        let totalScore = 0;
+        for (let i = 0; i < this.recentNotes.length; i++) {
+            const note = this.recentNotes[i];
+            let noteScore = 10000;
+            let multiplier = 1.0;
+            switch (note.judgment) {
+                case '良':
+                    multiplier = 1.0;
+                    break;
+                case '可':
+                    multiplier = 0.7;
+                    break;
+                case '不可':
+                    multiplier = 0.0;
+                    break;
+                default:
+                    multiplier = 0.0;
+                    break;
+            }
+            // 運指チェック（renPos基準）
+            if (note.keyGroup && note.renPos > 0) {
+                const isOddHit = note.renPos % 2 === 1;
+                const isEvenHit = note.renPos % 2 === 0;
+                if ((isOddHit && note.keyGroup === 'DF') || (isEvenHit && note.keyGroup === 'JK')) {
+                    multiplier *= 0.8;
+                }
+            }
+            if (i > 0) {
+                const prevNote = this.recentNotes[i - 1];
+                if (note.keyGroup === prevNote.keyGroup) {
+                    multiplier *= 0.5;
+                }
+            }
+            noteScore *= multiplier;
+            totalScore += noteScore;
+        }
+        this.recentScore = Math.round(totalScore);
+        this.updateRecentScoreDisplay();
+    }
+
+    updateRecentScoreDisplay() {
+        const recentScoreElement = document.getElementById('recent-score');
+        if (recentScoreElement) {
+            recentScoreElement.textContent = this.recentScore.toLocaleString();
+        }
+        // 直近100ノーツの最高記録保存・表示
+        const best = recentScoreManager.getScore(this.currentPreset);
+        if (this.recentScore > best) {
+            recentScoreManager.setScore(this.currentPreset, this.recentScore);
+            document.getElementById('recent-score-best').textContent = this.recentScore.toLocaleString();
+        } else {
+            document.getElementById('recent-score-best').textContent = best.toLocaleString();
+        }
+    }
+
+    // スコアチップの更新
+    updateScoreChip(judgment, keyGroup, renPos) {
+        const fingeringStatus = document.getElementById('fingering-status');
+        const consecutiveStatus = document.getElementById('consecutive-status');
+        const multiplierStatus = document.getElementById('multiplier-status');
+        if (!fingeringStatus || !consecutiveStatus || !multiplierStatus) return;
+        let fingeringText = '-';
+        let fingeringClass = '';
+        if (keyGroup && renPos > 0) {
+            const isOddHit = renPos % 2 === 1;
+            const isEvenHit = renPos % 2 === 0;
+            if ((isOddHit && keyGroup === 'JK') || (isEvenHit && keyGroup === 'DF')) {
+                fingeringText = '正解';
+                fingeringClass = 'correct';
+            } else {
+                fingeringText = '間違い';
+                fingeringClass = 'incorrect';
+            }
+        }
+        // 連続判定
+        let consecutiveText = '-';
+        let consecutiveClass = '';
+        if (renPos === 1) {
+            consecutiveText = 'OK';
+            consecutiveClass = 'correct';
+        } else if (this.recentNotes.length >= 2) {
+            const currentNote = this.recentNotes[this.recentNotes.length - 1];
+            const previousNote = this.recentNotes[this.recentNotes.length - 2];
+            if (currentNote.keyGroup && previousNote.keyGroup &&
+                currentNote.keyGroup === previousNote.keyGroup) {
+                consecutiveText = '連続';
+                consecutiveClass = 'warning';
+            } else {
+                consecutiveText = 'OK';
+                consecutiveClass = 'correct';
+            }
+        }
+
+        // 倍率計算
+        let multiplier = 1.0;
+        let multiplierText = '1.0x';
+        let multiplierClass = '';
+
+        // 判定による倍率
+        switch (judgment) {
+            case '良':
+                multiplier *= 1.0;
+                break;
+            case '可':
+                multiplier *= 0.7;
+                break;
+            case '不可':
+                multiplier *= 0.0;
+                break;
+            default:
+                multiplier *= 0.0;
+                break;
+        }
+
+        // 運指による倍率
+        if (fingeringText === '間違い') {
+            multiplier *= 0.8;
+        }
+
+        // 連続による倍率
+        if (consecutiveText === '連続') {
+            multiplier *= 0.5;
+        }
+
+        multiplierText = multiplier.toFixed(1) + 'x';
+
+        if (multiplier >= 1.0) {
+            multiplierClass = 'correct';
+        } else if (multiplier >= 0.5) {
+            multiplierClass = 'warning';
+        } else {
+            multiplierClass = 'incorrect';
+        }
+
+        // 表示を更新
+        fingeringStatus.textContent = fingeringText;
+        fingeringStatus.className = `detail-value ${fingeringClass}`;
+
+        consecutiveStatus.textContent = consecutiveText;
+        consecutiveStatus.className = `detail-value ${consecutiveClass}`;
+
+        multiplierStatus.textContent = multiplierText;
+        multiplierStatus.className = `detail-value ${multiplierClass}`;
     }
 
     missNote() {
         this.combo = 0;
         this.updateCombo();
         this.showJudgment('不可\n+100ms');
+        this.updateScoreChip('不可', null, 0);
+        this.updateRecentScore('不可', null);
+        // 10ノーツ区間バッファにも0点を追加
+        if (!this.scoreGraphBuffer) this.scoreGraphBuffer = [];
+        this.scoreGraphBuffer.push(0);
+        if (this.scoreGraphBuffer.length === 10) {
+            let sectionScore = this.scoreGraphBuffer.reduce((a, b) => a + b, 0);
+            this.scoreGraphHistory.push({ total: this.score, diff: sectionScore });
+            if (this.scoreGraphHistory.length > 20) this.scoreGraphHistory.shift();
+            this.scoreGraphBuffer = [];
+            drawScoreGraph(this.scoreGraphHistory);
+            console.log(`[10ノーツ区間スコア] #${this.scoreGraphHistory.length}: ${sectionScore}点 (累計: ${this.score}点)`);
+        }
     }
 
     updateScore() {
@@ -832,10 +1112,10 @@ class TaikoPractice {
             }
         }
 
-        // 50、100、200、300、400以降の100の倍数のコンボの時だけ表示
-        if ((this.combo === 50) || (this.combo >= 100 && this.combo % 100 === 0)) {
-            this.showComboMessage(`${this.combo}コンボ！`);
-        }
+        // コンボ表示を削除（50、100、200、300、400以降の100の倍数のコンボの時だけ表示）
+        // if ((this.combo === 50) || (this.combo >= 100 && this.combo % 100 === 0)) {
+        //     this.showComboMessage(`${this.combo}コンボ！`);
+        // }
     }
 
     updateJudgmentLinePosition() {
@@ -956,7 +1236,7 @@ class TaikoPractice {
             // タブが非アクティブになった時
             this.isTabActive = false;
             this.pauseStartTime = Date.now();
-            console.log('タブが非アクティブになりました。ゲームを一時停止します。');
+            // console.log('タブが非アクティブになりました。ゲームを一時停止します。');
         } else {
             // タブがアクティブになった時
             this.isTabActive = true;
@@ -965,7 +1245,7 @@ class TaikoPractice {
                 const pauseDuration = Date.now() - this.pauseStartTime;
                 this.totalPauseTime += pauseDuration;
                 this.pauseStartTime = 0;
-                console.log(`タブがアクティブになりました。一時停止時間: ${pauseDuration}ms`);
+                // console.log(`タブがアクティブになりました。一時停止時間: ${pauseDuration}ms`);
             }
         }
     }
@@ -1013,7 +1293,118 @@ class TaikoPractice {
         const comboMessages = document.querySelectorAll('.combo-message');
         comboMessages.forEach(el => el.remove());
 
-        console.log('ゲームインスタンスのクリーンアップが完了しました');
+        // 運指OKメッセージをクリア
+        const fingeringMessages = document.querySelectorAll('.fingering-ok-message');
+        fingeringMessages.forEach(el => el.remove());
+
+        // console.log('ゲームインスタンスのクリーンアップが完了しました');
+    }
+
+    // 連打セクションの運指判定をチェック
+    checkFingeringSection(keyGroup, renPos) {
+        // 連打セクションの最後のノーツ（renPos === this.renCount）の場合のみチェック
+        if (renPos === this.renCount) {
+            // 直近の連打数分のノーツを取得
+            const recentNotes = this.recentNotes.slice(-this.renCount);
+
+            // 連打数分のノーツが揃っているかチェック
+            if (recentNotes.length === this.renCount) {
+                let isPerfectFingering = true;
+
+                // 各ノーツの運指をチェック
+                for (let i = 0; i < recentNotes.length; i++) {
+                    const note = recentNotes[i];
+                    const expectedKeyGroup = (i % 2 === 0) ? 'JK' : 'DF'; // 奇数番目はJK、偶数番目はDF
+
+                    if (note.keyGroup !== expectedKeyGroup) {
+                        isPerfectFingering = false;
+                        break;
+                    }
+                }
+
+                // 運指が完璧な場合は「運指OK」を表示
+                if (isPerfectFingering) {
+                    this.showFingeringOK();
+                }
+            }
+        }
+    }
+
+    // 1セクションの長さを計算（ミリ秒）
+    calculateSectionDuration() {
+        // 1拍あたりの時間（ミリ秒）
+        const beatDuration = (60 / this.bpm) * 1000;
+
+        // 音符の種類に応じた倍率
+        let noteTypeMultiplier;
+        switch (this.noteType) {
+            case '24th':
+                noteTypeMultiplier = 1 / 6; // 24分音符
+                break;
+            case '16th':
+                noteTypeMultiplier = 1 / 4; // 16分音符
+                break;
+            case '12th':
+                noteTypeMultiplier = 1 / 3; // 12分音符（3連符）
+                break;
+            case '8th':
+                noteTypeMultiplier = 1 / 2; // 8分音符
+                break;
+            case '6th':
+                noteTypeMultiplier = 2 / 3; // 6分音符（3連符）
+                break;
+            case '4th':
+                noteTypeMultiplier = 1; // 4分音符
+                break;
+            default:
+                noteTypeMultiplier = 1 / 4; // デフォルトは16分音符
+        }
+
+        // 1ノーツあたりの時間
+        const noteDuration = beatDuration * noteTypeMultiplier;
+
+        // 1セクションの長さ（連打数 + 休み数）
+        const sectionNoteCount = this.renCount + this.restCount;
+        const sectionDuration = noteDuration * sectionNoteCount;
+
+        return sectionDuration;
+    }
+
+    // 運指OKメッセージを表示
+    showFingeringOK() {
+        // 既存の運指OKメッセージを削除
+        const existingMessages = document.querySelectorAll('.fingering-ok-message');
+        existingMessages.forEach(element => element.remove());
+
+        const fingeringElement = document.createElement('div');
+        fingeringElement.className = 'fingering-ok-message';
+        fingeringElement.textContent = '運指OK';
+
+        // 判定ラインの上に表示
+        const judgmentLine = document.querySelector('.judgment-line');
+        if (judgmentLine) {
+            judgmentLine.appendChild(fingeringElement);
+        } else {
+            document.body.appendChild(fingeringElement);
+        }
+
+        // 1セクションの長さの0.3倍の時間だけ表示
+        const sectionDuration = this.calculateSectionDuration();
+        const displayDuration = sectionDuration * 0.6;
+
+        setTimeout(() => {
+            fingeringElement.remove();
+        }, displayDuration);
+    }
+
+    // スコアチップの初期化
+    initializeScoreChip() {
+        const fingeringStatus = document.getElementById('fingering-status');
+        const consecutiveStatus = document.getElementById('consecutive-status');
+        const multiplierStatus = document.getElementById('multiplier-status');
+        if (fingeringStatus) fingeringStatus.textContent = '-';
+        if (consecutiveStatus) consecutiveStatus.textContent = '-';
+        if (multiplierStatus) multiplierStatus.textContent = '1.0x';
     }
 }
 
@@ -1043,7 +1434,7 @@ async function loadGlobalAudioFiles() {
         ]);
 
         // AudioContextの初期化はユーザージェスチャー後に延期
-        console.log('音声ファイルの読み込みが完了しました（AudioContextは後で初期化）');
+        // console.log('音声ファイルの読み込みが完了しました（AudioContextは後で初期化）');
         return { donArrayBuffer, katsuArrayBuffer, metronomeArrayBuffer };
     } catch (error) {
         console.error('音声ファイルの読み込みに失敗:', error);
@@ -1074,7 +1465,7 @@ async function initializeAudioContext(audioBuffers) {
             await globalAudioContext.resume();
         }
 
-        console.log('グローバル音声ファイルの読み込みが完了しました（最適化版）');
+        // console.log('グローバル音声ファイルの読み込みが完了しました（最適化版）');
         return true;
     } catch (error) {
         console.error('AudioContextの初期化に失敗:', error);
@@ -1092,16 +1483,16 @@ function getPracticeSettings() {
 
     // デバッグ用：HTMLのinput要素から取得した値を確認
     const offsetElement = document.getElementById('offset-setting');
-    console.log('getPracticeSettings - offset input element:', offsetElement);
-    console.log('getPracticeSettings - offset input value:', offsetElement?.value, 'Type:', typeof offsetElement?.value);
-    console.log('getPracticeSettings - parsed offset:', offset, 'Type:', typeof offset);
+    // console.log('getPracticeSettings - offset input element:', offsetElement);
+    // console.log('getPracticeSettings - offset input value:', offsetElement?.value, 'Type:', typeof offsetElement?.value);
+    // console.log('getPracticeSettings - parsed offset:', offset, 'Type:', typeof offset);
 
     return { bpm, noteType, renCount, restCount, offset };
 }
 function saveSettings() {
     const settings = getPracticeSettings();
     localStorage.setItem('taikoPracticeSettings', JSON.stringify(settings));
-    console.log('設定を保存しました:', settings);
+    // console.log('設定を保存しました:', settings);
 }
 function loadSettings() {
     // localStorageから保存された設定を読み込む
@@ -1109,7 +1500,7 @@ function loadSettings() {
     if (saved) {
         try {
             const settings = JSON.parse(saved);
-            console.log('loadSettings - 保存された設定を読み込みました:', settings);
+            // console.log('loadSettings - 保存された設定を読み込みました:', settings);
 
             const bpmElement = document.getElementById('bpm-setting');
             const noteTypeElement = document.getElementById('note-type');
@@ -1144,7 +1535,7 @@ function loadSettings() {
             console.error('設定の読み込みに失敗しました:', error);
         }
     } else {
-        console.log('loadSettings - 保存された設定が見つかりません。デフォルト値を使用します。');
+        // console.log('loadSettings - 保存された設定が見つかりません。デフォルト値を使用します。');
         // デフォルト値でも設定表示を更新
         updateSettingsDisplay();
     }
@@ -1157,6 +1548,11 @@ function showTitleScreen() {
 function showPracticeScreen() {
     document.querySelector('.title-screen').style.display = 'none';
     document.querySelector('.practice-screen').style.display = '';
+
+    // スコアチップを初期化
+    if (window.taikoGame) {
+        window.taikoGame.initializeScoreChip();
+    }
 }
 // 設定表示を更新する関数
 function updateSettingsDisplay() {
@@ -1192,12 +1588,12 @@ function startPracticeUnified() {
     const settings = getPracticeSettings();
 
     // デバッグ用：設定値を確認
-    console.log('Practice settings:', settings);
-    console.log('Offset value:', settings.offset, 'Type:', typeof settings.offset);
+    // console.log('Practice settings:', settings);
+    // console.log('Offset value:', settings.offset, 'Type:', typeof settings.offset);
 
     // AudioContextが初期化されていない場合は初期化を試行
     if (!globalAudioContext && globalAudioBuffers) {
-        console.warn('AudioContextが初期化されていません。ユーザージェスチャー後に初期化してください。');
+        // console.warn('AudioContextが初期化されていません。ユーザージェスチャー後に初期化してください。');
         return;
     }
 
@@ -1228,17 +1624,91 @@ function startPracticeUnified() {
     // 設定表示を更新
     updateSettingsDisplay();
 
+    // 現在のプリセットを設定
+    const currentPreset = getCurrentPresetId();
+
     // TaikoPracticeインスタンスを新規生成し直す
     window.taikoGame = new TaikoPractice(settings);
+    window.taikoGame.currentPreset = currentPreset; // プリセットIDを設定
+    // 直近100ノーツの記録をリセット
+    window.taikoGame.recentNotes = [];
+    window.taikoGame.recentScore = 0;
+    document.getElementById('recent-score').textContent = '0';
+    // 画面の直近100ノーツ最高記録はそのまま（プリセットごとにloadPresetで更新される）
     showPracticeScreen();
+    // 練習開始時にグラフもリセット
+    window.taikoGame.scoreGraphHistory = [];
+    window.taikoGame.scoreGraphBuffer = [];
+    drawScoreGraph([]);
 }
 // 練習終了（タイトルに戻る）
 function backToTitleUnified() {
     if (window.taikoGame) {
+        // 練習終了時にスコアを保存
+        const currentPreset = getCurrentPresetId();
+        if (currentPreset && window.taikoGame.recentScore > 0) {
+            const isNewRecord = presetScoreManager.setScore(currentPreset, window.taikoGame.recentScore);
+            if (isNewRecord) {
+                // console.log(`新しい記録達成！プリセット: ${currentPreset}, スコア: ${window.taikoGame.recentScore}`);
+                // プリセット情報を更新
+                const presetName = document.getElementById('current-preset-name');
+                const presetScore = document.getElementById('current-preset-score');
+                if (presetName && presetScore) {
+                    presetScore.textContent = `最高スコア: ${window.taikoGame.recentScore.toLocaleString()}`;
+                }
+            }
+        }
         window.taikoGame.cleanup();
     }
     showTitleScreen();
 }
+
+// 現在のプリセットIDを取得
+function getCurrentPresetId() {
+    const activeBtn = document.querySelector('.preset-btn.active');
+    return activeBtn ? activeBtn.getAttribute('data-preset') : 'custom';
+}
+// プリセット機能の実装
+function loadPreset(presetId) {
+    const preset = PRESETS[presetId];
+    if (!preset) return;
+
+    // 設定値をプリセットに更新
+    document.getElementById('bpm-setting').value = preset.bpm;
+    document.getElementById('note-type').value = preset.noteType;
+    document.getElementById('ren-count').value = preset.renCount;
+    document.getElementById('rest-count').value = preset.restCount;
+    document.getElementById('offset-setting').value = preset.offset;
+
+    // プリセットボタンのアクティブ状態を更新
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-preset="${presetId}"]`).classList.add('active');
+
+    // プリセット情報を更新
+    document.getElementById('current-preset-name').textContent = preset.name;
+    const bestScore = presetScoreManager.getScore(presetId);
+    document.getElementById('current-preset-score').textContent = `最高スコア: ${bestScore.toLocaleString()}`;
+    // 直近100ノーツ最高記録の表示
+    const bestRecent = recentScoreManager.getScore(presetId);
+    document.getElementById('recent-score-best').textContent = bestRecent.toLocaleString();
+
+    // 設定を保存
+    saveSettings();
+    updateSettingsDisplay();
+}
+
+// プリセットボタンのイベントリスナーを設定
+function setupPresetButtons() {
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const presetId = btn.getAttribute('data-preset');
+            loadPreset(presetId);
+        });
+    });
+}
+
 // 設定変更時に自動保存と表示更新
 ['bpm-setting', 'note-type', 'ren-count', 'rest-count', 'offset-setting'].forEach(id => {
     const el = document.getElementById(id);
@@ -1263,25 +1733,28 @@ function backToTitleUnified() {
 // ボタンイベント
 window.addEventListener('DOMContentLoaded', async function () {
     // タイトル画面で音声ファイルをロード（AudioContextは後で初期化）
-    console.log('音声ファイルをロード中...');
+    // console.log('音声ファイルをロード中...');
     globalAudioBuffers = await loadGlobalAudioFiles();
     if (globalAudioBuffers) {
-        console.log('音声ファイルのロードが完了しました');
+        // console.log('音声ファイルのロードが完了しました');
     } else {
-        console.error('音声ファイルのロードに失敗しました');
+        // console.error('音声ファイルのロードに失敗しました');
     }
 
+    await loadPresetsFromJson(); // presets.jsonを読み込む
     loadSettings();
+    setupPresetButtons(); // プリセットボタンの設定
+    loadPreset('custom'); // デフォルトでカスタムプリセットを読み込み
     showTitleScreen();
 
     // 練習開始ボタンのイベントハンドラーを修正
     document.getElementById('startPracticeBtn').onclick = async () => {
         // ユーザージェスチャー後にAudioContextを初期化
         if (globalAudioBuffers && !globalAudioContext) {
-            console.log('AudioContextを初期化中...');
+            // console.log('AudioContextを初期化中...');
             const audioInitialized = await initializeAudioContext(globalAudioBuffers);
             if (!audioInitialized) {
-                console.error('AudioContextの初期化に失敗しました');
+                // console.error('AudioContextの初期化に失敗しました');
                 return;
             }
         }
@@ -1298,10 +1771,10 @@ window.addEventListener('DOMContentLoaded', async function () {
             e.preventDefault();
             // ユーザージェスチャー後にAudioContextを初期化
             if (globalAudioBuffers && !globalAudioContext) {
-                console.log('AudioContextを初期化中...');
+                // console.log('AudioContextを初期化中...');
                 const audioInitialized = await initializeAudioContext(globalAudioBuffers);
                 if (!audioInitialized) {
-                    console.error('AudioContextの初期化に失敗しました');
+                    // console.error('AudioContextの初期化に失敗しました');
                     return;
                 }
             }
@@ -1310,3 +1783,38 @@ window.addEventListener('DOMContentLoaded', async function () {
     });
 });
 // ===== ここまで統合UI用の追加コード =====
+
+// スコアグラフ描画関数
+function drawScoreGraph(history) {
+    const canvas = document.getElementById('score-graph');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 軸
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(90, 30);
+    ctx.lineTo(90, 330);
+    ctx.lineTo(930, 330);
+    ctx.stroke();
+    // ラベル（削除）
+    // ctx.fillStyle = '#333';
+    // ctx.font = '24px sans-serif';
+    // ctx.fillText('100%', 20, 60);
+    // ctx.fillText('0%', 40, 330);
+    // 折れ線
+    ctx.strokeStyle = '#FFD600';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    let maxScore = 100000;
+    let n = history.length;
+    for (let i = 0; i < n; i++) {
+        let percent = Math.max(0, Math.min(1, history[i].diff / maxScore));
+        let x = 90 + (i * ((840) / 19));
+        let y = 330 - percent * 300;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+}
