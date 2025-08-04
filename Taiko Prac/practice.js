@@ -63,9 +63,9 @@ class TaikoPractice {
         this.metronomeLastTime = 0;
         this.metronomeInterval = (60 / this.bpm) * 1000; // 4分音符（拍）ごと
 
-        // キーリピート防止用
+        // キーリピート防止用（最適化）
         this.lastKeyPressTime = 0;
-        this.keyPressCooldown = 5; // 5msのクールダウン
+        this.keyPressCooldown = 2; // 2msのクールダウン（より反応性を向上）
 
         this.init();
     }
@@ -135,6 +135,15 @@ class TaikoPractice {
 
             if (!this.audioContext || !this.donAudioBuffer || !this.katsuAudioBuffer) {
                 console.warn('グローバル音声ファイルがまだロードされていません');
+            } else {
+                // 音声コンテキストの最適化設定
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
+                // 低遅延設定を確認
+                console.log('音声コンテキスト状態:', this.audioContext.state);
+                console.log('音声コンテキストサンプルレート:', this.audioContext.sampleRate);
             }
         } catch (error) {
             console.error('音声システムの初期化に失敗:', error);
@@ -184,30 +193,28 @@ class TaikoPractice {
                 return;
             }
 
-            // 現在の時間を取得
+            // 現在の時間を取得（より高精度なタイマーを使用）
             const currentTime = this.audioContext.currentTime;
 
-            // AudioBufferSourceNodeを作成
+            // AudioBufferSourceNodeを作成（最適化）
             const source = this.audioContext.createBufferSource();
             const gainNode = this.audioContext.createGain();
 
             // 音声データを設定
             source.buffer = audioBuffer;
 
-            // 音量設定
+            // 音量設定（即座に設定）
             gainNode.gain.setValueAtTime(0.3, currentTime);
 
-            // 接続
+            // 接続（最適化された順序）
             source.connect(gainNode);
             gainNode.connect(this.audioContext.destination);
 
-            // 太鼓の音はオフセットなしで即座に再生
+            // 太鼓の音は即座に再生（オフセットなし）
             source.start(currentTime);
 
-            // 音声再生完了後にクリーンアップ
-            source.onended = () => {
-                // クリーンアップは不要（メトロノーム音に影響しない）
-            };
+            // 音声再生完了後のクリーンアップは最小限に
+            source.onended = null; // クリーンアップを無効化してパフォーマンス向上
         } catch (error) {
             console.error('太鼓の音の再生に失敗:', error);
         }
@@ -258,10 +265,10 @@ class TaikoPractice {
             document.removeEventListener('visibilitychange', this.visibilityHandler);
         }
 
-        // キーボードイベントハンドラーを作成
+        // キーボードイベントハンドラーを作成（最適化版）
         this.keydownHandler = (e) => {
-            // キーリピート防止
-            const currentTime = Date.now();
+            // キーリピート防止（最小限のチェック）
+            const currentTime = performance.now(); // より高精度なタイマーを使用
             if (currentTime - this.lastKeyPressTime < this.keyPressCooldown) {
                 return;
             }
@@ -274,18 +281,19 @@ class TaikoPractice {
                     return;
                 }
 
-                // 音声コンテキストを開始（ブラウザの制限により必要）
+                // 音声コンテキストを開始（最優先で実行）
                 if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
 
-                // 太鼓の音を再生（ドン）
+                // 太鼓の音を再生（ドン）- 最優先で実行
                 this.playTaikoSound('don');
 
-                // 判定円の色を一瞬変える（ドン用：赤）
-                this.flashJudgmentCircle('#FF4444');
+                // 判定円の色を一瞬変える（ドン用：赤）- 非同期で実行
+                requestAnimationFrame(() => this.flashJudgmentCircle('#FF4444'));
 
-                this.handleTaikoClick('don');
+                // 判定処理（非同期で実行）
+                requestAnimationFrame(() => this.handleTaikoClick('don'));
 
                 // 最後のキー押下時間を更新
                 this.lastKeyPressTime = currentTime;
@@ -297,18 +305,19 @@ class TaikoPractice {
                     return;
                 }
 
-                // 音声コンテキストを開始（ブラウザの制限により必要）
+                // 音声コンテキストを開始（最優先で実行）
                 if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
 
-                // 太鼓の音を再生（カツ）
+                // 太鼓の音を再生（カツ）- 最優先で実行
                 this.playTaikoSound('ka');
 
-                // 判定円の色を一瞬変える（カツ用：青）
-                this.flashJudgmentCircle('#4444FF');
+                // 判定円の色を一瞬変える（カツ用：青）- 非同期で実行
+                requestAnimationFrame(() => this.flashJudgmentCircle('#4444FF'));
 
-                this.handleTaikoClick('ka');
+                // 判定処理（非同期で実行）
+                requestAnimationFrame(() => this.handleTaikoClick('ka'));
 
                 // 最後のキー押下時間を更新
                 this.lastKeyPressTime = currentTime;
@@ -1014,31 +1023,61 @@ let globalAudioContext = null;
 let globalDonAudioBuffer = null;
 let globalKatsuAudioBuffer = null;
 let globalMetronomeAudioBuffer = null;
+let globalAudioBuffers = null; // 音声ファイルのArrayBufferを保存
 
-// 音声ファイルをグローバルにロード
+// 音声ファイルをグローバルにロード（最適化版）
 async function loadGlobalAudioFiles() {
     try {
-        // Web Audio APIの初期化
-        globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // 音声ファイルを並列で読み込み（高速化）
+        const [donResponse, katsuResponse, metronomeResponse] = await Promise.all([
+            fetch('Assets/SFX/Don.wav'),
+            fetch('Assets/SFX/Katsu.wav'),
+            fetch('Assets/SFX/metronome.wav')
+        ]);
 
-        // Don、Katsu、メトロノームの音声ファイルを読み込み
-        const donResponse = await fetch('Assets/SFX/Don.wav');
-        const katsuResponse = await fetch('Assets/SFX/Katsu.wav');
-        const metronomeResponse = await fetch('Assets/SFX/metronome.wav');
+        // ArrayBufferを並列で取得
+        const [donArrayBuffer, katsuArrayBuffer, metronomeArrayBuffer] = await Promise.all([
+            donResponse.arrayBuffer(),
+            katsuResponse.arrayBuffer(),
+            metronomeResponse.arrayBuffer()
+        ]);
 
-        const donArrayBuffer = await donResponse.arrayBuffer();
-        const katsuArrayBuffer = await katsuResponse.arrayBuffer();
-        const metronomeArrayBuffer = await metronomeResponse.arrayBuffer();
+        // AudioContextの初期化はユーザージェスチャー後に延期
+        console.log('音声ファイルの読み込みが完了しました（AudioContextは後で初期化）');
+        return { donArrayBuffer, katsuArrayBuffer, metronomeArrayBuffer };
+    } catch (error) {
+        console.error('音声ファイルの読み込みに失敗:', error);
+        return null;
+    }
+}
 
-        // AudioBufferに変換
-        globalDonAudioBuffer = await globalAudioContext.decodeAudioData(donArrayBuffer);
-        globalKatsuAudioBuffer = await globalAudioContext.decodeAudioData(katsuArrayBuffer);
-        globalMetronomeAudioBuffer = await globalAudioContext.decodeAudioData(metronomeArrayBuffer);
+// AudioContextの初期化（ユーザージェスチャー後に呼び出し）
+async function initializeAudioContext(audioBuffers) {
+    if (!audioBuffers) return false;
 
-        console.log('グローバル音声ファイルの読み込みが完了しました');
+    try {
+        // Web Audio APIの初期化（最適化設定）
+        globalAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+            latencyHint: 'interactive', // 低遅延モード
+            sampleRate: 44100 // 標準サンプルレート
+        });
+
+        // AudioBufferを並列でデコード（高速化）
+        [globalDonAudioBuffer, globalKatsuAudioBuffer, globalMetronomeAudioBuffer] = await Promise.all([
+            globalAudioContext.decodeAudioData(audioBuffers.donArrayBuffer),
+            globalAudioContext.decodeAudioData(audioBuffers.katsuArrayBuffer),
+            globalAudioContext.decodeAudioData(audioBuffers.metronomeArrayBuffer)
+        ]);
+
+        // 音声コンテキストを開始（事前に開始して遅延を減らす）
+        if (globalAudioContext.state === 'suspended') {
+            await globalAudioContext.resume();
+        }
+
+        console.log('グローバル音声ファイルの読み込みが完了しました（最適化版）');
         return true;
     } catch (error) {
-        console.error('グローバル音声ファイルの読み込みに失敗:', error);
+        console.error('AudioContextの初期化に失敗:', error);
         return false;
     }
 }
@@ -1156,6 +1195,12 @@ function startPracticeUnified() {
     console.log('Practice settings:', settings);
     console.log('Offset value:', settings.offset, 'Type:', typeof settings.offset);
 
+    // AudioContextが初期化されていない場合は初期化を試行
+    if (!globalAudioContext && globalAudioBuffers) {
+        console.warn('AudioContextが初期化されていません。ユーザージェスチャー後に初期化してください。');
+        return;
+    }
+
     // 音声コンテキストを再開（ブラウザの制限により必要）
     if (globalAudioContext && globalAudioContext.state === 'suspended') {
         globalAudioContext.resume();
@@ -1217,10 +1262,10 @@ function backToTitleUnified() {
 });
 // ボタンイベント
 window.addEventListener('DOMContentLoaded', async function () {
-    // タイトル画面で音声ファイルをロード
+    // タイトル画面で音声ファイルをロード（AudioContextは後で初期化）
     console.log('音声ファイルをロード中...');
-    const audioLoaded = await loadGlobalAudioFiles();
-    if (audioLoaded) {
+    globalAudioBuffers = await loadGlobalAudioFiles();
+    if (globalAudioBuffers) {
         console.log('音声ファイルのロードが完了しました');
     } else {
         console.error('音声ファイルのロードに失敗しました');
@@ -1228,15 +1273,38 @@ window.addEventListener('DOMContentLoaded', async function () {
 
     loadSettings();
     showTitleScreen();
-    document.getElementById('startPracticeBtn').onclick = startPracticeUnified;
+
+    // 練習開始ボタンのイベントハンドラーを修正
+    document.getElementById('startPracticeBtn').onclick = async () => {
+        // ユーザージェスチャー後にAudioContextを初期化
+        if (globalAudioBuffers && !globalAudioContext) {
+            console.log('AudioContextを初期化中...');
+            const audioInitialized = await initializeAudioContext(globalAudioBuffers);
+            if (!audioInitialized) {
+                console.error('AudioContextの初期化に失敗しました');
+                return;
+            }
+        }
+        startPracticeUnified();
+    };
+
     // 練習画面の「タイトルに戻る」ボタンも統合用に上書き
     const backBtn = document.querySelector('.back-button');
     if (backBtn) backBtn.onclick = backToTitleUnified;
 
-    // タイトル画面でスペースキーで練習開始
-    document.addEventListener('keydown', (e) => {
+    // タイトル画面でスペースキーで練習開始（AudioContext初期化付き）
+    document.addEventListener('keydown', async (e) => {
         if (e.code === 'Space' && document.querySelector('.title-screen').style.display !== 'none') {
             e.preventDefault();
+            // ユーザージェスチャー後にAudioContextを初期化
+            if (globalAudioBuffers && !globalAudioContext) {
+                console.log('AudioContextを初期化中...');
+                const audioInitialized = await initializeAudioContext(globalAudioBuffers);
+                if (!audioInitialized) {
+                    console.error('AudioContextの初期化に失敗しました');
+                    return;
+                }
+            }
             startPracticeUnified();
         }
     });
