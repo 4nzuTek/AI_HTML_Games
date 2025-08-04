@@ -63,10 +63,10 @@ class PresetScoreManager {
 // グローバルスコアマネージャー
 const presetScoreManager = new PresetScoreManager();
 
-// 直近100ノーツの最高記録管理
-class RecentScoreManager {
+// 自己ベスト記録管理（永続保存）
+class AllTimeBestManager {
     getScoreKey(presetId) {
-        return `taiko_recent_score_best_${presetId}`;
+        return `taiko_all_time_best_${presetId}`;
     }
     getScore(presetId) {
         const key = this.getScoreKey(presetId);
@@ -83,7 +83,33 @@ class RecentScoreManager {
         return false;
     }
 }
-const recentScoreManager = new RecentScoreManager();
+const allTimeBestManager = new AllTimeBestManager();
+
+// 今回のセッションのベスト記録管理（リセットされる）
+class CurrentSessionBestManager {
+    constructor() {
+        this.sessionBests = {};
+    }
+
+    getScore(presetId) {
+        return this.sessionBests[presetId] || 0;
+    }
+
+    setScore(presetId, score) {
+        const currentBest = this.getScore(presetId);
+        if (score > currentBest) {
+            this.sessionBests[presetId] = score;
+            return true;
+        }
+        return false;
+    }
+
+    // セッション開始時にリセット
+    resetSession(presetId) {
+        this.sessionBests[presetId] = 0;
+    }
+}
+const currentSessionBestManager = new CurrentSessionBestManager();
 
 class TaikoPractice {
     constructor(settings) {
@@ -158,6 +184,9 @@ class TaikoPractice {
         this.currentPreset = 'custom'; // 現在のプリセット
 
         this.renPos = 1; // 連打サイクル内の打数（1始まり）
+
+        // 今回のセッションのベスト記録をリセット
+        currentSessionBestManager.resetSession(this.currentPreset);
 
         this.scoreGraphHistory = [];
         this.scoreGraphBuffer = [];
@@ -961,14 +990,16 @@ class TaikoPractice {
         if (recentScoreElement) {
             recentScoreElement.textContent = this.recentScore.toLocaleString();
         }
-        // 直近100ノーツの最高記録保存・表示
-        const best = recentScoreManager.getScore(this.currentPreset);
-        if (this.recentScore > best) {
-            recentScoreManager.setScore(this.currentPreset, this.recentScore);
-            document.getElementById('recent-score-best').textContent = this.recentScore.toLocaleString();
-        } else {
-            document.getElementById('recent-score-best').textContent = best.toLocaleString();
-        }
+
+        // 今回のセッションのベスト記録を更新
+        const sessionBestUpdated = currentSessionBestManager.setScore(this.currentPreset, this.recentScore);
+        const sessionBest = currentSessionBestManager.getScore(this.currentPreset);
+        document.getElementById('current-session-best').textContent = sessionBest.toLocaleString();
+
+        // 自己ベスト記録を更新
+        const allTimeBestUpdated = allTimeBestManager.setScore(this.currentPreset, this.recentScore);
+        const allTimeBest = allTimeBestManager.getScore(this.currentPreset);
+        document.getElementById('all-time-best').textContent = allTimeBest.toLocaleString();
     }
 
     // スコアチップの更新
@@ -1627,6 +1658,10 @@ function startPracticeUnified() {
     // 現在のプリセットを設定
     const currentPreset = getCurrentPresetId();
 
+    // 今回のセッションのベスト記録をリセット
+    currentSessionBestManager.resetSession(currentPreset);
+    document.getElementById('current-session-best').textContent = '0';
+
     // TaikoPracticeインスタンスを新規生成し直す
     window.taikoGame = new TaikoPractice(settings);
     window.taikoGame.currentPreset = currentPreset; // プリセットIDを設定
@@ -1634,7 +1669,6 @@ function startPracticeUnified() {
     window.taikoGame.recentNotes = [];
     window.taikoGame.recentScore = 0;
     document.getElementById('recent-score').textContent = '0';
-    // 画面の直近100ノーツ最高記録はそのまま（プリセットごとにloadPresetで更新される）
     showPracticeScreen();
     // 練習開始時にグラフもリセット
     window.taikoGame.scoreGraphHistory = [];
@@ -1647,14 +1681,14 @@ function backToTitleUnified() {
         // 練習終了時にスコアを保存
         const currentPreset = getCurrentPresetId();
         if (currentPreset && window.taikoGame.recentScore > 0) {
-            const isNewRecord = presetScoreManager.setScore(currentPreset, window.taikoGame.recentScore);
-            if (isNewRecord) {
-                // console.log(`新しい記録達成！プリセット: ${currentPreset}, スコア: ${window.taikoGame.recentScore}`);
-                // プリセット情報を更新
-                const presetName = document.getElementById('current-preset-name');
+            // 自己ベスト記録を更新
+            const isNewAllTimeBest = allTimeBestManager.setScore(currentPreset, window.taikoGame.recentScore);
+            if (isNewAllTimeBest) {
+                // console.log(`新しい自己ベスト達成！プリセット: ${currentPreset}, スコア: ${window.taikoGame.recentScore}`);
+                // タイトル画面の自己ベスト表示を更新
                 const presetScore = document.getElementById('current-preset-score');
-                if (presetName && presetScore) {
-                    presetScore.textContent = `最高スコア: ${window.taikoGame.recentScore.toLocaleString()}`;
+                if (presetScore) {
+                    presetScore.textContent = `自己ベスト: ${window.taikoGame.recentScore.toLocaleString()}`;
                 }
             }
         }
@@ -1665,8 +1699,8 @@ function backToTitleUnified() {
 
 // 現在のプリセットIDを取得
 function getCurrentPresetId() {
-    const activeBtn = document.querySelector('.preset-btn.active');
-    return activeBtn ? activeBtn.getAttribute('data-preset') : 'custom';
+    const presetSelect = document.getElementById('preset-select');
+    return presetSelect ? presetSelect.value : 'custom';
 }
 // プリセット機能の実装
 function loadPreset(presetId) {
@@ -1680,33 +1714,58 @@ function loadPreset(presetId) {
     document.getElementById('rest-count').value = preset.restCount;
     document.getElementById('offset-setting').value = preset.offset;
 
-    // プリセットボタンのアクティブ状態を更新
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.classList.remove('active');
+    // プリセットドロップダウンの値を更新
+    const presetSelect = document.getElementById('preset-select');
+    if (presetSelect) {
+        presetSelect.value = presetId;
+    }
+
+    // 設定項目の有効/無効を切り替え
+    const isCustom = presetId === 'custom';
+    const settingInputs = ['bpm-setting', 'note-type', 'ren-count', 'rest-count', 'offset-setting'];
+    const settingGroups = document.querySelectorAll('.setting-group');
+
+    settingInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.disabled = !isCustom;
+        }
     });
-    document.querySelector(`[data-preset="${presetId}"]`).classList.add('active');
+
+    settingGroups.forEach(group => {
+        if (isCustom) {
+            group.classList.remove('disabled');
+        } else {
+            group.classList.add('disabled');
+        }
+    });
 
     // プリセット情報を更新
     document.getElementById('current-preset-name').textContent = preset.name;
-    const bestScore = presetScoreManager.getScore(presetId);
-    document.getElementById('current-preset-score').textContent = `最高スコア: ${bestScore.toLocaleString()}`;
-    // 直近100ノーツ最高記録の表示
-    const bestRecent = recentScoreManager.getScore(presetId);
-    document.getElementById('recent-score-best').textContent = bestRecent.toLocaleString();
+    const allTimeBest = allTimeBestManager.getScore(presetId);
+    document.getElementById('current-preset-score').textContent = `自己ベスト: ${allTimeBest.toLocaleString()}`;
+
+    // 自己ベスト記録の表示（練習画面用）
+    document.getElementById('all-time-best').textContent = allTimeBest.toLocaleString();
+
+    // 今回のセッションのベスト記録の表示
+    const sessionBest = currentSessionBestManager.getScore(presetId);
+    document.getElementById('current-session-best').textContent = sessionBest.toLocaleString();
 
     // 設定を保存
     saveSettings();
     updateSettingsDisplay();
 }
 
-// プリセットボタンのイベントリスナーを設定
-function setupPresetButtons() {
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const presetId = btn.getAttribute('data-preset');
+// プリセットドロップダウンのイベントリスナーを設定
+function setupPresetDropdown() {
+    const presetSelect = document.getElementById('preset-select');
+    if (presetSelect) {
+        presetSelect.addEventListener('change', () => {
+            const presetId = presetSelect.value;
             loadPreset(presetId);
         });
-    });
+    }
 }
 
 // 設定変更時に自動保存と表示更新
@@ -1743,7 +1802,7 @@ window.addEventListener('DOMContentLoaded', async function () {
 
     await loadPresetsFromJson(); // presets.jsonを読み込む
     loadSettings();
-    setupPresetButtons(); // プリセットボタンの設定
+    setupPresetDropdown(); // プリセットドロップダウンの設定
     loadPreset('custom'); // デフォルトでカスタムプリセットを読み込み
     showTitleScreen();
 

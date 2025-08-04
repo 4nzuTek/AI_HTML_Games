@@ -29,10 +29,10 @@
   {
     "id": "expert",
     "name": "エキスパート",
-    "bpm": 160,
-    "noteType": "12th",
-    "renCount": 8,
-    "restCount": 4,
+    "bpm": 200,
+    "noteType": "16th",
+    "renCount": 9,
+    "restCount": 3,
     "offset": 0
   },
   {

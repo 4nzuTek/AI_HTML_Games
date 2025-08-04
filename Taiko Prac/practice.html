@@ -18,16 +18,18 @@
             <!-- プリセット機能 -->
             <div class="preset-section">
                 <h3>プリセット選択</h3>
-                <div class="preset-buttons">
-                    <button class="preset-btn" data-preset="beginner">初級者</button>
-                    <button class="preset-btn" data-preset="intermediate">中級者</button>
-                    <button class="preset-btn" data-preset="advanced">上級者</button>
-                    <button class="preset-btn" data-preset="expert">エキスパート</button>
-                    <button class="preset-btn" data-preset="custom">カスタム</button>
+                <div class="preset-selector">
+                    <select id="preset-select" class="preset-dropdown">
+                        <option value="beginner">初級者</option>
+                        <option value="intermediate">中級者</option>
+                        <option value="advanced">上級者</option>
+                        <option value="expert">エキスパート</option>
+                        <option value="custom" selected>カスタム</option>
+                    </select>
                 </div>
                 <div class="preset-info">
                     <div class="preset-name" id="current-preset-name">カスタム</div>
-                    <div class="preset-score" id="current-preset-score">最高スコア: 0</div>
+                    <div class="preset-score" id="current-preset-score">自己ベスト: 0</div>
                 </div>
             </div>
 
@@ -114,8 +116,12 @@
                                 <div class="chip-label">スコア</div>
                                 <div class="score-values">
                                     <div class="score-item-large">
-                                        <span class="score-label-large">ハイスコア:</span>
-                                        <span class="score-value-large" id="recent-score-best">0</span>
+                                        <span class="score-label-large">自己ベスト:</span>
+                                        <span class="score-value-large" id="all-time-best">0</span>
+                                    </div>
+                                    <div class="score-item-large">
+                                        <span class="score-label-large">今回のベスト:</span>
+                                        <span class="score-value-large" id="current-session-best">0</span>
                                     </div>
                                     <div class="score-item-large">
                                         <span class="score-label-large">直近100ノーツ:</span>
