@@ -43,5 +43,38 @@
     "renCount": 5,
     "restCount": 3,
     "offset": 0
+  },
+  {
+    "id": "mixed_notes1",
+    "name": "音符混合1",
+    "bpm": 150,
+    "offset": 0,
+    "patterns": [
+      { "noteType": "8th", "type": "hit", "count": 4 },
+      { "noteType": "16th", "type": "hit", "count": 4 }
+    ]
+  },
+  {
+    "id": "mixed_notes2",
+    "name": "音符混合2",
+    "bpm": 160,
+    "offset": 0,
+    "patterns": [
+      { "noteType": "12th", "type": "hit", "count": 4 },
+      { "noteType": "24th", "type": "hit", "count": 5 },
+      { "noteType": "24th", "type": "rest", "count": 11 }
+    ]
+  },
+  {
+    "id": "complex_pattern",
+    "name": "複雑パターン",
+    "bpm": 180,
+    "offset": 0,
+    "patterns": [
+      { "noteType": "8th", "type": "hit", "count": 2 },
+      { "noteType": "16th", "type": "hit", "count": 4 },
+      { "noteType": "8th", "type": "rest", "count": 1 },
+      { "noteType": "16th", "type": "hit", "count": 2 }
+    ]
   }
 ]
