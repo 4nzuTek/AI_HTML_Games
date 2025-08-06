@@ -142,6 +142,8 @@ class TaikoPractice {
         this.notes = [];
         this.lines = []; // ガイドライン表示用
         this.lastLineTime = 0; // 最後にガイドラインを生成した時間
+        this.nextGuideLineTime = 0; // 次のガイドライン生成時間（高精度管理）
+        this.guideLineBeatIndex = 0; // ガイドラインの拍インデックス（4分音符として管理）
         this.isPlaying = false;
         this.noteIndex = 0;
         this.sixteenthNoteCount = 0; // 16分音符のカウンター（0-3）
@@ -223,7 +225,7 @@ class TaikoPractice {
             return total;
         }, 0);
 
-        // 各パターンの拍数を計算
+        // 各パターンの拍数を計算（浮動小数点誤差を最小化）
         this.patternBeats = this.patterns.map(pattern => {
             let noteTypeMultiplier;
             switch (pattern.noteType) {
@@ -235,17 +237,17 @@ class TaikoPractice {
                 case '4th': noteTypeMultiplier = 1; break;
                 default: noteTypeMultiplier = 1 / 4; break;
             }
-            return pattern.count * noteTypeMultiplier; // このパターンの合計拍数
+            return Math.round(pattern.count * noteTypeMultiplier * 1000) / 1000; // このパターンの合計拍数
         });
 
         // 各パターンの累積拍数を計算（開始拍を決めるため）
         this.patternStartBeats = [0]; // 最初のパターンは0拍目から
         for (let i = 1; i < this.patternBeats.length; i++) {
-            this.patternStartBeats[i] = this.patternStartBeats[i - 1] + this.patternBeats[i - 1];
+            this.patternStartBeats[i] = Math.round((this.patternStartBeats[i - 1] + this.patternBeats[i - 1]) * 1000) / 1000;
         }
 
         // パターン全体の拍数を計算
-        this.totalPatternBeats = this.patternBeats.reduce((total, beats) => total + beats, 0);
+        this.totalPatternBeats = Math.round(this.patternBeats.reduce((total, beats) => total + beats, 0) * 1000) / 1000;
 
         console.log('パターン拍数:', this.patternBeats);
         console.log('パターン開始拍:', this.patternStartBeats);
@@ -593,6 +595,8 @@ class TaikoPractice {
             this.playBeatSound();
             // 最初のガイドラインを生成
             this.createGuideLine();
+            // ガイドライン用タイミングを初期化（4分音符として）
+            this.guideLineBeatIndex = 1; // 次のガイドラインは1拍目
 
             // 最初のノーツを生成（オフセットが正の場合は遅らせる）
             if (this.audioOffset > 0) {
@@ -664,17 +668,19 @@ class TaikoPractice {
             if (this.patterns && this.patterns.length > 0) {
                 // パターン配列の場合：拍境界でノーツを生成
                 const beatDuration = (60 / this.bpm) * 1000; // 1拍の長さ（ms）
-                const elapsedBeats = (currentTime - this.startTime) / beatDuration; // 経過拍数
+                const elapsedTime = currentTime - this.startTime;
+                const elapsedBeats = elapsedTime / beatDuration; // 経過拍数
 
                 // 現在のパターン内での期待ノーツ位置を計算
                 const currentPattern = this.patterns[this.currentPatternIndex];
                 if (currentPattern && currentPattern.type === 'hit') {
-                    // 現在のサイクル内での累積拍数を計算
-                    let totalBeats = this.patternCycleCount * this.totalPatternBeats;
+                    // 拍数計算を整数ベースで行い、浮動小数点誤差を最小化
+                    const cycleBeats = this.patternCycleCount * this.totalPatternBeats;
+                    let patternBeats = 0;
 
                     // 現在のパターンまでの累積拍数を計算
                     for (let i = 0; i < this.currentPatternIndex; i++) {
-                        totalBeats += this.patternBeats[i];
+                        patternBeats += this.patternBeats[i];
                     }
 
                     // 現在のパターン内での音符間隔（拍）
@@ -690,26 +696,31 @@ class TaikoPractice {
                     }
 
                     // 次のノーツの期待拍位置（サイクル数 + パターン内位置）
-                    const nextNoteBeat = totalBeats + (this.patternNoteIndex * noteTypeMultiplier);
+                    const nextNoteBeat = cycleBeats + patternBeats + (this.patternNoteIndex * noteTypeMultiplier);
 
-                    // 期待拍位置の時間に達していればノーツ生成
-                    if (elapsedBeats >= nextNoteBeat) {
+                    // 期待拍位置の時間に達していればノーツ生成（許容誤差5ms）
+                    const tolerance = 5; // 5msの許容誤差
+                    const expectedTime = this.startTime + (nextNoteBeat * beatDuration);
+                    if (currentTime >= expectedTime - tolerance) {
                         shouldGenerateNow = true;
                         // 次回のチェック時間を正確に設定
-                        this.lastNoteTime = this.startTime + (nextNoteBeat * beatDuration);
+                        this.lastNoteTime = expectedTime;
                     }
                 } else if (currentPattern && currentPattern.type === 'rest') {
-                    // restタイプのパターンの場合、時間だけ進める
-                    let totalBeats = this.patternCycleCount * this.totalPatternBeats;
+                    // restタイプのパターンの場合、時間だけ進める（重複計算を避ける）
+                    const cycleBeats = this.patternCycleCount * this.totalPatternBeats;
+                    let patternBeats = 0;
+
                     for (let i = 0; i < this.currentPatternIndex; i++) {
-                        totalBeats += this.patternBeats[i];
+                        patternBeats += this.patternBeats[i];
                     }
 
                     // restパターンの完了時間を計算
-                    const restEndBeat = totalBeats + this.patternBeats[this.currentPatternIndex];
+                    const restEndBeat = cycleBeats + patternBeats + this.patternBeats[this.currentPatternIndex];
+                    const expectedTime = this.startTime + (restEndBeat * beatDuration);
 
-                    if (elapsedBeats >= restEndBeat) {
-                        // restパターンが完了したら次のパターンに進む（advancePatternは呼ばない）
+                    if (currentTime >= expectedTime) {
+                        // restパターンが完了したら次のパターンに進む
                         const oldPatternIndex = this.currentPatternIndex;
                         this.currentPatternIndex = (this.currentPatternIndex + 1) % this.patterns.length;
                         this.patternNoteIndex = 0;
@@ -726,60 +737,57 @@ class TaikoPractice {
             } else {
                 // 従来の形式の場合
                 const adjustedInterval = this.getAdjustedNoteInterval();
-                if (currentTime - this.lastNoteTime >= adjustedInterval) {
+                // 許容誤差5msを追加してタイミングのブレを軽減
+                const tolerance = 5;
+                if (currentTime - this.lastNoteTime >= adjustedInterval - tolerance) {
                     shouldGenerateNow = true;
                     this.lastNoteTime += adjustedInterval;
                 }
             }
 
             if (shouldGenerateNow) {
-                // 連打数・休み数に応じてノーツ生成（オフセットが正の場合は遅らせる）
-                if (this.audioOffset > 0) {
-                    setTimeout(() => {
-                        // パターン配列の場合は直接ノーツ生成（shouldGenerateNoteFromPatternは既に拍境界で判定済み）
-                        if (this.patterns && this.patterns.length > 0) {
-                            this.createNote();
-                        } else if (this.shouldGenerateNote()) {
-                            this.createNote();
-                        }
-                        // サイクルカウンターを進める（パターン配列の場合は従来の管理を行わない）
-                        if (!this.patterns || this.patterns.length === 0) {
-                            // 従来の形式の場合のみサイクル管理を行う
-                            if (this.restCount === 0) {
-                                this.cycleCount = (this.cycleCount + 1) % this.renCount;
-                            } else {
-                                this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
-                            }
-                        }
-                    }, this.audioOffset);
-                } else {
-                    // パターン配列の場合は直接ノーツ生成（shouldGenerateNoteFromPatternは既に拍境界で判定済み）
-                    if (this.patterns && this.patterns.length > 0) {
-                        this.createNote();
-                    } else if (this.shouldGenerateNote()) {
-                        this.createNote();
-                    }
-                    // サイクルカウンターを進める（パターン配列の場合は従来の管理を行わない）
-                    if (!this.patterns || this.patterns.length === 0) {
-                        // 従来の形式の場合のみサイクル管理を行う
-                        if (this.restCount === 0) {
-                            this.cycleCount = (this.cycleCount + 1) % this.renCount;
-                        } else {
-                            this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
-                        }
+                // ノーツ生成を即座に実行（オフセットは音の再生タイミングのみに影響）
+                if (this.patterns && this.patterns.length > 0) {
+                    this.createNote();
+                } else if (this.shouldGenerateNote()) {
+                    this.createNote();
+                }
+                // サイクルカウンターを進める（パターン配列の場合は従来の管理を行わない）
+                if (!this.patterns || this.patterns.length === 0) {
+                    // 従来の形式の場合のみサイクル管理を行う
+                    if (this.restCount === 0) {
+                        this.cycleCount = (this.cycleCount + 1) % this.renCount;
+                    } else {
+                        this.cycleCount = (this.cycleCount + 1) % (this.renCount + this.restCount);
                     }
                 }
             }
 
-            // === ガイドライン生成（常に4分間隔） ===
-            const beatInterval = this.metronomeInterval; // 4分音符(一拍)
-            while (currentTime - this.lastLineTime >= beatInterval) {
-                if (this.audioOffset > 0) {
-                    setTimeout(() => this.createGuideLine(), this.audioOffset);
-                } else {
+            // === ガイドライン生成（4分音符としてノーツと同じ処理） ===
+            if (this.patterns && this.patterns.length > 0) {
+                // パターン配列の場合：4分音符の拍境界でガイドラインを生成
+                const beatDuration = (60 / this.bpm) * 1000; // 1拍の長さ（ms）
+                const elapsedTime = currentTime - this.startTime;
+                const elapsedBeats = elapsedTime / beatDuration; // 経過拍数
+
+                // ガイドラインの期待拍位置（4分音符として）
+                const nextGuideLineBeat = this.guideLineBeatIndex;
+
+                // 期待拍位置の時間に達していればガイドライン生成（許容誤差5ms）
+                const tolerance = 5; // 5msの許容誤差
+                const expectedTime = this.startTime + (nextGuideLineBeat * beatDuration);
+                if (currentTime >= expectedTime - tolerance) {
                     this.createGuideLine();
+                    this.guideLineBeatIndex++;
                 }
-                this.lastLineTime += beatInterval;
+            } else {
+                // 従来の形式の場合：4分音符間隔でガイドライン生成
+                const beatDuration = (60 / this.bpm) * 1000; // 1拍の長さ（ms）
+                const tolerance = 5;
+                if (currentTime - this.lastLineTime >= beatDuration - tolerance) {
+                    this.createGuideLine();
+                    this.lastLineTime += beatDuration;
+                }
             }
         }
 
@@ -795,6 +803,7 @@ class TaikoPractice {
             this.updateJudgmentLinePosition();
         }
 
+        // より高精度なタイミング管理のため、次のフレームを即座に要求
         requestAnimationFrame(() => this.gameLoop());
     }
 
@@ -808,7 +817,7 @@ class TaikoPractice {
         note.textContent = noteText;
         note.style.left = '1920px'; // 画面右端から開始（ノーツの中心が画面右端に来るように）
         note.style.top = '50%';
-        note.style.transform = 'translateY(-50%)';
+        note.style.transform = 'translate(-50%, -50%)'; // 中心揃え
         // 連番をz-indexに使う（新しいノーツほどz-indexが小さい）
         note.style.zIndex = String(1000000 - this.noteSerial);
         this.noteSerial++;
@@ -830,7 +839,7 @@ class TaikoPractice {
             const currentNoteInPattern = this.patternNoteIndex + 1;
             const totalNotes = currentPattern?.count || 0;
 
-            console.log(`ノーツ${this.noteSerial}: ${currentBeat.toFixed(3)}拍目 - ${currentPattern?.noteType || 'unknown'} (パターン${this.currentPatternIndex + 1}の${currentNoteInPattern}/${totalNotes})`);
+            // console.log(`ノーツ${this.noteSerial}: ${currentBeat.toFixed(3)}拍目 - ${currentPattern?.noteType || 'unknown'} (パターン${this.currentPatternIndex + 1}の${currentNoteInPattern}/${totalNotes})`);
 
             // パターンを進行（ノーツ生成後に進行）
             this.advancePattern();
@@ -840,12 +849,19 @@ class TaikoPractice {
             if (this.renPos > this.renCount) this.renPos = 1;
         }
 
+        // ノーツ生成時の拍数を計算
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - this.startTime;
+        const beatDuration = (60 / this.bpm) * 1000;
+        const createdBeat = elapsedTime / beatDuration;
+
         this.notes.push({
             element: note,
             type: noteType,
             centerX: 1920, // ノーツの中心X座標（画面右端から開始）
             hit: false,
             createdAt: Date.now(), // ノーツの生成時間を記録
+            createdBeat: createdBeat, // ノーツ生成時の拍数を記録
             renPos: renPos // 連打サイクル内の打数
         });
     }
@@ -863,6 +879,8 @@ class TaikoPractice {
         });
     }
 
+
+
     updateNotes(currentTime) {
         // 実際のフレーム間隔を使用してdeltaTimeを計算
         const deltaTime = this.lastFrameTime > 0 ? (currentTime - this.lastFrameTime) : 16.67; // 初回は16.67msを使用
@@ -874,7 +892,28 @@ class TaikoPractice {
                 const deltaX = (this.noteSpeed * deltaTime) / 1000;
 
                 note.centerX -= deltaX; // 左に移動
-                note.element.style.left = `${note.centerX - 40}px`; // ノーツの中心から40px左（ノーツの左端）
+                note.element.style.left = `${note.centerX}px`; // ノーツの中心座標を直接使用
+                note.element.style.transform = 'translate(-50%, -50%)'; // 中心揃え
+
+                // 判定ライン通過時刻を検出（判定ラインを通過した瞬間）
+                if (note.centerX <= this.judgmentLineX && !note.judgmentLinePassed) { // 判定ラインよりも左に移動したら通過
+                    note.judgmentLinePassed = true;
+
+                    // 現在時刻を拍数に変換
+                    const currentTime = Date.now();
+                    const elapsedTime = currentTime - this.startTime;
+                    const beatDuration = (60 / this.bpm) * 1000;
+                    const currentBeat = elapsedTime / beatDuration;
+
+                    // 期待される拍数を計算（シンプルな方法）
+                    const expectedBeat = note.createdBeat + this.beatsToReach;
+
+                    // 最終的な誤差を計算
+                    const finalBeatError = currentBeat - expectedBeat;
+                    const finalTimeError = finalBeatError * beatDuration;
+
+                    console.log(`🎯 判定ライン通過: ノーツ${note.element.textContent} - 期待${expectedBeat.toFixed(3)}拍目, 実際${currentBeat.toFixed(3)}拍目, 最終誤差${finalBeatError.toFixed(4)}拍(${finalTimeError.toFixed(1)}ms)`);
+                }
             }
 
             // 判定線を更新（ヒットしていないノーツのみ）
@@ -887,7 +926,25 @@ class TaikoPractice {
         this.lines.forEach(line => {
             const deltaX = (this.noteSpeed * deltaTime) / 1000;
             line.centerX -= deltaX;
-            line.element.style.transform = `translateX(${line.centerX - 1}px)`;
+            line.element.style.transform = `translateX(${line.centerX}px)`;
+
+            // ガイドラインの判定ライン通過時刻を検出
+            if (line.centerX <= this.judgmentLineX && !line.judgmentLinePassed) { // 判定ラインよりも左に移動したら通過
+                line.judgmentLinePassed = true;
+
+                // 現在時刻を拍数に変換
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - this.startTime;
+                const beatDuration = (60 / this.bpm) * 1000;
+                const currentBeat = elapsedTime / beatDuration;
+
+                // ガイドラインは4分音符なので、期待拍数は整数
+                const expectedBeat = Math.round(currentBeat);
+                const finalBeatError = currentBeat - expectedBeat;
+                const finalTimeError = finalBeatError * beatDuration;
+
+                console.log(`📏 ガイドライン通過: 期待${expectedBeat}拍目, 実際${currentBeat.toFixed(3)}拍目, 最終誤差${finalBeatError.toFixed(4)}拍(${finalTimeError.toFixed(1)}ms)`);
+            }
         });
 
         this.lastFrameTime = currentTime; // 現在のフレーム時間を更新
@@ -933,7 +990,7 @@ class TaikoPractice {
             // ノーツの中心位置を直接使用
             const noteCenterX = note.centerX;
 
-            // 判定ラインを過ぎた距離を計算
+            // 判定ラインを過ぎたかどうかを座標で判定
             const distancePastLine = this.judgmentLineX - noteCenterX;
 
             // 距離をミリ秒に変換
