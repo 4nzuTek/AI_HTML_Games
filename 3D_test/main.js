@@ -1,25 +1,42 @@
-// ===== Mini FPS with Photon Fusion =====
-// Photon Configuration
+// ===== Photon Fusion を使ったミニFPS =====
+// Photon設定
 const PHOTON_APP_ID = "d2b05894-f70e-4fbd-b86e-f96c9837017f";
 let photonClient = null;
 let isHost = false;
 let connectedPlayers = new Map();
 let nextPlayerColorIndex = 0; // Host manages color assignment order
 
-// Config
+// ゲーム設定
 const WORLD_SIZE = 120;
 const PLAYER_EYE_HEIGHT = 1.7;
-const WALK_SPEED = 6;            // m/s
-const SPRINT_MULTIPLIER = 1.6;
-const JUMP_SPEED = 6.5;
-const GRAVITY = 18;              // m/s^2
-const FIRE_COOLDOWN_S = 0.08;    // seconds per shot (faster full-auto)
-const MAG_SIZE = 30;
-const RESERVE_START = 300;
-const RELOAD_TIME_S = 1.1;
-const MOUSE_SENSITIVITY = 0.002; // Standard FPS sensitivity
+const WALK_SPEED = 6;            // 歩行速度 m/s
+const SPRINT_MULTIPLIER = 1.6;   // 走行速度倍率
+const JUMP_SPEED = 6.5;          // ジャンプ力
+const GRAVITY = 18;              // 重力 m/s^2
+const FIRE_COOLDOWN_S = 0.08;    // 発射間隔（秒） フルオート射撃
+const MAG_SIZE = 30;             // マガジン弾数
+const RESERVE_START = 300;       // 初期予備弾数
+const RELOAD_TIME_S = 1.1;       // リロード時間（秒）
+const MOUSE_SENSITIVITY = 0.002; // マウス感度（標準FPS感度）
 
-// State
+// 反動設定（調整可能）
+const RECOIL_INTENSITY = 0.015;  // 基本反動の強さ（ラジアン）
+const RECOIL_EASING_SPEED = 30.0; // 反動到達速度（大きいほど速い）
+const RECOIL_EASE_IN_POWER = 5.0;  // イーズイン強度（大きいほど急激な開始）
+const RECOIL_EASE_OUT_POWER = 0.3; // イーズアウト強度（小さいほど滑らかな終了）
+
+// ランダム反動設定
+const RECOIL_INTENSITY_VARIATION = 0.3; // 反動強度の変動幅（±30%）
+const RECOIL_HORIZONTAL_MAX = 0.008; // 最大左右反動（ラジアン）
+
+// 反動蓄積設定（連射時）
+const RECOIL_BUILDUP_MIN_MULTIPLIER = 1.0; // 最小反動倍率（100%）
+const RECOIL_BUILDUP_MAX_MULTIPLIER = 3.0; // 最大反動倍率（300%）
+const RECOIL_BUILDUP_RATE = 2.0; // 1発毎の反動蓄積速度
+const RECOIL_BUILDUP_DECAY_RATE = 3.0; // 射撃停止時の反動減衰速度
+const RECOIL_BUILDUP_DECAY_DELAY = 0.3; // 減衰開始までの遅延（秒）
+
+// ゲーム状態
 let isPaused = true;
 let isGameOver = false;
 let pointerLocked = false;
@@ -30,7 +47,29 @@ let health = 100;
 let lastShotAt = 0;
 let isThirdPerson = false;
 
-// Input
+// 反動状態
+let targetRecoil = 0;         // 目標反動量（縦方向）
+let currentRecoil = 0;        // 現在のスムージングされた反動量（縦方向）
+let targetHorizontalRecoil = 0; // 目標水平反動量
+let currentHorizontalRecoil = 0; // 現在のスムージングされた水平反動量
+
+// 反動蓄積状態
+let recoilBuildup = 0;        // 現在の反動蓄積レベル（0から1）
+let lastShotTime = 0;         // 最後の射撃時刻（減衰計算用）
+
+// 反動用カスタムイージング関数
+function easeInOut(t, easeInPower, easeOutPower) {
+    // tは0から1までの進行度
+    if (t < 0.5) {
+        // 前半：イーズイン（スロースタート、加速）
+        return Math.pow(2 * t, easeInPower) / 2;
+    } else {
+        // 後半：イーズアウト（減速）
+        return 1 - Math.pow(2 * (1 - t), easeOutPower) / 2;
+    }
+}
+
+// 入力管理
 const keyState = new Map();
 let mouseDown = false;
 
@@ -39,10 +78,11 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyP') toggleViewMode();
     if (e.code === 'KeyR') reload();
     if (e.code === 'KeyT') {
-        // Debug: Show current angles (Quaternion-based)
+        // デバッグ：現在の角度を表示（クォータニオンベース）
         console.log(`Debug - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
+        console.log(`Recoil - target: ${targetRecoil.toFixed(4)}, current: ${currentRecoil.toFixed(4)}`);
 
-        // Safety check and auto-correction
+        // 安全チェックと自動修正
         if (isNaN(yawObject.rotation.y) || isNaN(pitchObject.rotation.x)) {
             console.warn('🔧 Detected NaN angles, resetting to safe values');
             yawObject.rotation.y = 0;
@@ -465,12 +505,187 @@ function attemptShoot() {
     scene.add(bullet);
     bullets.push(bullet);
 
+    // Apply recoil
+    applyRecoil();
+
     // Send network shoot event
     if (networkManager.isJoinedToRoom()) {
         networkManager.sendShootEvent(camera.position, direction);
     }
 
     updateUI();
+}
+
+// 射撃時に反動を適用
+function applyRecoil() {
+    const oldTarget = targetRecoil;
+    const oldHorizontalTarget = targetHorizontalRecoil;
+    const oldBuildup = recoilBuildup;
+
+    // 射撃時刻と蓄積を更新
+    const currentTime = performance.now() / 1000;
+    lastShotTime = currentTime;
+
+    // 反動蓄積を増加
+    recoilBuildup = Math.min(1, recoilBuildup + RECOIL_BUILDUP_RATE * (1 / 60)); // 蓄積速度は60FPSを想定
+
+    // 蓄積倍率を計算（最小値と最大値の間で補間）
+    const buildupMultiplier = RECOIL_BUILDUP_MIN_MULTIPLIER +
+        (RECOIL_BUILDUP_MAX_MULTIPLIER - RECOIL_BUILDUP_MIN_MULTIPLIER) * recoilBuildup;
+
+    // 反動強度のランダム変動（デフォルト±30%）
+    const randomMultiplier = 1 + (Math.random() - 0.5) * 2 * RECOIL_INTENSITY_VARIATION;
+
+    // 基本反動に蓄積倍率を適用
+    const baseVerticalRecoil = RECOIL_INTENSITY * buildupMultiplier * randomMultiplier;
+    const baseHorizontalRecoil = RECOIL_HORIZONTAL_MAX * buildupMultiplier;
+
+    // ランダム水平反動（左右）
+    const horizontalRecoil = (Math.random() - 0.5) * 2 * baseHorizontalRecoil;
+
+    // 目標反動に加算（スムージに適用される）
+    targetRecoil += baseVerticalRecoil;
+    targetHorizontalRecoil += horizontalRecoil;
+
+    console.log(`🔫 発射! 蓄積: ${oldBuildup.toFixed(3)} → ${recoilBuildup.toFixed(3)} (倍率: ${buildupMultiplier.toFixed(2)}x)`);
+    console.log(`      縦反動: ${oldTarget.toFixed(4)} → ${targetRecoil.toFixed(4)} (+${baseVerticalRecoil.toFixed(4)})`);
+    console.log(`      横反動: ${oldHorizontalTarget.toFixed(4)} → ${targetHorizontalRecoil.toFixed(4)} (+${horizontalRecoil.toFixed(4)})`);
+}
+
+// 安全なシンプルイージングで反動を更新
+function updateRecoil(delta) {
+    const oldCurrent = currentRecoil;
+    const oldCurrentHorizontal = currentHorizontalRecoil;
+    const oldPitch = pitchObject.rotation.x;
+    const oldYaw = yawObject.rotation.y;
+
+    // === 縦方向反動 ===
+    // 安全：目標値へのシンプル補間
+    const diff = targetRecoil - currentRecoil;
+
+    // NaN防止の安全チェック（縦方向）
+    if (isNaN(currentRecoil) || isNaN(targetRecoil) || isNaN(diff)) {
+        console.warn('🚨 縦方向反動計算でNaNを検出！ リセットします...');
+        currentRecoil = 0;
+        targetRecoil = 0;
+        return;
+    }
+
+    // シンプルイージング：目標から遠い時は速く、近い時は遅く
+    let speed = RECOIL_EASING_SPEED;
+    if (Math.abs(diff) > 0.01) {
+        speed *= 2.0; // 「ガク」効果のための速いスタート
+    } else {
+        speed *= 0.5; // 滑らかな終了のための遅いフィニッシュ
+    }
+
+    currentRecoil += diff * speed * delta;
+
+    // 安全範囲制限
+    currentRecoil = Math.max(0, Math.min(10, currentRecoil));
+
+    // スムージな縦反動をピッチに適用
+    const recoilPitch = currentRecoil;
+    const lastRecoil = pitchObject.userData.lastRecoil || 0;
+    const pitchDelta = recoilPitch - lastRecoil;
+
+    // ピッチ計算の安全チェック
+    if (isNaN(recoilPitch) || isNaN(lastRecoil) || isNaN(pitchDelta)) {
+        console.warn('🚨 ピッチ計算でNaNを検出！ ピッチデータをリセットします...');
+        pitchObject.userData.lastRecoil = 0;
+        return;
+    }
+
+    // カメラピッチに適用
+    pitchObject.rotation.x += pitchDelta;
+
+    // 最終ピッチの安全チェック
+    if (isNaN(pitchObject.rotation.x)) {
+        console.warn('🚨 最終ピッチでNaNを検出！ リセットします...');
+        pitchObject.rotation.x = 0;
+        pitchObject.userData.lastRecoil = 0;
+        return;
+    }
+
+    // 次フレーム用に保存
+    pitchObject.userData.lastRecoil = recoilPitch;
+
+    // 過回転防止のためピッチを制限
+    const maxPitch = Math.PI / 2 - 0.1;
+    pitchObject.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, pitchObject.rotation.x));
+
+    // === 水平反動 ===
+    const horizontalDiff = targetHorizontalRecoil - currentHorizontalRecoil;
+
+    // NaN防止の安全チェック（水平）
+    if (isNaN(currentHorizontalRecoil) || isNaN(targetHorizontalRecoil) || isNaN(horizontalDiff)) {
+        console.warn('🚨 水平反動計算でNaNを検出！ リセットします...');
+        currentHorizontalRecoil = 0;
+        targetHorizontalRecoil = 0;
+        return;
+    }
+
+    // 水平方向も同じイージング速度を使用
+    currentHorizontalRecoil += horizontalDiff * speed * delta;
+
+    // 水平反動の安全範囲制限
+    currentHorizontalRecoil = Math.max(-1, Math.min(1, currentHorizontalRecoil));
+
+    // 水平反動をヨーに適用
+    const recoilYaw = currentHorizontalRecoil;
+    const lastHorizontalRecoil = yawObject.userData.lastHorizontalRecoil || 0;
+    const yawDelta = recoilYaw - lastHorizontalRecoil;
+
+    // ヨー計算の安全チェック
+    if (isNaN(recoilYaw) || isNaN(lastHorizontalRecoil) || isNaN(yawDelta)) {
+        console.warn('🚨 ヨー計算でNaNを検出！ ヨーデータをリセットします...');
+        yawObject.userData.lastHorizontalRecoil = 0;
+        return;
+    }
+
+    // カメラヨーに適用
+    yawObject.rotation.y += yawDelta;
+
+    // 最終ヨーの安全チェック
+    if (isNaN(yawObject.rotation.y)) {
+        console.warn('🚨 最終ヨーでNaNを検出！ リセットします...');
+        yawObject.rotation.y = 0;
+        yawObject.userData.lastHorizontalRecoil = 0;
+        return;
+    }
+
+    // 次フレーム用に保存
+    yawObject.userData.lastHorizontalRecoil = recoilYaw;
+
+    // === 反動蓄積の減衰 ===
+    const currentTime = performance.now() / 1000;
+    const timeSinceLastShot = currentTime - lastShotTime;
+
+    // 遅延後に減衰を適用
+    if (timeSinceLastShot > RECOIL_BUILDUP_DECAY_DELAY && recoilBuildup > 0) {
+        const oldRecoilBuildup = recoilBuildup;
+        recoilBuildup = Math.max(0, recoilBuildup - RECOIL_BUILDUP_DECAY_RATE * delta);
+
+        // 蓄積減衰を時々ログ出力
+        if (Math.abs(oldRecoilBuildup - recoilBuildup) > 0.001 && Math.random() < 0.05) {
+            console.log(`⏳ 反動蓄積減衰: ${oldRecoilBuildup.toFixed(3)} → ${recoilBuildup.toFixed(3)} (${timeSinceLastShot.toFixed(2)}s経過)`);
+        }
+    }
+
+    // デバッグログ - 反動 > 0 の時は必ずログ出力
+    if (targetRecoil > 0.001 || currentRecoil > 0.001 || Math.abs(targetHorizontalRecoil) > 0.001 || Math.abs(currentHorizontalRecoil) > 0.001) {
+        const progress = targetRecoil > 0 ? (currentRecoil / targetRecoil) : 0;
+        const horizontalProgress = Math.abs(targetHorizontalRecoil) > 0 ? (Math.abs(currentHorizontalRecoil) / Math.abs(targetHorizontalRecoil)) : 0;
+        console.log(`📈 updateRecoil CALLED:`);
+        console.log(`   縦: current ${oldCurrent.toFixed(4)} → ${currentRecoil.toFixed(4)}, target: ${targetRecoil.toFixed(4)}, progress: ${progress.toFixed(3)}`);
+        console.log(`   横: current ${oldCurrentHorizontal.toFixed(4)} → ${currentHorizontalRecoil.toFixed(4)}, target: ${targetHorizontalRecoil.toFixed(4)}, progress: ${horizontalProgress.toFixed(3)}`);
+        console.log(`   pitch: ${oldPitch.toFixed(4)} → ${pitchObject.rotation.x.toFixed(4)} (${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°)`);
+        console.log(`   yaw: ${oldYaw.toFixed(4)} → ${yawObject.rotation.y.toFixed(4)} (${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°)`);
+        console.log(`   蓄積レベル: ${recoilBuildup.toFixed(3)}`);
+    } else if (Math.random() < 0.01) {
+        // 反動がない時も関数が呼ばれていることを確認するため時々ログ出力
+        console.log(`📈 updateRecoil called (no recoil): vertical target=${targetRecoil.toFixed(4)}, horizontal target=${targetHorizontalRecoil.toFixed(4)}, buildup=${recoilBuildup.toFixed(3)}`);
+    }
 }
 
 function reload() {
@@ -721,7 +936,7 @@ class NetworkManager {
 
             testConn.on('error', (err) => {
                 clearTimeout(timeout);
-                // Suppress "Could not connect" errors as they're expected
+                // 「Could not connect」エラーは予期されるものなので抑制
                 if (!err.message.includes('Could not connect')) {
                     console.warn(`Room ${roomId} check failed:`, err.message);
                 }
@@ -923,7 +1138,7 @@ class NetworkManager {
     handlePlayerUpdate(data, peerId) {
         if (peerId === this.playerId) return; // Ignore own updates
 
-        // Only update existing players - don't create unknown players
+        // 既存プレイヤーのみ更新 - 未知のプレイヤーは作成しない
         if (!connectedPlayers.has(peerId)) {
             console.warn(`Received update for unknown player: ${peerId}`);
             return;
@@ -980,7 +1195,7 @@ class NetworkManager {
     }
 
     createNetworkPlayer(peerId, playerName = 'Player', assignedColorIndex = null) {
-        // Check if player already exists
+        // プレイヤーが既に存在するかチェック
         if (connectedPlayers.has(peerId)) {
             console.warn(`⚠️ Player ${peerId} (${playerName}) already exists! Skipping creation.`);
             return;
@@ -1337,7 +1552,7 @@ const PlayerNameStorage = {
         try {
             localStorage.setItem(this.KEY, playerName);
         } catch (e) {
-            console.warn('Could not save player name:', e);
+            console.warn('プレイヤー名を保存できませんでした:', e);
         }
     },
 
@@ -1345,7 +1560,7 @@ const PlayerNameStorage = {
         try {
             return localStorage.getItem(this.KEY) || '';
         } catch (e) {
-            console.warn('Could not load player name:', e);
+            console.warn('プレイヤー名を読み込めませんでした:', e);
             return '';
         }
     }
@@ -1434,6 +1649,24 @@ function resetGame() {
     playerPosition.set(0, PLAYER_EYE_HEIGHT, 0);
     playerVelocity.set(0, 0, 0);
     playerBody.visible = false;
+
+    // 反動状態を安全にリセット
+    targetRecoil = 0;
+    currentRecoil = 0;
+    targetHorizontalRecoil = 0;
+    currentHorizontalRecoil = 0;
+    recoilBuildup = 0;
+    lastShotTime = 0;
+    if (pitchObject && pitchObject.userData) {
+        pitchObject.userData.lastRecoil = 0;
+    }
+    if (yawObject && yawObject.userData) {
+        yawObject.userData.lastHorizontalRecoil = 0;
+    }
+
+    // カメラ角度を安全にリセット
+    yawObject.rotation.y = 0;
+    pitchObject.rotation.x = 0;
 
     // Clear bullets
     for (const bullet of bullets) {
@@ -1664,6 +1897,9 @@ function animate() {
         // Only update player movement and shooting when not paused
         moveAndCollide(delta);
 
+        // Update recoil recovery
+        updateRecoil(delta);
+
         // Full-auto shooting
         if (mouseDown && pointerLocked) {
             attemptShoot();
@@ -1718,9 +1954,9 @@ function animate() {
         camera.rotation.x = pitchObject.rotation.x;
         camera.rotation.z = 0;
 
-        // Check for NaN in camera rotation
+        // カメラ回転のNaNをチェック
         if (isNaN(camera.rotation.x) || isNaN(camera.rotation.y) || isNaN(camera.rotation.z)) {
-            console.error('🚨 NaN detected in camera rotation!');
+            console.error('🚨 カメラ回転でNaNを検出！');
             camera.rotation.set(0, 0, 0);
             yawObject.rotation.y = 0;
             pitchObject.rotation.x = 0;
