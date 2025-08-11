@@ -531,6 +531,18 @@ class NetworkManager {
                 playerId: this.playerId,
                 colorIndex: 0  // Host is always blue (index 0)
             });
+
+            // Send host's current position to new connection
+            conn.send({
+                type: 'playerUpdate',
+                x: playerPosition.x,
+                y: playerPosition.y,
+                z: playerPosition.z,
+                yaw: yawObject.rotation.y,
+                pitch: pitchObject.rotation.x,
+                timestamp: Date.now()
+            });
+            console.log(`📤 Host welcome: sending position (${playerPosition.x.toFixed(1)}, ${playerPosition.y.toFixed(1)}, ${playerPosition.z.toFixed(1)}) to ${conn.peer}`);
         });
 
         conn.on('data', (data) => {
@@ -805,7 +817,19 @@ class NetworkManager {
                             colorIndex: 0
                         });
 
-                        // Send info about all other existing players with their assigned colors
+                        // Send host's current position
+                        conn.send({
+                            type: 'playerUpdate',
+                            x: playerPosition.x,
+                            y: playerPosition.y,
+                            z: playerPosition.z,
+                            yaw: yawObject.rotation.y,
+                            pitch: pitchObject.rotation.x,
+                            timestamp: Date.now()
+                        });
+                        console.log(`📤 Host sending own position to ${data.playerName}: (${playerPosition.x.toFixed(1)}, ${playerPosition.y.toFixed(1)}, ${playerPosition.z.toFixed(1)})`);
+
+                        // Send info about all other existing players with their assigned colors AND positions
                         connectedPlayers.forEach((player, existingPeerId) => {
                             if (existingPeerId !== peerId && player.userData.playerName) {
                                 console.log(`📤 Host sending existing player ${player.userData.playerName} info: color index ${player.userData.colorIndex}`);
@@ -815,6 +839,22 @@ class NetworkManager {
                                     playerId: existingPeerId,
                                     colorIndex: player.userData.colorIndex
                                 });
+
+                                // Send current position of existing player
+                                if (player.userData.networkData) {
+                                    const pos = player.userData.networkData.targetPosition || player.position;
+                                    const yaw = player.userData.networkData.targetYaw || player.rotation.y;
+                                    conn.send({
+                                        type: 'playerUpdate',
+                                        x: pos.x,
+                                        y: pos.y,
+                                        z: pos.z,
+                                        yaw: yaw,
+                                        pitch: 0,
+                                        timestamp: Date.now()
+                                    });
+                                    console.log(`📤 Host sending existing player ${player.userData.playerName} position: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`);
+                                }
                             }
                         });
 
