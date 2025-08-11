@@ -409,10 +409,24 @@ document.addEventListener('mousemove', onMouseMove);
 
 // Bullets
 const bullets = [];
-const bulletGeo = new THREE.SphereGeometry(0.06, 8, 8);
-const bulletMat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x332200 });
 const BULLET_SPEED = 225; // m/s (5x faster)
 const BULLET_LIFETIME = 3; // seconds
+const BULLET_BASE_LENGTH = 3.0; // Base length for bullets
+const BULLET_SPEED_SCALE = 0.02; // How much speed affects length
+
+// Function to create bullet geometry based on speed
+function createBulletGeometry(speed) {
+    // Length scales with speed for realistic bullet trail effect
+    const length = BULLET_BASE_LENGTH + (speed * BULLET_SPEED_SCALE);
+    return new THREE.CylinderGeometry(0.01, 0.01, length, 8);
+}
+
+// Make it bright and glowing for visibility
+const bulletMat = new THREE.MeshStandardMaterial({
+    color: 0xffd700,
+    emissive: 0xffaa00,
+    emissiveIntensity: 0.3
+});
 
 // Shooting (full-auto when mouse held)
 function attemptShoot() {
@@ -426,13 +440,21 @@ function attemptShoot() {
     lastShotAt = now;
     magazine -= 1;
 
-    // Create bullet
-    const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-    bullet.position.copy(camera.position);
-
     // Calculate shooting direction from camera
     const direction = new THREE.Vector3(0, 0, -1);
     direction.applyQuaternion(camera.quaternion);
+
+    // Create bullet with speed-based geometry
+    const bulletGeo = createBulletGeometry(BULLET_SPEED);
+    const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+    bullet.position.copy(camera.position);
+
+    // Orient bullet to point in the direction of travel
+    // Default cylinder points along Y axis, rotate to align with direction
+    const quaternion = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    quaternion.setFromUnitVectors(up, direction);
+    bullet.setRotationFromQuaternion(quaternion);
 
     bullet.userData = {
         velocity: direction.clone().multiplyScalar(BULLET_SPEED),
@@ -933,11 +955,19 @@ class NetworkManager {
     handlePlayerShoot(data, peerId) {
         if (peerId === this.playerId) return; // Ignore own shots
 
-        // Create network bullet
+        const direction = new THREE.Vector3(data.dx, data.dy, data.dz);
+
+        // Create network bullet with speed-based geometry
+        const bulletGeo = createBulletGeometry(BULLET_SPEED);
         const bullet = new THREE.Mesh(bulletGeo, bulletMat);
         bullet.position.set(data.ox, data.oy, data.oz);
 
-        const direction = new THREE.Vector3(data.dx, data.dy, data.dz);
+        // Orient network bullet to point in the direction of travel
+        const quaternion = new THREE.Quaternion();
+        const up = new THREE.Vector3(0, 1, 0);
+        quaternion.setFromUnitVectors(up, direction);
+        bullet.setRotationFromQuaternion(quaternion);
+
         bullet.userData = {
             velocity: direction.multiplyScalar(BULLET_SPEED),
             birthTime: performance.now() / 1000,
