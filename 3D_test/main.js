@@ -95,13 +95,44 @@ window.addEventListener('keydown', (e) => {
         }
     }
 
+    // Debug collision toggle (works anytime)
+    if (e.code === 'Digit1') {
+        DEBUG_COLLISION = !DEBUG_COLLISION;
+        console.log(`🔍 Debug collision visualization: ${DEBUG_COLLISION ? 'ON' : 'OFF'}`);
+
+        // Clear existing debug hitboxes when turning off
+        if (!DEBUG_COLLISION) {
+            debugHitboxes.forEach(hitbox => scene.remove(hitbox));
+            debugHitboxes.length = 0;
+        }
+
+        // Show user feedback
+        const message = document.createElement('div');
+        message.style.position = 'fixed';
+        message.style.top = '20px';
+        message.style.left = '50%';
+        message.style.transform = 'translateX(-50%)';
+        message.style.color = DEBUG_COLLISION ? '#00ff00' : '#ff6666';
+        message.style.fontSize = '18px';
+        message.style.fontWeight = 'bold';
+        message.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+        message.style.zIndex = '9999';
+        message.style.pointerEvents = 'none';
+        message.style.padding = '10px 20px';
+        message.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        message.style.borderRadius = '5px';
+        message.textContent = `デバッグ当たり判定: ${DEBUG_COLLISION ? 'ON' : 'OFF'}`;
+        document.body.appendChild(message);
+
+        setTimeout(() => {
+            document.body.removeChild(message);
+        }, 2000);
+        return; // Don't process stage switching when using debug toggle
+    }
+
     // Stage switching (only when playing)
     if (pointerLocked && !isPaused) {
         switch (e.code) {
-            case 'Digit1':
-                StageCreator.createBasicArena();
-                console.log('🏗️ Switched to Basic Arena');
-                break;
             case 'Digit2':
                 StageCreator.createUrbanMap();
                 console.log('🏙️ Switched to Urban Map');
@@ -109,6 +140,10 @@ window.addEventListener('keydown', (e) => {
             case 'Digit3':
                 StageCreator.createForestMap();
                 console.log('🌲 Switched to Forest Map');
+                break;
+            case 'Digit4':
+                StageCreator.createBasicArena();
+                console.log('🏗️ Switched to Basic Arena');
                 break;
         }
     }
@@ -449,7 +484,7 @@ document.addEventListener('mousemove', onMouseMove);
 
 // Bullets
 const bullets = [];
-const BULLET_SPEED = 225; // m/s (5x faster)
+const BULLET_SPEED = 225; // m/s (高速テスト - 補間効果確認用)
 const BULLET_LIFETIME = 3; // seconds
 const BULLET_BASE_LENGTH = 3.0; // Base length for bullets
 const BULLET_SPEED_SCALE = 0.02; // How much speed affects length
@@ -1019,6 +1054,66 @@ class NetworkManager {
         });
     }
 
+    sendPlayerDamageEvent(targetPlayerId, damage) {
+        if (!this.currentRoom || this.connections.size === 0) return;
+
+        const data = {
+            type: 'playerDamage',
+            targetPlayerId: targetPlayerId,
+            damage: damage,
+            attackerId: this.playerId,
+            timestamp: Date.now()
+        };
+
+        // Send to all connected peers
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(data);
+            }
+        });
+    }
+
+    sendPlayerRespawnEvent(newPosition) {
+        if (!this.currentRoom || this.connections.size === 0) return;
+
+        const data = {
+            type: 'playerRespawn',
+            playerId: this.playerId,
+            x: newPosition.x,
+            y: newPosition.y,
+            z: newPosition.z,
+            timestamp: Date.now()
+        };
+
+        // Send to all connected peers
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(data);
+            }
+        });
+    }
+
+    sendBloodEffectEvent(position, isLargeSplatter) {
+        if (!this.currentRoom || this.connections.size === 0) return;
+
+        const data = {
+            type: 'playerBloodEffect',
+            playerId: this.playerId,
+            x: position.x,
+            y: position.y,
+            z: position.z,
+            isLargeSplatter: isLargeSplatter,
+            timestamp: Date.now()
+        };
+
+        // Send to all connected peers
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(data);
+            }
+        });
+    }
+
     handleNetworkMessage(data, peerId) {
         switch (data.type) {
             case 'playerJoin':
@@ -1132,6 +1227,15 @@ class NetworkManager {
             case 'playerShoot':
                 this.handlePlayerShoot(data, peerId);
                 break;
+            case 'playerDamage':
+                this.handlePlayerDamage(data, peerId);
+                break;
+            case 'playerRespawn':
+                this.handlePlayerRespawn(data, peerId);
+                break;
+            case 'playerBloodEffect':
+                this.handlePlayerBloodEffect(data, peerId);
+                break;
         }
     }
 
@@ -1187,11 +1291,58 @@ class NetworkManager {
             velocity: direction.multiplyScalar(BULLET_SPEED),
             birthTime: performance.now() / 1000,
             isBullet: true,
-            isNetworkBullet: true
+            isNetworkBullet: true,
+            shooterId: peerId  // Track who shot this bullet
         };
 
         scene.add(bullet);
         bullets.push(bullet);
+    }
+
+    handlePlayerDamage(data, peerId) {
+        // Handle damage received from network
+        if (data.targetPlayerId === this.playerId) {
+            // This player was hit
+            console.log(`🎯 Received damage from ${peerId}: ${data.damage}`);
+            applyDamageToPlayer(data.damage);
+        } else {
+            // Another player was hit, just log for now
+            console.log(`📡 Player ${data.targetPlayerId} took ${data.damage} damage from ${data.attackerId}`);
+        }
+    }
+
+    handlePlayerRespawn(data, peerId) {
+        // Handle respawn from network
+        if (peerId === this.playerId) return; // Ignore own respawn
+
+        console.log(`🔄 Player ${peerId} respawned at (${data.x.toFixed(1)}, ${data.y.toFixed(1)}, ${data.z.toFixed(1)})`);
+
+        // Update network player position if they exist
+        const player = connectedPlayers.get(peerId);
+        if (player) {
+            const newPos = new THREE.Vector3(data.x, data.y - PLAYER_EYE_HEIGHT, data.z);
+            player.position.copy(newPos);
+
+            // Update network data for smooth interpolation
+            if (player.userData.networkData) {
+                player.userData.networkData.targetPosition = newPos;
+            }
+        }
+    }
+
+    handlePlayerBloodEffect(data, peerId) {
+        // Handle blood effect from network
+        if (peerId === this.playerId) return; // Ignore own blood effects
+
+        const bloodPosition = new THREE.Vector3(data.x, data.y, data.z);
+        console.log(`🩸 Blood effect from player ${peerId} at (${data.x.toFixed(1)}, ${data.y.toFixed(1)}, ${data.z.toFixed(1)}), large: ${data.isLargeSplatter}`);
+
+        // Create blood effect for other players
+        if (data.isLargeSplatter) {
+            createBloodSplatter(bloodPosition);
+        } else {
+            createSmallBloodEffect(bloodPosition);
+        }
     }
 
     createNetworkPlayer(peerId, playerName = 'Player', assignedColorIndex = null) {
@@ -1649,6 +1800,7 @@ function resetGame() {
     playerPosition.set(0, PLAYER_EYE_HEIGHT, 0);
     playerVelocity.set(0, 0, 0);
     playerBody.visible = false;
+    isRespawning = false; // リスポーンフラグもリセット
 
     // 反動状態を安全にリセット
     targetRecoil = 0;
@@ -1685,6 +1837,499 @@ function updateUI() {
     if (hudTargetsEl) hudTargetsEl.textContent = String(targets.length);
 }
 
+// Damage and respawn constants
+const DAMAGE_PER_HIT = 10;
+const RESPAWN_RADIUS_MIN = 8;
+const RESPAWN_RADIUS_MAX = 15;
+const DAMAGE_FLASH_DURATION = 200; // milliseconds
+let damageFlashTime = 0;
+let isRespawning = false; // フラグでリスポーン重複を防ぐ
+
+// Debug collision visualization (set to true to see hitboxes)
+let DEBUG_COLLISION = false;
+let debugHitboxes = [];
+
+// Blood splatter effect system
+const bloodParticles = [];
+const BLOOD_PARTICLE_COUNT = 15; // 血しぶきの粒子数
+const BLOOD_PARTICLE_LIFETIME = 1.5; // 血しぶきの持続時間（秒）
+
+// Create blood splatter effect (for death)
+function createBloodSplatter(position) {
+    console.log('🩸 Creating blood splatter effect...');
+
+    // Blood particle material (red, emissive)
+    const bloodMaterial = new THREE.MeshBasicMaterial({
+        color: 0xcc0000,
+        transparent: true,
+        opacity: 0.8
+    });
+
+    // Create multiple blood particles
+    for (let i = 0; i < BLOOD_PARTICLE_COUNT; i++) {
+        // Random particle size
+        const size = 0.05 + Math.random() * 0.1; // 5-15cm particles
+        const bloodGeo = new THREE.SphereGeometry(size, 8, 6);
+        const bloodParticle = new THREE.Mesh(bloodGeo, bloodMaterial.clone());
+
+        // Position at death location
+        bloodParticle.position.copy(position);
+
+        // Random velocity for splatter effect
+        const velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 6, // Horizontal spread
+            Math.random() * 4 + 2,     // Upward velocity
+            (Math.random() - 0.5) * 6  // Horizontal spread
+        );
+
+        // Store particle data
+        bloodParticle.userData = {
+            velocity: velocity,
+            birthTime: performance.now() / 1000,
+            originalOpacity: bloodParticle.material.opacity,
+            isBloodParticle: true
+        };
+
+        scene.add(bloodParticle);
+        bloodParticles.push(bloodParticle);
+    }
+}
+
+// Create small blood effect (for damage)
+function createSmallBloodEffect(position) {
+    // Smaller blood particle material
+    const bloodMaterial = new THREE.MeshBasicMaterial({
+        color: 0xaa0000,
+        transparent: true,
+        opacity: 0.6
+    });
+
+    // Create fewer, smaller particles
+    const smallParticleCount = 5;
+    for (let i = 0; i < smallParticleCount; i++) {
+        // Smaller particle size
+        const size = 0.02 + Math.random() * 0.05; // 2-7cm particles
+        const bloodGeo = new THREE.SphereGeometry(size, 6, 4);
+        const bloodParticle = new THREE.Mesh(bloodGeo, bloodMaterial.clone());
+
+        // Position at damage location
+        bloodParticle.position.copy(position);
+
+        // Smaller, more contained velocity
+        const velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 2, // Smaller horizontal spread
+            Math.random() * 2 + 0.5,   // Lower upward velocity
+            (Math.random() - 0.5) * 2  // Smaller horizontal spread
+        );
+
+        // Store particle data
+        bloodParticle.userData = {
+            velocity: velocity,
+            birthTime: performance.now() / 1000,
+            originalOpacity: bloodParticle.material.opacity,
+            isBloodParticle: true
+        };
+
+        scene.add(bloodParticle);
+        bloodParticles.push(bloodParticle);
+    }
+}
+
+// Update blood particles
+function updateBloodParticles(delta) {
+    const now = performance.now() / 1000;
+
+    for (let i = bloodParticles.length - 1; i >= 0; i--) {
+        const particle = bloodParticles[i];
+        const userData = particle.userData;
+        const age = now - userData.birthTime;
+
+        // Remove old particles
+        if (age > BLOOD_PARTICLE_LIFETIME) {
+            scene.remove(particle);
+            particle.geometry.dispose();
+            particle.material.dispose();
+            bloodParticles.splice(i, 1);
+            continue;
+        }
+
+        // Update particle physics
+        const velocity = userData.velocity;
+
+        // Apply gravity
+        velocity.y -= 15 * delta; // Gravity
+
+        // Update position
+        particle.position.add(velocity.clone().multiplyScalar(delta));
+
+        // Fade out over time
+        const lifeRatio = age / BLOOD_PARTICLE_LIFETIME;
+        const opacity = userData.originalOpacity * (1 - lifeRatio);
+        particle.material.opacity = Math.max(0, opacity);
+
+        // Stop at ground level
+        if (particle.position.y < 0.1) {
+            particle.position.y = 0.1;
+            velocity.y = 0;
+            velocity.x *= 0.8; // Friction
+            velocity.z *= 0.8; // Friction
+        }
+    }
+}
+
+// Debug function to visualize hitboxes
+function showDebugHitbox(position, radius, height, color = 0xff0000, temporary = true) {
+    if (!DEBUG_COLLISION) return;
+
+    // Create wireframe cylinder for body collision
+    const bodyGeo = new THREE.CylinderGeometry(radius, radius, height, 8);
+    const bodyMat = new THREE.MeshBasicMaterial({
+        color: color,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.5
+    });
+    const bodyDebug = new THREE.Mesh(bodyGeo, bodyMat);
+    bodyDebug.position.copy(position);
+    scene.add(bodyDebug);
+    debugHitboxes.push(bodyDebug);
+
+    // Auto-remove after time if temporary
+    if (temporary) {
+        setTimeout(() => {
+            scene.remove(bodyDebug);
+            const index = debugHitboxes.indexOf(bodyDebug);
+            if (index > -1) debugHitboxes.splice(index, 1);
+        }, 1000);
+    }
+
+    return bodyDebug;
+}
+
+// Function to update persistent debug hitboxes
+function updateDebugHitboxes() {
+    if (!DEBUG_COLLISION) return;
+
+    // Clear old persistent hitboxes
+    debugHitboxes.forEach(hitbox => {
+        if (hitbox.userData.isPersistent) {
+            scene.remove(hitbox);
+        }
+    });
+    debugHitboxes = debugHitboxes.filter(hitbox => !hitbox.userData.isPersistent);
+
+    // Show own player hitbox
+    const bodyHeight = 0.9;
+    const playerRadius = 0.25;
+    const bodyBottom = playerPosition.y - PLAYER_EYE_HEIGHT + 0.45;
+    const bodyCenter = bodyBottom + bodyHeight / 2;
+    const headCenter = playerPosition.y - PLAYER_EYE_HEIGHT + 1.35;
+
+    // Body hitbox
+    const bodyHitbox = showDebugHitbox(
+        new THREE.Vector3(playerPosition.x, bodyCenter, playerPosition.z),
+        playerRadius,
+        bodyHeight,
+        0x00ff00,
+        false
+    );
+    if (bodyHitbox) bodyHitbox.userData.isPersistent = true;
+
+    // Head hitbox
+    const headHitbox = showDebugHitbox(
+        new THREE.Vector3(playerPosition.x, headCenter, playerPosition.z),
+        playerRadius,
+        playerRadius * 2,
+        0x00ffff,
+        false
+    );
+    if (headHitbox) headHitbox.userData.isPersistent = true;
+
+    // Show network players hitboxes
+    connectedPlayers.forEach((player, playerId) => {
+        const playerWorldPos = new THREE.Vector3();
+        player.getWorldPosition(playerWorldPos);
+
+        const bodyBottom = playerWorldPos.y + 0.45 - bodyHeight / 2;
+        const bodyCenter = bodyBottom + bodyHeight / 2;
+        const headCenter = playerWorldPos.y + 1.35;
+
+        // Network player body hitbox
+        const netBodyHitbox = showDebugHitbox(
+            new THREE.Vector3(playerWorldPos.x, bodyCenter, playerWorldPos.z),
+            playerRadius,
+            bodyHeight,
+            0xff4444,
+            false
+        );
+        if (netBodyHitbox) netBodyHitbox.userData.isPersistent = true;
+
+        // Network player head hitbox
+        const netHeadHitbox = showDebugHitbox(
+            new THREE.Vector3(playerWorldPos.x, headCenter, playerWorldPos.z),
+            playerRadius,
+            playerRadius * 2,
+            0xff8844,
+            false
+        );
+        if (netHeadHitbox) netHeadHitbox.userData.isPersistent = true;
+    });
+}
+
+// Damage visual feedback
+function showDamageFlash() {
+    damageFlashTime = performance.now();
+    // Create red overlay effect
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.zIndex = '9999';
+    overlay.style.transition = 'opacity 0.2s';
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 200);
+    }, 50);
+}
+
+// Random respawn position
+function getRandomRespawnPosition() {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = RESPAWN_RADIUS_MIN + Math.random() * (RESPAWN_RADIUS_MAX - RESPAWN_RADIUS_MIN);
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+
+    // Make sure position is within world bounds
+    const bound = WORLD_SIZE / 2 - 3;
+    const clampedX = Math.max(-bound, Math.min(bound, x));
+    const clampedZ = Math.max(-bound, Math.min(bound, z));
+
+    return new THREE.Vector3(clampedX, PLAYER_EYE_HEIGHT, clampedZ);
+}
+
+// Handle player death and respawn
+function handlePlayerDeath() {
+    console.log('💀 Player died! Respawning...');
+
+    // Create blood splatter effect at death location for other players to see
+    if (networkManager.isJoinedToRoom()) {
+        networkManager.sendBloodEffectEvent(playerPosition.clone(), true); // true = large splatter
+    }
+
+    // Reset health
+    health = 100;
+
+    // Reset ammo to maximum
+    magazine = MAG_SIZE;
+    reserveAmmo = RESERVE_START;
+    isReloading = false; // リロード状態もリセット
+    console.log('🔫 Ammo restored to full!');
+
+    // Get random respawn position
+    const respawnPos = getRandomRespawnPosition();
+    playerPosition.copy(respawnPos);
+
+    // Reset velocity
+    playerVelocity.set(0, 0, 0);
+
+    // Reset camera rotation
+    yawObject.rotation.y = Math.random() * Math.PI * 2; // Random starting direction
+    pitchObject.rotation.x = 0;
+
+    // Reset recoil
+    targetRecoil = 0;
+    currentRecoil = 0;
+    targetHorizontalRecoil = 0;
+    currentHorizontalRecoil = 0;
+    recoilBuildup = 0;
+
+    // Send respawn event to network
+    if (networkManager.isJoinedToRoom()) {
+        networkManager.sendPlayerRespawnEvent(respawnPos);
+    }
+
+    // リスポーン完了 - フラグをリセット
+    isRespawning = false;
+    console.log('✅ Respawn completed!');
+
+    // Show respawn message
+    const message = document.createElement('div');
+    message.style.position = 'fixed';
+    message.style.top = '50%';
+    message.style.left = '50%';
+    message.style.transform = 'translate(-50%, -50%)';
+    message.style.color = 'white';
+    message.style.fontSize = '24px';
+    message.style.fontWeight = 'bold';
+    message.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+    message.style.zIndex = '9999';
+    message.style.pointerEvents = 'none';
+    message.textContent = 'リスポーンしました！';
+    document.body.appendChild(message);
+
+    setTimeout(() => {
+        document.body.removeChild(message);
+    }, 2000);
+
+    updateUI();
+}
+
+// Apply damage to player
+function applyDamageToPlayer(damage) {
+    // プレイヤーがすでにリスポーン中の場合はダメージを無視
+    if (isRespawning) {
+        console.log('⚠️ Player is respawning, ignoring damage');
+        return;
+    }
+
+    health -= damage;
+    console.log(`🩸 Player took ${damage} damage! Health: ${health}/100`);
+
+    // Show damage feedback
+    showDamageFlash();
+
+    // Create small blood effect when taking damage (but not dying)
+    // Only for network - other players will see our blood
+    if (health > 0 && networkManager.isJoinedToRoom()) {
+        networkManager.sendBloodEffectEvent(playerPosition.clone(), false); // false = small effect
+    }
+
+    // Check if player died
+    if (health <= 0 && !isRespawning) {
+        health = 0;
+        isRespawning = true; // リスポーンフラグを設定
+        updateUI();
+        console.log('💀 Player died! Starting respawn process...');
+        setTimeout(handlePlayerDeath, 100); // 短い演出遅延（0.1秒）
+    } else {
+        updateUI();
+    }
+}
+
+// Check if bullet hits player
+function checkBulletPlayerCollision(bullet, bulletPrevPos, bulletNewPos) {
+    // Skip own bullets (no self-damage)
+    if (!bullet.userData.isNetworkBullet) {
+        return false;
+    }
+
+    // プレイヤーがリスポーン中は当たり判定を無効化
+    if (isRespawning) {
+        return false;
+    }
+
+    // Use EXACT model dimensions for collision
+    const playerRadius = 0.25; // Matches CapsuleGeometry radius exactly
+    const bodyHeight = 0.9; // Matches CapsuleGeometry height exactly
+    const headRadius = 0.25; // Matches SphereGeometry radius exactly
+
+    // Calculate exact positions based on model setup
+    const bodyBottom = playerPosition.y - PLAYER_EYE_HEIGHT + 0.45; // Body mesh position.y = 0.45
+    const bodyTop = bodyBottom + bodyHeight;
+    const headCenter = playerPosition.y - PLAYER_EYE_HEIGHT + 1.35; // Head mesh position.y = 1.35
+    const headTop = headCenter + headRadius;
+    const headBottom = headCenter - headRadius;
+
+    // Multiple interpolation steps to prevent high-speed pass-through
+    const bulletTravel = bulletNewPos.clone().sub(bulletPrevPos);
+    const travelDistance = bulletTravel.length();
+
+    // Calculate number of interpolation steps based on bullet speed
+    // More steps for faster bullets or longer distances
+    const maxStepSize = 0.1; // Maximum step size (10cm)
+    const numSteps = Math.max(1, Math.ceil(travelDistance / maxStepSize));
+    const stepVector = bulletTravel.clone().divideScalar(numSteps);
+
+    // Check collision at each interpolation step
+    for (let step = 0; step <= numSteps; step++) {
+        const interpolatedPos = bulletPrevPos.clone().add(stepVector.clone().multiplyScalar(step));
+
+        // Check collision with body (capsule) at this interpolated position
+        if (interpolatedPos.y >= bodyBottom && interpolatedPos.y <= bodyTop) {
+            const distanceToPlayer = interpolatedPos.distanceTo(new THREE.Vector3(playerPosition.x, interpolatedPos.y, playerPosition.z));
+            if (distanceToPlayer < playerRadius) {
+                // Show debug visualization when hit
+                showDebugHitbox(
+                    new THREE.Vector3(playerPosition.x, bodyBottom + bodyHeight / 2, playerPosition.z),
+                    playerRadius,
+                    bodyHeight,
+                    0x00ff00
+                );
+                console.log(`🎯 Body hit detected at step ${step}/${numSteps}, distance: ${travelDistance.toFixed(2)}m`);
+                return true;
+            }
+        }
+
+        // Check collision with head (sphere) at this interpolated position
+        if (interpolatedPos.y >= headBottom && interpolatedPos.y <= headTop) {
+            const distanceToHead = interpolatedPos.distanceTo(new THREE.Vector3(playerPosition.x, headCenter, playerPosition.z));
+            if (distanceToHead < headRadius) {
+                // Show debug visualization when hit
+                showDebugHitbox(
+                    new THREE.Vector3(playerPosition.x, headCenter, playerPosition.z),
+                    headRadius,
+                    headRadius * 2,
+                    0x00ffff
+                );
+                console.log(`🎯 Head hit detected at step ${step}/${numSteps}, distance: ${travelDistance.toFixed(2)}m`);
+                return true;
+            }
+        }
+    }
+
+    // Also check raycast collision for fast-moving bullets
+    const direction = bulletNewPos.clone().sub(bulletPrevPos).normalize();
+    const distance = bulletPrevPos.distanceTo(bulletNewPos);
+    raycaster.set(bulletPrevPos, direction);
+    raycaster.far = distance;
+
+    // Create temporary collision objects matching exact model geometry
+    // Body capsule collision
+    const tempBodyGeo = new THREE.CylinderGeometry(playerRadius, playerRadius, bodyHeight, 8);
+    const tempBodyMat = new THREE.MeshBasicMaterial({ visible: false });
+    const tempBody = new THREE.Mesh(tempBodyGeo, tempBodyMat);
+    tempBody.position.copy(playerPosition);
+    tempBody.position.y = bodyBottom + bodyHeight / 2; // Center the cylinder
+
+    // Head sphere collision
+    const tempHeadGeo = new THREE.SphereGeometry(headRadius, 8, 6);
+    const tempHeadMat = new THREE.MeshBasicMaterial({ visible: false });
+    const tempHead = new THREE.Mesh(tempHeadGeo, tempHeadMat);
+    tempHead.position.copy(playerPosition);
+    tempHead.position.y = headCenter;
+
+    const bodyHits = raycaster.intersectObject(tempBody, false);
+    const headHits = raycaster.intersectObject(tempHead, false);
+    const hitPlayer = bodyHits.length > 0 || headHits.length > 0;
+
+    if (hitPlayer) {
+        console.log(`🎯 Raycast hit detected, distance: ${travelDistance.toFixed(2)}m, body: ${bodyHits.length > 0}, head: ${headHits.length > 0}`);
+        // Show debug visualization when hit
+        showDebugHitbox(
+            new THREE.Vector3(playerPosition.x, bodyBottom + bodyHeight / 2, playerPosition.z),
+            playerRadius,
+            bodyHeight,
+            0xffff00  // Yellow for raycast hits
+        );
+    }
+
+    // Clean up temporary objects
+    tempBodyGeo.dispose();
+    tempBodyMat.dispose();
+    tempHeadGeo.dispose();
+    tempHeadMat.dispose();
+
+    return hitPlayer;
+}
+
 // Bullet update and collision
 const raycaster = new THREE.Raycaster();
 
@@ -1718,6 +2363,103 @@ function updateBullets(delta) {
             scene.remove(bullet);
             bullets.splice(i, 1);
             continue;
+        }
+
+        // Check player collision (only for network bullets)
+        if (checkBulletPlayerCollision(bullet, prevPos, newPos)) {
+            console.log('🎯 Player hit by bullet!');
+            applyDamageToPlayer(DAMAGE_PER_HIT);
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+            continue;
+        }
+
+        // Check collision with network players (only for own bullets)
+        if (!userData.isNetworkBullet) {
+            let hitNetworkPlayer = false;
+            connectedPlayers.forEach((player, playerId) => {
+                if (hitNetworkPlayer) return; // Already hit someone
+
+                const playerWorldPos = new THREE.Vector3();
+                player.getWorldPosition(playerWorldPos);
+
+                // Use EXACT model dimensions for network player collision
+                const playerRadius = 0.25; // Matches CapsuleGeometry radius exactly
+                const bodyHeight = 0.9; // Matches CapsuleGeometry height exactly
+                const headRadius = 0.25; // Matches SphereGeometry radius exactly
+
+                // Calculate exact positions based on network player model
+                // Network player model: body mesh at y=0.45, head mesh at y=1.35 (relative to player group)
+                const bodyBottom = playerWorldPos.y + 0.45 - bodyHeight / 2; // Body center is at 0.45
+                const bodyTop = bodyBottom + bodyHeight;
+                const headCenter = playerWorldPos.y + 1.35; // Head center is at 1.35
+                const headTop = headCenter + headRadius;
+                const headBottom = headCenter - headRadius;
+
+                let hitThisPlayer = false;
+
+                // Check collision with body (capsule)
+                // Multiple interpolation steps for network players too
+                const networkBulletTravel = newPos.clone().sub(prevPos);
+                const networkTravelDistance = networkBulletTravel.length();
+                const networkMaxStepSize = 0.1; // Same step size as local player
+                const networkNumSteps = Math.max(1, Math.ceil(networkTravelDistance / networkMaxStepSize));
+                const networkStepVector = networkBulletTravel.clone().divideScalar(networkNumSteps);
+
+                // Check collision at each interpolation step for network players
+                for (let netStep = 0; netStep <= networkNumSteps && !hitThisPlayer; netStep++) {
+                    const netInterpolatedPos = prevPos.clone().add(networkStepVector.clone().multiplyScalar(netStep));
+
+                    // Check collision with body (capsule)
+                    if (netInterpolatedPos.y >= bodyBottom && netInterpolatedPos.y <= bodyTop) {
+                        const distanceToPlayer = netInterpolatedPos.distanceTo(new THREE.Vector3(playerWorldPos.x, netInterpolatedPos.y, playerWorldPos.z));
+                        if (distanceToPlayer < playerRadius) {
+                            // Show debug visualization when hit
+                            showDebugHitbox(
+                                new THREE.Vector3(playerWorldPos.x, bodyBottom + bodyHeight / 2, playerWorldPos.z),
+                                playerRadius,
+                                bodyHeight,
+                                0xff0000
+                            );
+                            console.log(`🎯 Network player ${playerId} body hit at step ${netStep}/${networkNumSteps}, distance: ${networkTravelDistance.toFixed(2)}m`);
+                            hitThisPlayer = true;
+                            break;
+                        }
+                    }
+
+                    // Check collision with head (sphere)
+                    if (netInterpolatedPos.y >= headBottom && netInterpolatedPos.y <= headTop) {
+                        const distanceToHead = netInterpolatedPos.distanceTo(new THREE.Vector3(playerWorldPos.x, headCenter, playerWorldPos.z));
+                        if (distanceToHead < headRadius) {
+                            // Show debug visualization when hit
+                            showDebugHitbox(
+                                new THREE.Vector3(playerWorldPos.x, headCenter, playerWorldPos.z),
+                                headRadius,
+                                headRadius * 2,
+                                0xff6600
+                            );
+                            console.log(`🎯 Network player ${playerId} head hit at step ${netStep}/${networkNumSteps}, distance: ${networkTravelDistance.toFixed(2)}m`);
+                            hitThisPlayer = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hitThisPlayer) {
+                    console.log(`🎯 Hit network player ${playerId}!`);
+
+                    // Send damage event to network
+                    if (networkManager.isJoinedToRoom()) {
+                        networkManager.sendPlayerDamageEvent(playerId, DAMAGE_PER_HIT);
+                    }
+
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                    hitNetworkPlayer = true;
+                }
+            });
+
+            if (hitNetworkPlayer) continue;
         }
 
         // Check target collision with interpolation
@@ -1892,6 +2634,12 @@ function animate() {
     updateBullets(delta);
     networkManager.updateNetworkPlayers(delta);
     updateNameplateBillboards();
+    updateBloodParticles(delta); // 血しぶきパーティクルを更新
+
+    // Update debug collision visualization
+    if (DEBUG_COLLISION) {
+        updateDebugHitboxes();
+    }
 
     if (!isPaused) {
         // Only update player movement and shooting when not paused
