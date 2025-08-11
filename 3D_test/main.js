@@ -4,6 +4,7 @@ const PHOTON_APP_ID = "d2b05894-f70e-4fbd-b86e-f96c9837017f";
 let photonClient = null;
 let isHost = false;
 let connectedPlayers = new Map();
+let nextPlayerColorIndex = 0; // Host manages color assignment order
 
 // Config
 const WORLD_SIZE = 120;
@@ -527,7 +528,8 @@ class NetworkManager {
             conn.send({
                 type: 'playerJoin',
                 playerName: this.playerName,
-                playerId: this.playerId
+                playerId: this.playerId,
+                colorIndex: 0  // Host is always blue (index 0)
             });
         });
 
@@ -772,17 +774,78 @@ class NetworkManager {
         switch (data.type) {
             case 'playerJoin':
                 console.log(`${data.playerName} joined the game`);
-                this.createNetworkPlayer(peerId, data.playerName);
 
-                // If this is the host, send back host info to the new player
+                // Don't create network player for yourself
+                if (peerId === this.playerId) {
+                    console.log(`🚫 Ignoring own playerJoin message`);
+                    break;
+                }
+
+                // If this is the host, assign color to new player BEFORE creating
+                let assignedColorIndex = data.colorIndex;
+                if (this.isHost) {
+                    // Assign color to new player (skip 0 for host)
+                    assignedColorIndex = nextPlayerColorIndex + 1; // Host is 0, guests start from 1
+                    nextPlayerColorIndex++;
+                    console.log(`🎯 Host assigning color index ${assignedColorIndex} to ${data.playerName}`);
+                }
+
+                this.createNetworkPlayer(peerId, data.playerName, assignedColorIndex);
+
+                // If this is the host, send back host info AND all existing players to the new player
                 if (this.isHost) {
                     const conn = this.connections.get(peerId);
                     if (conn && conn.open) {
+                        // Send host info (always color index 0)
+                        console.log(`📤 Host sending own info to ${data.playerName}: color index 0`);
                         conn.send({
                             type: 'playerJoin',
                             playerName: this.playerName,
-                            playerId: this.playerId
+                            playerId: this.playerId,
+                            colorIndex: 0
                         });
+
+                        // Send info about all other existing players with their assigned colors
+                        connectedPlayers.forEach((player, existingPeerId) => {
+                            if (existingPeerId !== peerId && player.userData.playerName) {
+                                console.log(`📤 Host sending existing player ${player.userData.playerName} info: color index ${player.userData.colorIndex}`);
+                                conn.send({
+                                    type: 'playerJoin',
+                                    playerName: player.userData.playerName,
+                                    playerId: existingPeerId,
+                                    colorIndex: player.userData.colorIndex
+                                });
+                            }
+                        });
+
+                        // IMPORTANT: Send the new player's own color assignment back to them
+                        console.log(`📤 Host sending new player ${data.playerName} their own color: index ${assignedColorIndex}`);
+                        conn.send({
+                            type: 'playerColorAssignment',
+                            colorIndex: assignedColorIndex
+                        });
+                    }
+                }
+                break;
+            case 'playerColorAssignment':
+                console.log(`🎨 Received color assignment: index ${data.colorIndex}`);
+                // Update own player body color if it exists
+                if (playerBody && playerBody.children.length > 0) {
+                    const playerColors = [
+                        0x4a9eff, // Blue (1st player - host)
+                        0xff4a4a, // Red (2nd player)
+                        0x4aff4a, // Green (3rd player)
+                        0xffff4a, // Yellow (4th player)
+                        0xff4aff, // Magenta (5th player)
+                        0x4affff, // Cyan (6th player)
+                        0xff9f4a, // Orange (7th player)
+                        0x9f4aff  // Purple (8th player)
+                    ];
+                    const newColor = playerColors[data.colorIndex % playerColors.length];
+                    const bodyMesh = playerBody.children[0]; // First child is the body mesh
+                    if (bodyMesh && bodyMesh.material) {
+                        bodyMesh.material.color.setHex(newColor);
+                        console.log(`🎨 Updated own player body color to #${newColor.toString(16)}`);
                     }
                 }
                 break;
@@ -798,9 +861,10 @@ class NetworkManager {
     handlePlayerUpdate(data, peerId) {
         if (peerId === this.playerId) return; // Ignore own updates
 
-        // Update or create network player
+        // Only update existing players - don't create unknown players
         if (!connectedPlayers.has(peerId)) {
-            this.createNetworkPlayer(peerId, 'Player');
+            console.warn(`Received update for unknown player: ${peerId}`);
+            return;
         }
 
         const player = connectedPlayers.get(peerId);
@@ -845,17 +909,64 @@ class NetworkManager {
         bullets.push(bullet);
     }
 
-    createNetworkPlayer(peerId, playerName = 'Player') {
+    createNetworkPlayer(peerId, playerName = 'Player', assignedColorIndex = null) {
+        // Check if player already exists
+        if (connectedPlayers.has(peerId)) {
+            console.warn(`⚠️ Player ${peerId} (${playerName}) already exists! Skipping creation.`);
+            return;
+        }
+
+        console.log(`✨ Creating new network player: ${playerName} (ID: ${peerId})`);
+
         const networkPlayer = new THREE.Group();
 
-        // Create player body (similar to local player)
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        // Store player name and color index for future reference
+        networkPlayer.userData.playerName = playerName;
+        networkPlayer.userData.colorIndex = assignedColorIndex !== null ? assignedColorIndex : connectedPlayers.size;
+
+        // Define unique colors for different players
+        const playerColors = [
+            0x4a9eff, // Blue (1st player - host)
+            0xff4a4a, // Red (2nd player)
+            0x4aff4a, // Green (3rd player)
+            0xffff4a, // Yellow (4th player)
+            0xff4aff, // Magenta (5th player)
+            0x4affff, // Cyan (6th player)
+            0xff9f4a, // Orange (7th player)
+            0x9f4aff  // Purple (8th player)
+        ];
+
+        // Use assigned color index or default to current player count
+        let colorIndex;
+        if (assignedColorIndex !== null && assignedColorIndex !== undefined) {
+            colorIndex = assignedColorIndex % playerColors.length;
+            console.log(`🎨 Player ${playerName} assigned color index ${colorIndex} by host (received: ${assignedColorIndex})`);
+        } else {
+            // Fallback for host or when no color assigned
+            colorIndex = connectedPlayers.size % playerColors.length;
+            console.log(`🎨 Player ${playerName} using fallback color index ${colorIndex} (assignedColorIndex was: ${assignedColorIndex})`);
+        }
+
+        const playerColor = playerColors[colorIndex];
+        console.log(`   Color: #${playerColor.toString(16)}`);
+
+        // Create unique material for this player
+        const uniqueBodyMat = new THREE.MeshStandardMaterial({
+            color: playerColor,
+            metalness: 0.1,
+            roughness: 0.8
+        });
+
+        // Create player body with unique color
+        const body = new THREE.Mesh(bodyGeo, uniqueBodyMat);
         body.position.y = 0.45;
         networkPlayer.add(body);
 
         const head = new THREE.Mesh(headGeo, headMat);
         head.position.y = 1.35;
         networkPlayer.add(head);
+
+        console.log(`🎨 Created player ${playerName} with color index ${colorIndex} (${playerColor.toString(16)})`);
 
         // Add name tag with billboard effect - ADD DIRECTLY TO SCENE, NOT TO PLAYER GROUP
         const canvas = document.createElement('canvas');
@@ -887,6 +998,9 @@ class NetworkManager {
 
         scene.add(networkPlayer);
         connectedPlayers.set(peerId, networkPlayer);
+
+        console.log(`📊 Total connected players: ${connectedPlayers.size}`);
+        console.log(`🎮 All player IDs:`, Array.from(connectedPlayers.keys()));
     }
 
     removeNetworkPlayer(peerId) {
