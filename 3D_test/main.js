@@ -73,9 +73,167 @@ banner.style.display = 'block';
 
 // Three.js setup
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0f1117);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+// Create gradient skybox
+function createGradientSky() {
+    const skyGeometry = new THREE.SphereGeometry(500, 32, 15);
+
+    // Create gradient texture
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+
+    // Create vertical gradient (ground to sky)
+    const gradient = context.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, '#87CEEB');    // Sky blue (top)
+    gradient.addColorStop(0.3, '#98D8E8'); // Light blue
+    gradient.addColorStop(0.7, '#B0E0E6'); // Powder blue
+    gradient.addColorStop(1, '#F0F8FF');   // Alice blue (horizon)
+
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 256, 256);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const skyMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.BackSide // Render inside the sphere
+    });
+
+    const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+    return sky;
+}
+
+// Skybox loader utility
+class SkyboxLoader {
+    // Check if files exist before attempting to load
+    static async checkFileExists(url) {
+        try {
+            const response = await fetch(url, { method: 'HEAD' });
+            return response.ok;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    static async loadCubemap(basePath, fileNames = ['px', 'nx', 'py', 'ny', 'pz', 'nz']) {
+        const loader = new THREE.CubeTextureLoader();
+
+        // Try different extensions in order of preference
+        const extensions = ['png', 'jpg', 'jpeg', 'webp'];
+
+        for (const ext of extensions) {
+            const urls = fileNames.map(name => `${basePath}/${name}.${ext}`);
+
+            // Check if all files exist before attempting to load
+            const allExist = await Promise.all(urls.map(url => this.checkFileExists(url)));
+
+            if (allExist.every(exists => exists)) {
+                try {
+                    return await new Promise((resolve, reject) => {
+                        loader.load(urls,
+                            (texture) => {
+                                console.log(`✅ Cubemap skybox loaded: ${ext.toUpperCase()}`);
+                                resolve(texture);
+                            },
+                            undefined,
+                            reject
+                        );
+                    });
+                } catch (error) {
+                    // If load fails despite files existing, continue to next format
+                }
+            }
+        }
+
+        throw new Error('No compatible cubemap format found');
+    }
+
+    static async loadEquirectangular(basePath) {
+        const loader = new THREE.TextureLoader();
+
+        // Try different extensions and common filenames
+        const extensions = ['png', 'jpg', 'jpeg', 'webp'];
+        const filenames = ['sky', 'skybox', 'panorama', 'equirectangular'];
+
+        for (const filename of filenames) {
+            for (const ext of extensions) {
+                const imagePath = `${basePath}/${filename}.${ext}`;
+
+                // Check if file exists before attempting to load
+                if (await this.checkFileExists(imagePath)) {
+                    try {
+                        return await new Promise((resolve, reject) => {
+                            loader.load(imagePath,
+                                (texture) => {
+                                    texture.mapping = THREE.EquirectangularReflectionMapping;
+                                    console.log(`✅ Equirectangular skybox loaded: ${filename}.${ext.toUpperCase()}`);
+                                    resolve(texture);
+                                },
+                                undefined,
+                                reject
+                            );
+                        });
+                    } catch (error) {
+                        // If load fails despite file existing, continue to next combination
+                    }
+                }
+            }
+        }
+
+        throw new Error('No compatible equirectangular format found');
+    }
+
+    static async loadSkybox() {
+        // Quick folder existence check first
+        const cubemapExists = await this.checkFileExists('assets/skybox/cubemap/px.png') ||
+            await this.checkFileExists('assets/skybox/cubemap/px.jpg');
+
+        if (cubemapExists) {
+            try {
+                const texture = await this.loadCubemap('assets/skybox/cubemap');
+                return texture;
+            } catch (e) {
+                // Silent fail
+            }
+        }
+
+        // Quick equirectangular check
+        const equirectangularExists = await this.checkFileExists('assets/skybox/equirectangular/sky.png') ||
+            await this.checkFileExists('assets/skybox/equirectangular/sky.jpg');
+
+        if (equirectangularExists) {
+            try {
+                const texture = await this.loadEquirectangular('assets/skybox/equirectangular');
+                return texture;
+            } catch (e) {
+                // Silent fail
+            }
+        }
+
+        // Fallback to gradient
+        console.log('🌈 No skybox files found, using gradient sky');
+        return null;
+    }
+}
+
+// Try to load skybox, fallback to gradient
+SkyboxLoader.loadSkybox().then(texture => {
+    if (texture) {
+        scene.background = texture;
+    } else {
+        // Fallback: Add gradient sky
+        const sky = createGradientSky();
+        scene.add(sky);
+    }
+}).catch((error) => {
+    // Error fallback: Add gradient sky (silent)
+    console.log('🌈 Using fallback gradient sky');
+    const sky = createGradientSky();
+    scene.add(sky);
+});
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, PLAYER_EYE_HEIGHT, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -682,11 +840,34 @@ class NetworkManager {
 // Initialize network manager
 const networkManager = new NetworkManager();
 
+// Player name storage utility
+const PlayerNameStorage = {
+    KEY: 'fps_game_player_name',
+
+    save(playerName) {
+        try {
+            localStorage.setItem(this.KEY, playerName);
+        } catch (e) {
+            console.warn('Could not save player name:', e);
+        }
+    },
+
+    load() {
+        try {
+            return localStorage.getItem(this.KEY) || '';
+        } catch (e) {
+            console.warn('Could not load player name:', e);
+            return '';
+        }
+    }
+};
+
 // Button event handlers
 createRoomBtn.onclick = () => {
     const roomId = parseInt(roomIdInput.value);
     const playerName = playerNameInput.value.trim();
     if (roomId && roomId >= 1 && roomId <= 9999 && playerName) {
+        PlayerNameStorage.save(playerName); // Save player name
         networkManager.createRoom(roomId, playerName);
     } else {
         alert('Please enter a room number (1-9999) and player name');
@@ -697,6 +878,7 @@ joinRoomBtn.onclick = () => {
     const selectedRoom = availableRoomsSelect.value;
     const playerName = playerNameInput.value.trim();
     if (selectedRoom && playerName) {
+        PlayerNameStorage.save(playerName); // Save player name
         networkManager.joinRoom(parseInt(selectedRoom), playerName);
     } else {
         alert('Please select a room and enter player name');
@@ -917,6 +1099,17 @@ window.addEventListener('load', () => {
     }
 
     console.log('PeerJS loaded successfully');
+
+    // Load and restore saved player name
+    const savedPlayerName = PlayerNameStorage.load();
+    if (savedPlayerName) {
+        playerNameInput.value = savedPlayerName;
+        console.log('Restored player name:', savedPlayerName);
+    } else {
+        // Set default name for new users
+        playerNameInput.value = 'Player1';
+    }
+
     networkManager.initialize();
 
     // Add info message about manual room refresh
