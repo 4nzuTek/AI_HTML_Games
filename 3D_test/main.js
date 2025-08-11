@@ -16,7 +16,7 @@ const FIRE_COOLDOWN_S = 0.08;    // seconds per shot (faster full-auto)
 const MAG_SIZE = 30;
 const RESERVE_START = 300;
 const RELOAD_TIME_S = 1.1;
-const MOUSE_SENSITIVITY = 0.002;
+const MOUSE_SENSITIVITY = 0.002; // Standard FPS sensitivity
 
 // State
 let isPaused = true;
@@ -37,9 +37,38 @@ window.addEventListener('keydown', (e) => {
     keyState.set(e.code, true);
     if (e.code === 'KeyP') toggleViewMode();
     if (e.code === 'KeyR') reload();
+    if (e.code === 'KeyT') {
+        // Debug: Show current angles (Quaternion-based)
+        console.log(`Debug - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
+
+        // Safety check and auto-correction
+        if (isNaN(yawObject.rotation.y) || isNaN(pitchObject.rotation.x)) {
+            console.warn('🔧 Detected NaN angles, resetting to safe values');
+            yawObject.rotation.y = 0;
+            pitchObject.rotation.x = 0;
+        }
+    }
     if (e.code === 'Escape') {
         if (pointerLocked) {
             document.exitPointerLock(); // Release pointer lock
+        }
+    }
+
+    // Stage switching (only when playing)
+    if (pointerLocked && !isPaused) {
+        switch (e.code) {
+            case 'Digit1':
+                StageCreator.createBasicArena();
+                console.log('🏗️ Switched to Basic Arena');
+                break;
+            case 'Digit2':
+                StageCreator.createUrbanMap();
+                console.log('🏙️ Switched to Urban Map');
+                break;
+            case 'Digit3':
+                StageCreator.createForestMap();
+                console.log('🌲 Switched to Forest Map');
+                break;
         }
     }
 });
@@ -259,6 +288,7 @@ scene.add(new THREE.GridHelper(WORLD_SIZE, WORLD_SIZE / 2, 0x2f3b52, 0x1f2937));
 
 // Simple walls (boundaries visual)
 const walls = [];
+const stageObjects = []; // Stage geometry and objects
 const wallMat = new THREE.MeshStandardMaterial({ color: 0x222a38, metalness: 0.05, roughness: 1.0 });
 const half = WORLD_SIZE / 2;
 for (const [x, z, rot] of [
@@ -322,16 +352,57 @@ scene.add(playerBody);
 // Player (first-person camera position)
 const playerPosition = new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0);
 const playerVelocity = new THREE.Vector3(0, 0, 0);
-let yaw = 0;
-let pitch = 0;
 
-// Pointer lock look
+// Quaternion-based camera control (no gimbal lock possible)
+const cameraQuaternion = new THREE.Quaternion();
+const pitchObject = new THREE.Object3D();
+const yawObject = new THREE.Object3D();
+
+// Setup quaternion-based camera control
+yawObject.add(pitchObject);
+yawObject.position.copy(playerPosition);
+
+// Fixed mouse movement with strict filtering
+let lastValidMovement = { x: 0, y: 0, time: 0 };
+
 function onMouseMove(e) {
     if (!pointerLocked) return;
-    yaw -= e.movementX * MOUSE_SENSITIVITY;
-    pitch -= e.movementY * MOUSE_SENSITIVITY;
-    const maxPitch = Math.PI / 2 - 0.01;
-    pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+
+    const movementX = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
+    const movementY = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
+    const now = performance.now();
+
+    // Multiple filtering layers
+
+    // Filter 1: Extreme values (>100px/frame)
+    if (Math.abs(movementX) > 100 || Math.abs(movementY) > 100) {
+        console.log(`🚫 Filtered extreme movement: X=${movementX}, Y=${movementY}`);
+        return;
+    }
+
+    // Filter 2: Sudden acceleration detection
+    const timeDelta = now - lastValidMovement.time;
+    if (timeDelta > 0 && timeDelta < 50) { // Less than 50ms between movements
+        const acceleration = Math.hypot(
+            Math.abs(movementX - lastValidMovement.x),
+            Math.abs(movementY - lastValidMovement.y)
+        );
+        if (acceleration > 150) {
+            console.log(`🚫 Filtered sudden acceleration: ${acceleration.toFixed(1)}`);
+            return;
+        }
+    }
+
+    // Record this movement for next frame's acceleration check
+    lastValidMovement = { x: movementX, y: movementY, time: now };
+
+    // Apply movement
+    yawObject.rotation.y -= movementX * MOUSE_SENSITIVITY;
+    pitchObject.rotation.x -= movementY * MOUSE_SENSITIVITY;
+
+    // Limit pitch
+    const maxPitch = Math.PI / 2 - 0.1;
+    pitchObject.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, pitchObject.rotation.x));
 }
 document.addEventListener('mousemove', onMouseMove);
 
@@ -837,6 +908,216 @@ class NetworkManager {
     }
 }
 
+// Stage Creator System
+class StageCreator {
+    static createBasicArena() {
+        console.log('🏗️ Creating basic arena stage...');
+
+        // Clear existing stage objects
+        stageObjects.forEach(obj => scene.remove(obj));
+        stageObjects.length = 0;
+
+        // Central platform
+        const platformGeo = new THREE.CylinderGeometry(8, 8, 1, 32);
+        const platformMat = new THREE.MeshStandardMaterial({
+            color: 0x4a90a4,
+            metalness: 0.2,
+            roughness: 0.7
+        });
+        const platform = new THREE.Mesh(platformGeo, platformMat);
+        platform.position.set(0, 0.5, 0);
+        platform.receiveShadow = true;
+        platform.castShadow = true;
+        scene.add(platform);
+        stageObjects.push(platform);
+
+        // Corner boxes for cover
+        const boxGeo = new THREE.BoxGeometry(3, 2, 3);
+        const boxMat = new THREE.MeshStandardMaterial({
+            color: 0x8b7355,
+            metalness: 0.1,
+            roughness: 0.9
+        });
+
+        const corners = [
+            [12, 1, 12],
+            [-12, 1, 12],
+            [12, 1, -12],
+            [-12, 1, -12]
+        ];
+
+        corners.forEach(([x, y, z]) => {
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(x, y, z);
+            box.receiveShadow = true;
+            box.castShadow = true;
+            scene.add(box);
+            stageObjects.push(box);
+        });
+
+        // Elevated walkways
+        const walkwayGeo = new THREE.BoxGeometry(20, 0.5, 2);
+        const walkwayMat = new THREE.MeshStandardMaterial({
+            color: 0x666666,
+            metalness: 0.3,
+            roughness: 0.6
+        });
+
+        const walkways = [
+            [0, 3, 15],
+            [0, 3, -15],
+            [15, 3, 0],
+            [-15, 3, 0]
+        ];
+
+        walkways.forEach(([x, y, z]) => {
+            const walkway = new THREE.Mesh(walkwayGeo, walkwayMat);
+            walkway.position.set(x, y, z);
+            if (x !== 0) walkway.rotation.y = Math.PI / 2;
+            walkway.receiveShadow = true;
+            walkway.castShadow = true;
+            scene.add(walkway);
+            stageObjects.push(walkway);
+        });
+
+        console.log(`✅ Basic arena created with ${stageObjects.length} objects`);
+    }
+
+    static createUrbanMap() {
+        console.log('🏙️ Creating urban map stage...');
+
+        // Clear existing stage objects
+        stageObjects.forEach(obj => scene.remove(obj));
+        stageObjects.length = 0;
+
+        // Buildings
+        const buildingMat = new THREE.MeshStandardMaterial({
+            color: 0x404040,
+            metalness: 0.1,
+            roughness: 0.8
+        });
+
+        const buildings = [
+            [10, 4, 10, 3, 8, 3],  // [x, y, z, width, height, depth]
+            [-8, 3, 12, 4, 6, 2],
+            [15, 2.5, -5, 2, 5, 4],
+            [-12, 3, -8, 3, 6, 3],
+            [5, 2, -15, 6, 4, 2],
+            [-15, 1.5, 5, 2, 3, 5]
+        ];
+
+        buildings.forEach(([x, y, z, w, h, d]) => {
+            const buildingGeo = new THREE.BoxGeometry(w, h, d);
+            const building = new THREE.Mesh(buildingGeo, buildingMat);
+            building.position.set(x, y, z);
+            building.receiveShadow = true;
+            building.castShadow = true;
+            scene.add(building);
+            stageObjects.push(building);
+        });
+
+        // Street barriers
+        const barrierGeo = new THREE.BoxGeometry(0.5, 1, 3);
+        const barrierMat = new THREE.MeshStandardMaterial({
+            color: 0xff6b35,
+            metalness: 0.2,
+            roughness: 0.7
+        });
+
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const radius = 18;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+
+            const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+            barrier.position.set(x, 0.5, z);
+            barrier.rotation.y = angle;
+            barrier.receiveShadow = true;
+            barrier.castShadow = true;
+            scene.add(barrier);
+            stageObjects.push(barrier);
+        }
+
+        console.log(`✅ Urban map created with ${stageObjects.length} objects`);
+    }
+
+    static createForestMap() {
+        console.log('🌲 Creating forest map stage...');
+
+        // Clear existing stage objects
+        stageObjects.forEach(obj => scene.remove(obj));
+        stageObjects.length = 0;
+
+        // Tree trunks
+        const trunkGeo = new THREE.CylinderGeometry(0.5, 0.8, 6, 8);
+        const trunkMat = new THREE.MeshStandardMaterial({
+            color: 0x8b4513,
+            metalness: 0.0,
+            roughness: 1.0
+        });
+
+        // Tree canopies
+        const canopyGeo = new THREE.SphereGeometry(2.5, 8, 6);
+        const canopyMat = new THREE.MeshStandardMaterial({
+            color: 0x228b22,
+            metalness: 0.0,
+            roughness: 0.9
+        });
+
+        // Generate random tree positions
+        for (let i = 0; i < 15; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 8 + Math.random() * 12;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+
+            // Tree trunk
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.set(x, 3, z);
+            trunk.receiveShadow = true;
+            trunk.castShadow = true;
+            scene.add(trunk);
+            stageObjects.push(trunk);
+
+            // Tree canopy
+            const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+            canopy.position.set(x, 7 + Math.random() * 1, z);
+            canopy.receiveShadow = true;
+            canopy.castShadow = true;
+            scene.add(canopy);
+            stageObjects.push(canopy);
+        }
+
+        // Rock formations
+        const rockGeo = new THREE.DodecahedronGeometry(1.5);
+        const rockMat = new THREE.MeshStandardMaterial({
+            color: 0x696969,
+            metalness: 0.1,
+            roughness: 0.9
+        });
+
+        for (let i = 0; i < 8; i++) {
+            const x = (Math.random() - 0.5) * 30;
+            const z = (Math.random() - 0.5) * 30;
+
+            const rock = new THREE.Mesh(rockGeo, rockMat);
+            rock.position.set(x, 0.75, z);
+            rock.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+            rock.receiveShadow = true;
+            rock.castShadow = true;
+            scene.add(rock);
+            stageObjects.push(rock);
+        }
+
+        console.log(`✅ Forest map created with ${stageObjects.length} objects`);
+    }
+}
+
 // Initialize network manager
 const networkManager = new NetworkManager();
 
@@ -939,7 +1220,8 @@ function resetGame() {
     health = 100;
     magazine = MAG_SIZE;
     reserveAmmo = RESERVE_START;
-    yaw = 0; pitch = 0;
+    yawObject.rotation.y = 0;
+    pitchObject.rotation.x = 0;
     isThirdPerson = false;
     playerPosition.set(0, PLAYER_EYE_HEIGHT, 0);
     playerVelocity.set(0, 0, 0);
@@ -1054,8 +1336,8 @@ function moveAndCollide(delta) {
     inputX /= len; inputZ /= len;
 
     const speed = WALK_SPEED * (keyState.get('ShiftLeft') || keyState.get('ShiftRight') ? SPRINT_MULTIPLIER : 1);
-    // Rotate input by +yaw to align with view direction
-    const sin = Math.sin(yaw), cos = Math.cos(yaw);
+    // Rotate input by yaw to align with view direction
+    const sin = Math.sin(yawObject.rotation.y), cos = Math.cos(yawObject.rotation.y);
     const moveX = (inputX * cos + inputZ * sin) * speed * delta;
     const moveZ = (-inputX * sin + inputZ * cos) * speed * delta;
 
@@ -1088,6 +1370,9 @@ function moveAndCollide(delta) {
 
 // Init
 resetGame();
+
+// Create default stage
+StageCreator.createBasicArena();
 
 // Initialize P2P when page loads
 window.addEventListener('load', () => {
@@ -1149,43 +1434,59 @@ function animate() {
         // Update player body position and rotation
         playerBody.position.copy(playerPosition);
         playerBody.position.y = playerPosition.y - PLAYER_EYE_HEIGHT; // adjust for eye height offset
-        playerBody.rotation.y = yaw; // body follows yaw rotation
+        playerBody.rotation.y = yawObject.rotation.y; // body follows yaw rotation
 
         // Send network updates
         if (networkManager.isJoinedToRoom()) {
             // Send player position update at 20fps (every 3 frames at 60fps)
             if (Math.floor(performance.now() / 1000 * 20) !== networkManager.lastUpdateFrame) {
                 networkManager.lastUpdateFrame = Math.floor(performance.now() / 1000 * 20);
-                networkManager.sendPlayerUpdate(playerPosition, { yaw, pitch });
+                networkManager.sendPlayerUpdate(playerPosition, { yaw: yawObject.rotation.y, pitch: pitchObject.rotation.x });
             }
         }
     }
 
-    // Camera positioning
+    // Update yaw object position
+    yawObject.position.copy(playerPosition);
+
+    // Camera positioning with quaternion-based control
     if (isThirdPerson) {
-        // Third person camera behind player with pitch support
+        // Third person camera behind player
         const cameraDistance = 4;
-        const cameraHeight = 2;
 
-        // Calculate camera position considering both yaw and pitch
-        const cameraOffset = new THREE.Vector3(
-            Math.sin(yaw) * Math.cos(pitch) * cameraDistance,
-            cameraHeight - Math.sin(pitch) * cameraDistance,
-            Math.cos(yaw) * Math.cos(pitch) * cameraDistance
-        );
-        camera.position.copy(playerPosition).add(cameraOffset);
+        // Get camera direction from quaternion objects
+        const direction = new THREE.Vector3(0, 0, 1);
+        direction.applyQuaternion(pitchObject.quaternion);
+        direction.applyQuaternion(yawObject.quaternion);
 
-        // Look at a point in front of the player considering pitch
-        const lookAtTarget = playerPosition.clone().add(new THREE.Vector3(
-            -Math.sin(yaw) * Math.cos(pitch),
-            Math.sin(pitch),
-            -Math.cos(yaw) * Math.cos(pitch)
-        ));
-        camera.lookAt(lookAtTarget);
+        // Position camera behind player
+        camera.position.copy(playerPosition).add(direction.multiplyScalar(-cameraDistance));
+        camera.position.y += 2; // Height offset
+
+        // Look at player
+        camera.lookAt(playerPosition);
     } else {
-        // First person camera
+        // First person camera - debug quaternion application
         camera.position.copy(playerPosition);
-        camera.rotation.set(pitch, yaw, 0, 'YXZ');
+
+        // Occasional debug logging (reduced frequency)
+        if (Math.random() < 0.001) { // 0.1% chance to log
+            console.log(`Camera angles - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
+        }
+
+        // Method 1: Try simple euler application first
+        camera.rotation.order = 'YXZ';
+        camera.rotation.y = yawObject.rotation.y;
+        camera.rotation.x = pitchObject.rotation.x;
+        camera.rotation.z = 0;
+
+        // Check for NaN in camera rotation
+        if (isNaN(camera.rotation.x) || isNaN(camera.rotation.y) || isNaN(camera.rotation.z)) {
+            console.error('🚨 NaN detected in camera rotation!');
+            camera.rotation.set(0, 0, 0);
+            yawObject.rotation.y = 0;
+            pitchObject.rotation.x = 0;
+        }
     }
 
     renderer.render(scene, camera);
