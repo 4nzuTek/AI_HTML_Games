@@ -1,4 +1,10 @@
-// ===== Mini FPS =====
+// ===== Mini FPS with Photon Fusion =====
+// Photon Configuration
+const PHOTON_APP_ID = "d2b05894-f70e-4fbd-b86e-f96c9837017f";
+let photonClient = null;
+let isHost = false;
+let connectedPlayers = new Map();
+
 // Config
 const WORLD_SIZE = 120;
 const PLAYER_EYE_HEIGHT = 1.7;
@@ -55,9 +61,15 @@ const hudTargetsEl = document.getElementById('targets');
 const banner = document.getElementById('banner');
 const bannerText = document.getElementById('banner-text');
 const bannerBtn = document.getElementById('banner-btn');
+const connectionStatus = document.getElementById('connection-status');
+const roomIdInput = document.getElementById('room-id');
+const playerNameInput = document.getElementById('player-name');
+const createRoomBtn = document.getElementById('create-room-btn');
+const joinRoomBtn = document.getElementById('join-room-btn');
+const availableRoomsSelect = document.getElementById('available-rooms');
+const refreshRoomsBtn = document.getElementById('refresh-rooms-btn');
+
 banner.style.display = 'block';
-bannerText.textContent = 'FPS Demo - Click Play to start';
-bannerBtn.textContent = 'Play';
 
 // Three.js setup
 const scene = new THREE.Scene();
@@ -193,13 +205,19 @@ function attemptShoot() {
     direction.applyQuaternion(camera.quaternion);
 
     bullet.userData = {
-        velocity: direction.multiplyScalar(BULLET_SPEED),
+        velocity: direction.clone().multiplyScalar(BULLET_SPEED),
         birthTime: now,
         isBullet: true
     };
 
     scene.add(bullet);
     bullets.push(bullet);
+
+    // Send network shoot event
+    if (networkManager.isJoinedToRoom()) {
+        networkManager.sendShootEvent(camera.position, direction);
+    }
+
     updateUI();
 }
 
@@ -217,6 +235,482 @@ function reload() {
         updateUI();
     }, RELOAD_TIME_S * 1000);
 }
+
+// PeerJS P2P Network System (no server required)
+class NetworkManager {
+    constructor() {
+        this.peer = null;
+        this.connections = new Map();
+        this.isConnected = false;
+        this.currentRoom = null;
+        this.playerName = "";
+        this.playerId = null;
+        this.isHost = false;
+        this.availableRooms = new Map(); // roomId -> {hostName, playerCount}
+        this.lastUpdateFrame = -1;
+    }
+
+    async initialize() {
+        try {
+            console.log("Initializing P2P connection...");
+            this.updateConnectionStatus("Initializing P2P...");
+
+            // Create PeerJS instance with random ID
+            this.playerId = 'fps-' + Math.random().toString(36).substr(2, 9);
+            this.peer = new Peer(this.playerId);
+
+            this.peer.on('open', (id) => {
+                console.log('P2P connection established with ID:', id);
+                this.playerId = id;
+                this.isConnected = true;
+                this.updateConnectionStatus("Ready to connect");
+                createRoomBtn.disabled = false;
+                joinRoomBtn.disabled = false;
+            });
+
+            this.peer.on('connection', (conn) => {
+                this.handleIncomingConnection(conn);
+            });
+
+            this.peer.on('error', (err) => {
+                // Suppress "Could not connect" errors during room discovery
+                if (!err.message.includes('Could not connect')) {
+                    console.error('PeerJS error:', err);
+                    this.updateConnectionStatus("Connection error: " + err.message);
+                }
+            });
+
+        } catch (error) {
+            console.error("Failed to initialize P2P:", error);
+            this.updateConnectionStatus("Connection failed");
+        }
+    }
+
+    handleIncomingConnection(conn) {
+        console.log('Incoming connection from:', conn.peer);
+
+        conn.on('open', () => {
+            console.log('Connection opened with:', conn.peer);
+            this.connections.set(conn.peer, conn);
+            this.updateConnectionStatus(`Connected with ${conn.peer}`);
+
+            // Send welcome message
+            conn.send({
+                type: 'playerJoin',
+                playerName: this.playerName,
+                playerId: this.playerId
+            });
+        });
+
+        conn.on('data', (data) => {
+            this.handleNetworkMessage(data, conn.peer);
+        });
+
+        conn.on('close', () => {
+            console.log('Connection closed with:', conn.peer);
+            this.connections.delete(conn.peer);
+            this.removeNetworkPlayer(conn.peer);
+        });
+    }
+
+    async createRoom(roomId, playerName) {
+        if (!this.isConnected) return false;
+
+        try {
+            console.log(`Creating room: ${roomId} as ${playerName}`);
+            this.playerName = playerName;
+            this.currentRoom = roomId;
+            this.isHost = true;
+
+            // Create a predictable peer ID based on room number
+            const hostPeerId = `fps-room-${roomId}`;
+
+            // Destroy current peer and create new one with room-specific ID
+            if (this.peer) {
+                this.peer.destroy();
+            }
+
+            this.peer = new Peer(hostPeerId);
+
+            this.peer.on('open', (id) => {
+                this.playerId = id;
+                this.updateConnectionStatus(`Room ${roomId} created! Others can join room ${roomId}`);
+                this.showGameStartButton();
+
+                // Register room as available
+                this.availableRooms.set(roomId, {
+                    hostName: playerName,
+                    playerCount: 1,
+                    peerId: hostPeerId
+                });
+            });
+
+            this.peer.on('connection', (conn) => {
+                this.handleIncomingConnection(conn);
+            });
+
+            this.peer.on('error', (err) => {
+                // Only log non-connection errors
+                if (!err.message.includes('Could not connect')) {
+                    console.error('PeerJS error:', err);
+                    this.updateConnectionStatus("Room creation failed: " + err.message);
+                }
+            });
+
+            return true;
+        } catch (error) {
+            console.error("Failed to create room:", error);
+            this.updateConnectionStatus("Failed to create room");
+            return false;
+        }
+    }
+
+    async joinRoom(roomId, playerName) {
+        if (!this.isConnected) return false;
+
+        try {
+            console.log(`Joining room: ${roomId} as ${playerName}`);
+            this.updateConnectionStatus(`Connecting to room ${roomId}...`);
+            this.playerName = playerName;
+            this.currentRoom = roomId;
+
+            // Connect to room host using predictable ID
+            const hostPeerId = `fps-room-${roomId}`;
+            const conn = this.peer.connect(hostPeerId);
+
+            conn.on('open', () => {
+                console.log('Connected to room:', roomId);
+                this.connections.set(hostPeerId, conn);
+                this.updateConnectionStatus(`Joined room ${roomId}!`);
+                this.showGameStartButton();
+
+                // Send join message
+                conn.send({
+                    type: 'playerJoin',
+                    playerName: this.playerName,
+                    playerId: this.playerId
+                });
+            });
+
+            conn.on('data', (data) => {
+                this.handleNetworkMessage(data, hostPeerId);
+            });
+
+            conn.on('close', () => {
+                console.log('Disconnected from room');
+                this.connections.delete(hostPeerId);
+                this.updateConnectionStatus("Disconnected from room");
+            });
+
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                this.updateConnectionStatus(`Failed to join room ${roomId}: ${err.message}`);
+            });
+
+            return true;
+        } catch (error) {
+            console.error("Failed to join room:", error);
+            this.updateConnectionStatus("Failed to join room");
+            return false;
+        }
+    }
+
+    async refreshAvailableRooms() {
+        // Try to detect available rooms by attempting connections to common room IDs
+        this.updateConnectionStatus("Searching for rooms...");
+        this.availableRooms.clear();
+
+        // Check only rooms 1-10 for active hosts (reduced to minimize errors)
+        const promises = [];
+        for (let i = 1; i <= 10; i++) {
+            promises.push(this.checkRoomExists(i));
+        }
+
+        await Promise.allSettled(promises);
+        this.updateRoomsList();
+    }
+
+    async checkRoomExists(roomId) {
+        return new Promise((resolve) => {
+            const hostPeerId = `fps-room-${roomId}`;
+            const testConn = this.peer.connect(hostPeerId);
+
+            const timeout = setTimeout(() => {
+                if (testConn) {
+                    testConn.close();
+                }
+                resolve(false);
+            }, 1000); // Reduced timeout for faster searching
+
+            testConn.on('open', () => {
+                clearTimeout(timeout);
+                // Room exists, add to available rooms
+                this.availableRooms.set(roomId, {
+                    hostName: 'Host',
+                    playerCount: '?',
+                    peerId: hostPeerId
+                });
+                testConn.close();
+                resolve(true);
+            });
+
+            testConn.on('error', (err) => {
+                clearTimeout(timeout);
+                // Suppress "Could not connect" errors as they're expected
+                if (!err.message.includes('Could not connect')) {
+                    console.warn(`Room ${roomId} check failed:`, err.message);
+                }
+                resolve(false);
+            });
+        });
+    }
+
+    updateRoomsList() {
+        // Clear current options except the first one
+        availableRoomsSelect.innerHTML = '<option value="">Select a room to join...</option>';
+
+        if (this.availableRooms.size === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No rooms found';
+            option.disabled = true;
+            availableRoomsSelect.appendChild(option);
+        } else {
+            this.availableRooms.forEach((room, roomId) => {
+                const option = document.createElement('option');
+                option.value = roomId;
+                option.textContent = `Room ${roomId} - Host: ${room.hostName}`;
+                availableRoomsSelect.appendChild(option);
+            });
+        }
+
+        this.updateConnectionStatus(`Found ${this.availableRooms.size} available rooms`);
+    }
+
+    updateConnectionStatus(message) {
+        if (connectionStatus) {
+            connectionStatus.textContent = message;
+        }
+    }
+
+    showGameStartButton() {
+        document.getElementById('connection-panel').style.display = 'none';
+        bannerBtn.style.display = 'block';
+        bannerBtn.textContent = 'Start Game';
+    }
+
+    // Network message handling
+    sendPlayerUpdate(position, rotation) {
+        if (!this.currentRoom || this.connections.size === 0) return;
+
+        const data = {
+            type: 'playerUpdate',
+            x: position.x,
+            y: position.y,
+            z: position.z,
+            yaw: rotation.yaw,
+            pitch: rotation.pitch,
+            timestamp: Date.now()
+        };
+
+        // Send to all connected peers
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(data);
+            }
+        });
+    }
+
+    sendShootEvent(origin, direction) {
+        if (!this.currentRoom || this.connections.size === 0) return;
+
+        const data = {
+            type: 'playerShoot',
+            ox: origin.x, oy: origin.y, oz: origin.z,
+            dx: direction.x, dy: direction.y, dz: direction.z,
+            timestamp: Date.now()
+        };
+
+        // Send to all connected peers
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(data);
+            }
+        });
+    }
+
+    handleNetworkMessage(data, peerId) {
+        switch (data.type) {
+            case 'playerJoin':
+                console.log(`${data.playerName} joined the game`);
+                this.createNetworkPlayer(peerId, data.playerName);
+                break;
+            case 'playerUpdate':
+                this.handlePlayerUpdate(data, peerId);
+                break;
+            case 'playerShoot':
+                this.handlePlayerShoot(data, peerId);
+                break;
+        }
+    }
+
+    handlePlayerUpdate(data, peerId) {
+        if (peerId === this.playerId) return; // Ignore own updates
+
+        // Update or create network player
+        if (!connectedPlayers.has(peerId)) {
+            this.createNetworkPlayer(peerId, 'Player');
+        }
+
+        const player = connectedPlayers.get(peerId);
+        if (player) {
+            // Store target position for smooth interpolation
+            const targetPos = new THREE.Vector3(data.x, data.y - PLAYER_EYE_HEIGHT, data.z);
+
+            // Initialize interpolation data if not exists
+            if (!player.userData.networkData) {
+                player.userData.networkData = {
+                    targetPosition: targetPos,
+                    targetYaw: data.yaw,
+                    lastUpdateTime: performance.now()
+                };
+                player.position.copy(targetPos);
+                player.rotation.y = data.yaw;
+            } else {
+                // Update targets for interpolation
+                player.userData.networkData.targetPosition = targetPos;
+                player.userData.networkData.targetYaw = data.yaw;
+                player.userData.networkData.lastUpdateTime = performance.now();
+            }
+        }
+    }
+
+    handlePlayerShoot(data, peerId) {
+        if (peerId === this.playerId) return; // Ignore own shots
+
+        // Create network bullet
+        const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+        bullet.position.set(data.ox, data.oy, data.oz);
+
+        const direction = new THREE.Vector3(data.dx, data.dy, data.dz);
+        bullet.userData = {
+            velocity: direction.multiplyScalar(BULLET_SPEED),
+            birthTime: performance.now() / 1000,
+            isBullet: true,
+            isNetworkBullet: true
+        };
+
+        scene.add(bullet);
+        bullets.push(bullet);
+    }
+
+    createNetworkPlayer(peerId, playerName = 'Player') {
+        const networkPlayer = new THREE.Group();
+
+        // Create player body (similar to local player)
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.45;
+        networkPlayer.add(body);
+
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.y = 1.35;
+        networkPlayer.add(head);
+
+        // Add name tag
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        context.fillStyle = 'rgba(0,0,0,0.8)';
+        context.fillRect(0, 0, 256, 64);
+        context.fillStyle = 'white';
+        context.font = '20px Arial';
+        context.textAlign = 'center';
+        context.fillText(playerName, 128, 40);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const nameTag = new THREE.Mesh(
+            new THREE.PlaneGeometry(2, 0.5),
+            new THREE.MeshBasicMaterial({ map: texture, transparent: true })
+        );
+        nameTag.position.y = 2;
+        networkPlayer.add(nameTag);
+
+        scene.add(networkPlayer);
+        connectedPlayers.set(peerId, networkPlayer);
+    }
+
+    removeNetworkPlayer(peerId) {
+        const player = connectedPlayers.get(peerId);
+        if (player) {
+            scene.remove(player);
+            connectedPlayers.delete(peerId);
+        }
+    }
+
+    isJoinedToRoom() {
+        return this.currentRoom && this.connections.size > 0;
+    }
+
+    // Update network players with smooth interpolation
+    updateNetworkPlayers(delta) {
+        connectedPlayers.forEach((player, peerId) => {
+            if (player.userData.networkData) {
+                const data = player.userData.networkData;
+                const interpolationSpeed = 8; // Higher = faster interpolation
+
+                // Smooth position interpolation
+                player.position.lerp(data.targetPosition, interpolationSpeed * delta);
+
+                // Smooth rotation interpolation
+                const currentYaw = player.rotation.y;
+                const targetYaw = data.targetYaw;
+                const yawDiff = targetYaw - currentYaw;
+
+                // Handle rotation wrapping (avoid spinning the long way around)
+                let adjustedYawDiff = yawDiff;
+                if (Math.abs(yawDiff) > Math.PI) {
+                    adjustedYawDiff = yawDiff > 0 ? yawDiff - 2 * Math.PI : yawDiff + 2 * Math.PI;
+                }
+
+                player.rotation.y += adjustedYawDiff * interpolationSpeed * delta;
+            }
+        });
+    }
+}
+
+// Initialize network manager
+const networkManager = new NetworkManager();
+
+// Button event handlers
+createRoomBtn.onclick = () => {
+    const roomId = parseInt(roomIdInput.value);
+    const playerName = playerNameInput.value.trim();
+    if (roomId && roomId >= 1 && roomId <= 9999 && playerName) {
+        networkManager.createRoom(roomId, playerName);
+    } else {
+        alert('Please enter a room number (1-9999) and player name');
+    }
+};
+
+joinRoomBtn.onclick = () => {
+    const selectedRoom = availableRoomsSelect.value;
+    const playerName = playerNameInput.value.trim();
+    if (selectedRoom && playerName) {
+        networkManager.joinRoom(parseInt(selectedRoom), playerName);
+    } else {
+        alert('Please select a room and enter player name');
+    }
+};
+
+refreshRoomsBtn.onclick = () => {
+    networkManager.refreshAvailableRooms();
+};
+
+// Enable/disable join button based on room selection
+availableRoomsSelect.onchange = () => {
+    joinRoomBtn.disabled = !availableRoomsSelect.value;
+};
 
 // Pause / Resume and pointer lock
 bannerBtn.onclick = () => {
@@ -413,6 +907,26 @@ function moveAndCollide(delta) {
 // Init
 resetGame();
 
+// Initialize P2P when page loads
+window.addEventListener('load', () => {
+    // Check if PeerJS is loaded
+    if (typeof Peer === 'undefined') {
+        console.error('PeerJS not loaded');
+        connectionStatus.textContent = 'PeerJS failed to load';
+        return;
+    }
+
+    console.log('PeerJS loaded successfully');
+    networkManager.initialize();
+
+    // Add info message about manual room refresh
+    setTimeout(() => {
+        if (connectionStatus.textContent === 'Ready to connect') {
+            connectionStatus.textContent = 'Ready! Click "Refresh Rooms" to find available rooms';
+        }
+    }, 2000);
+});
+
 // Resize handling
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -426,9 +940,13 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
 
+    // Always update bullets and network players (even when paused)
+    updateBullets(delta);
+    networkManager.updateNetworkPlayers(delta);
+
     if (!isPaused) {
+        // Only update player movement and shooting when not paused
         moveAndCollide(delta);
-        updateBullets(delta);
 
         // Full-auto shooting
         if (mouseDown && pointerLocked) {
@@ -439,6 +957,15 @@ function animate() {
         playerBody.position.copy(playerPosition);
         playerBody.position.y = playerPosition.y - PLAYER_EYE_HEIGHT; // adjust for eye height offset
         playerBody.rotation.y = yaw; // body follows yaw rotation
+
+        // Send network updates
+        if (networkManager.isJoinedToRoom()) {
+            // Send player position update at 20fps (every 3 frames at 60fps)
+            if (Math.floor(performance.now() / 1000 * 20) !== networkManager.lastUpdateFrame) {
+                networkManager.lastUpdateFrame = Math.floor(performance.now() / 1000 * 20);
+                networkManager.sendPlayerUpdate(playerPosition, { yaw, pitch });
+            }
+        }
     }
 
     // Camera positioning
