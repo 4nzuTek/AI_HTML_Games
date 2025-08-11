@@ -14,6 +14,28 @@
     <div class="title-screen">
         <div class="title-container">
             <h1 class="main-title">あんずの太鼓練習ツール</h1>
+
+            <!-- プリセット機能 -->
+            <div class="preset-section">
+                <h3>プリセット選択</h3>
+                <div class="preset-selector">
+                    <select id="preset-select" class="preset-dropdown">
+                        <option value="beginner">初級者</option>
+                        <option value="intermediate">中級者</option>
+                        <option value="advanced">上級者</option>
+                        <option value="expert">エキスパート</option>
+                        <option value="mixed_notes1">音符混合1</option>
+                        <option value="mixed_notes2">音符混合2</option>
+                        <option value="complex_pattern">複雑パターン</option>
+                        <option value="custom" selected>カスタム</option>
+                    </select>
+                </div>
+                <div class="preset-info">
+                    <div class="preset-name" id="current-preset-name">カスタム</div>
+                    <div class="preset-score" id="current-preset-score">自己ベスト: 0</div>
+                </div>
+            </div>
+
             <div class="practice-settings">
                 <div class="setting-group">
                     <label for="bpm-setting">BPM:</label>
@@ -54,30 +76,79 @@
     <div class="practice-screen">
         <!-- 上部の情報エリア -->
         <div class="info-area">
-            <div class="player-info">
-                <div class="settings-display">
-                    <div class="setting-row">
-                        <div class="setting-item">
-                            <span class="setting-label">BPM:</span>
-                            <span class="setting-value" id="current-bpm">120</span>
+            <div class="info-area-left">
+                <div class="player-info">
+                    <div class="settings-display">
+                        <div class="setting-row">
+                            <div class="setting-item">
+                                <span class="setting-label">BPM:</span>
+                                <span class="setting-value" id="current-bpm">120</span>
+                            </div>
+                            <div class="setting-item">
+                                <span class="setting-label">オフセット:</span>
+                                <span class="setting-value" id="current-offset">0ms</span>
+                            </div>
                         </div>
-                        <div class="setting-item">
-                            <span class="setting-label">音符:</span>
-                            <span class="setting-value" id="current-note">16分音符</span>
-                        </div>
-                        <div class="setting-item">
-                            <span class="setting-label">連打:</span>
-                            <span class="setting-value" id="current-ren">5連</span>
+                        <div class="setting-row">
+                            <div class="setting-item">
+                                <span class="setting-label">音符:</span>
+                                <span class="setting-value" id="current-note">16分音符</span>
+                            </div>
+                            <div class="setting-item">
+                                <span class="setting-label">連打:</span>
+                                <span class="setting-value" id="current-ren">5連</span>
+                            </div>
+                            <div class="setting-item">
+                                <span class="setting-label">休み:</span>
+                                <span class="setting-value" id="current-rest">3</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="setting-row">
-                        <div class="setting-item">
-                            <span class="setting-label">休み:</span>
-                            <span class="setting-value" id="current-rest">3</span>
-                        </div>
-                        <div class="setting-item">
-                            <span class="setting-label">オフセット:</span>
-                            <span class="setting-value" id="current-offset">0ms</span>
+
+                    <!-- グラフをplayer-infoの中に移動 -->
+                    <canvas id="score-graph" width="960" height="360"></canvas>
+
+                </div>
+                <div class="player-info-layout">
+                    <div class="player-info-content">
+                        <!-- ここにプレイヤーインフォ（設定・スコア表示・スコアチップ）が入る -->
+                    </div>
+                    <div class="score-graph-area">
+                        <div class="score-chips-container">
+                            <div class="score-chip">
+                                <div class="chip-label">スコア</div>
+                                <div class="score-values">
+                                    <div class="score-item-large">
+                                        <span class="score-label-large">自己ベスト:</span>
+                                        <span class="score-value-large" id="all-time-best">0</span>
+                                    </div>
+                                    <div class="score-item-large">
+                                        <span class="score-label-large">今回のベスト:</span>
+                                        <span class="score-value-large" id="current-session-best">0</span>
+                                    </div>
+                                    <div class="score-item-large">
+                                        <span class="score-label-large">直近100ノーツ:</span>
+                                        <span class="score-value-large" id="recent-score">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="score-chip">
+                                <div class="chip-label">スコア詳細</div>
+                                <div class="score-details">
+                                    <div class="detail-item">
+                                        <span class="detail-label">運指:</span>
+                                        <span class="detail-value" id="fingering-status">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">連続:</span>
+                                        <span class="detail-value" id="consecutive-status">-</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">倍率:</span>
+                                        <span class="detail-value" id="multiplier-status">1.0x</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
