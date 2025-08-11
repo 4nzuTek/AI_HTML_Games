@@ -523,7 +523,7 @@ class NetworkManager {
             this.connections.set(conn.peer, conn);
             this.updateConnectionStatus(`Connected with ${conn.peer}`);
 
-            // Send welcome message
+            // Send welcome message with host player info
             conn.send({
                 type: 'playerJoin',
                 playerName: this.playerName,
@@ -773,6 +773,18 @@ class NetworkManager {
             case 'playerJoin':
                 console.log(`${data.playerName} joined the game`);
                 this.createNetworkPlayer(peerId, data.playerName);
+
+                // If this is the host, send back host info to the new player
+                if (this.isHost) {
+                    const conn = this.connections.get(peerId);
+                    if (conn && conn.open) {
+                        conn.send({
+                            type: 'playerJoin',
+                            playerName: this.playerName,
+                            playerId: this.playerId
+                        });
+                    }
+                }
                 break;
             case 'playerUpdate':
                 this.handlePlayerUpdate(data, peerId);
@@ -845,7 +857,7 @@ class NetworkManager {
         head.position.y = 1.35;
         networkPlayer.add(head);
 
-        // Add name tag
+        // Add name tag with billboard effect - ADD DIRECTLY TO SCENE, NOT TO PLAYER GROUP
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = 256;
@@ -862,8 +874,16 @@ class NetworkManager {
             new THREE.PlaneGeometry(2, 0.5),
             new THREE.MeshBasicMaterial({ map: texture, transparent: true })
         );
-        nameTag.position.y = 2;
-        networkPlayer.add(nameTag);
+
+        // Mark as nameplate for billboard update and link to player
+        nameTag.userData.isNameplate = true;
+        nameTag.userData.playerId = peerId;
+
+        // Add nameplate directly to scene (not to player group)
+        scene.add(nameTag);
+
+        // Store reference to nameplate in network player
+        networkPlayer.userData.nameTag = nameTag;
 
         scene.add(networkPlayer);
         connectedPlayers.set(peerId, networkPlayer);
@@ -872,6 +892,10 @@ class NetworkManager {
     removeNetworkPlayer(peerId) {
         const player = connectedPlayers.get(peerId);
         if (player) {
+            // Remove nameplate if it exists
+            if (player.userData.nameTag) {
+                scene.remove(player.userData.nameTag);
+            }
             scene.remove(player);
             connectedPlayers.delete(peerId);
         }
@@ -1412,6 +1436,35 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Billboard function to make nameplates always face the camera
+function updateNameplateBillboards() {
+    connectedPlayers.forEach((player, peerId) => {
+        // Get the nameplate from the stored reference
+        const nameTag = player.userData.nameTag;
+        if (nameTag) {
+            // Update nameplate position to follow player (with height offset)
+            const playerWorldPos = new THREE.Vector3();
+            player.getWorldPosition(playerWorldPos);
+            nameTag.position.copy(playerWorldPos);
+            nameTag.position.y += 2; // Height offset above player
+
+            // Calculate direction vector from nameplate to camera
+            const direction = new THREE.Vector3();
+            direction.subVectors(camera.position, nameTag.position);
+
+            // Calculate only Y-axis rotation (horizontal rotation) to face camera
+            const horizontalDirection = new THREE.Vector3(direction.x, 0, direction.z);
+            horizontalDirection.normalize();
+
+            // Calculate angle and apply rotation
+            const angle = Math.atan2(horizontalDirection.x, horizontalDirection.z);
+
+            // Set rotation directly - only rotate around Y axis to keep upright
+            nameTag.rotation.set(0, angle, 0);
+        }
+    });
+}
+
 // Main loop
 const clock = new THREE.Clock();
 function animate() {
@@ -1421,6 +1474,7 @@ function animate() {
     // Always update bullets and network players (even when paused)
     updateBullets(delta);
     networkManager.updateNetworkPlayers(delta);
+    updateNameplateBillboards();
 
     if (!isPaused) {
         // Only update player movement and shooting when not paused
