@@ -875,13 +875,59 @@ function reload() {
     if (isReloading) return;
     if (magazine >= MAG_SIZE) return;
     if (reserveAmmo <= 0) return;
+
     isReloading = true;
+
+    // クロスヘアを非表示
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) {
+        crosshair.style.display = 'none';
+    }
+
+    // リロードゲージを表示
+    const reloadContainer = document.getElementById('reload-container');
+    const reloadProgress = document.querySelector('.reload-progress');
+    if (reloadContainer && reloadProgress) {
+        reloadContainer.style.display = 'block';
+        reloadProgress.style.width = '0%';
+
+        // リロードゲージをアニメーション
+        const startTime = performance.now();
+        const reloadDuration = RELOAD_TIME_S * 1000;
+
+        function updateReloadProgress() {
+            if (!isReloading) return;
+
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(100, (elapsed / reloadDuration) * 100);
+
+            reloadProgress.style.width = progress + '%';
+
+            if (progress < 100) {
+                requestAnimationFrame(updateReloadProgress);
+            }
+        }
+
+        updateReloadProgress();
+    }
+
     setTimeout(() => {
         const need = MAG_SIZE - magazine;
         const take = Math.min(need, reserveAmmo);
         magazine += take;
         reserveAmmo -= take;
         isReloading = false;
+
+        // クロスヘアを再表示
+        if (crosshair) {
+            crosshair.style.display = 'block';
+        }
+
+        // リロードゲージを非表示
+        if (reloadContainer) {
+            reloadContainer.style.display = 'none';
+        }
+
         updateUI();
     }, RELOAD_TIME_S * 1000);
 }
@@ -2032,6 +2078,21 @@ function resetGame() {
     playerVelocity.set(0, 0, 0);
     playerBody.visible = false;
     isRespawning = false; // リスポーンフラグもリセット
+
+    // リロード状態をリセット
+    isReloading = false;
+
+    // クロスヘアを表示
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) {
+        crosshair.style.display = 'block';
+    }
+
+    // リロードゲージを非表示
+    const reloadContainer = document.getElementById('reload-container');
+    if (reloadContainer) {
+        reloadContainer.style.display = 'none';
+    }
 
     // ダメージ方向インジケーターをクリア
     damageIndicators.forEach(indicator => indicator.destroy());

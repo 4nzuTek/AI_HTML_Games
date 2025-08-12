@@ -346,3 +346,40 @@ a:hover {
     z-index: 9999;
     pointer-events: none;
 }
+
+/* リロードゲージ */
+.reload-container {
+    position: fixed;
+    top: 60%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    pointer-events: none;
+    display: none;
+}
+
+.reload-text {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: 10px;
+}
+
+.reload-bar {
+    width: 200px;
+    height: 8px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.reload-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #ff4444, #ff6666);
+    width: 0%;
+    transition: width 0.1s linear;
+    border-radius: 2px;
+}
