@@ -77,6 +77,8 @@ let lastShotTime = 0;         // 最後の射撃時刻（減衰計算用）
 // デバッグ設定
 let isDebugMenuOpen = false;
 let isInvincible = false;
+let isAutoRotating = false; // 自動回転フラグ
+let autoRotateSpeed = 1.0; // 自動回転速度（ラジアン/秒）
 
 // ダメージ方向インジケータークラス
 class DamageIndicator {
@@ -2128,6 +2130,24 @@ function resetGame() {
 
     spawnTargets(12);
     updateUI();
+
+    // Reset recoil
+    targetRecoil = 0;
+    currentRecoil = 0;
+    targetHorizontalRecoil = 0;
+    currentHorizontalRecoil = 0;
+    recoilBuildup = 0;
+
+    // 自動回転状態をリセット
+    isAutoRotating = false;
+    const autoRotateCheckbox = document.getElementById('auto-rotate-checkbox');
+    if (autoRotateCheckbox) {
+        autoRotateCheckbox.checked = false;
+    }
+
+    // ダメージ方向インジケーターを完全にクリア
+    damageIndicators.forEach(indicator => indicator.destroy());
+    damageIndicators.length = 0;
 }
 
 function updateUI() {
@@ -2971,6 +2991,11 @@ function animate() {
         updateDebugHitboxes();
     }
 
+    // 自動回転処理（ポーズ中でも動作）
+    if (isAutoRotating) {
+        yawObject.rotation.y += autoRotateSpeed * delta;
+    }
+
     if (!isPaused) {
         // Only update player movement and shooting when not paused
         moveAndCollide(delta);
@@ -3080,6 +3105,63 @@ function createDebugMenu() {
     invincibleContainer.appendChild(invincibleCheckbox);
     invincibleContainer.appendChild(invincibleLabel);
     menu.appendChild(invincibleContainer);
+
+    // 自動回転のチェックボックス
+    const autoRotateContainer = document.createElement('div');
+    autoRotateContainer.style.marginBottom = '10px';
+
+    const autoRotateCheckbox = document.createElement('input');
+    autoRotateCheckbox.type = 'checkbox';
+    autoRotateCheckbox.id = 'auto-rotate-checkbox';
+    autoRotateCheckbox.checked = isAutoRotating;
+    autoRotateCheckbox.addEventListener('change', (e) => {
+        isAutoRotating = e.target.checked;
+        console.log(`🔄 自動回転: ${isAutoRotating ? 'ON' : 'OFF'}`);
+    });
+
+    const autoRotateLabel = document.createElement('label');
+    autoRotateLabel.htmlFor = 'auto-rotate-checkbox';
+    autoRotateLabel.textContent = '視点自動回転';
+    autoRotateLabel.style.marginLeft = '8px';
+    autoRotateLabel.style.cursor = 'pointer';
+
+    autoRotateContainer.appendChild(autoRotateCheckbox);
+    autoRotateContainer.appendChild(autoRotateLabel);
+    menu.appendChild(autoRotateContainer);
+
+    // 自動回転速度設定
+    const speedContainer = document.createElement('div');
+    speedContainer.style.marginBottom = '15px';
+
+    const speedLabel = document.createElement('label');
+    speedLabel.textContent = '回転速度: ';
+    speedLabel.style.marginRight = '8px';
+
+    const speedInput = document.createElement('input');
+    speedInput.type = 'range';
+    speedInput.min = '0.1';
+    speedInput.max = '5.0';
+    speedInput.step = '0.1';
+    speedInput.value = autoRotateSpeed;
+    speedInput.style.width = '100px';
+    speedInput.addEventListener('input', (e) => {
+        autoRotateSpeed = parseFloat(e.target.value);
+        console.log(`🔄 回転速度: ${autoRotateSpeed} rad/s`);
+    });
+
+    const speedValue = document.createElement('span');
+    speedValue.textContent = autoRotateSpeed.toFixed(1);
+    speedValue.style.marginLeft = '8px';
+    speedValue.style.color = '#00ff00';
+
+    speedInput.addEventListener('input', (e) => {
+        speedValue.textContent = parseFloat(e.target.value).toFixed(1);
+    });
+
+    speedContainer.appendChild(speedLabel);
+    speedContainer.appendChild(speedInput);
+    speedContainer.appendChild(speedValue);
+    menu.appendChild(speedContainer);
 
     // 閉じるボタン
     const closeButton = document.createElement('button');
