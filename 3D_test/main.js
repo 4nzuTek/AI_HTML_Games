@@ -200,12 +200,12 @@ class DamageIndicator {
         triangle.style.transform = `translate(calc(-50% + ${triangleX}px), calc(-33.33% + ${triangleY}px)) rotate(${triangleAngle}deg)`;
 
         // デバッグログ: 円の中心と三角形の中心を出力
-        console.log(`🎯 インジケーター配置デバッグ:`);
-        console.log(`   円の中心: (${circleCenterX.toFixed(1)}, ${circleCenterY.toFixed(1)})`);
-        console.log(`   三角形の中心: (${triangleActualX.toFixed(1)}, ${triangleActualY.toFixed(1)})`);
-        console.log(`   円の半径: ${circleRadius.toFixed(1)}px`);
-        console.log(`   角度: ${(angle * 180 / Math.PI).toFixed(1)}°`);
-        console.log(`   三角形の相対位置: (${triangleX.toFixed(1)}, ${triangleY.toFixed(1)})`);
+        // console.log(`🎯 インジケーター配置デバッグ:`);
+        // console.log(`   円の中心: (${circleCenterX.toFixed(1)}, ${circleCenterY.toFixed(1)})`);
+        // console.log(`   三角形の中心: (${triangleActualX.toFixed(1)}, ${triangleActualY.toFixed(1)})`);
+        // console.log(`   円の半径: ${circleRadius.toFixed(1)}px`);
+        // console.log(`   角度: ${(angle * 180 / Math.PI).toFixed(1)}°`);
+        // console.log(`   三角形の相対位置: (${triangleX.toFixed(1)}, ${triangleY.toFixed(1)})`);
 
         // ダメージに応じて色を変更
         const intensity = Math.min(255, 100 + (this.damage * 15));
@@ -259,12 +259,12 @@ function addDamageIndicator(attackPosition, damage) {
         const victimY = playerPosition.y.toFixed(2);
         const victimZ = playerPosition.z.toFixed(2);
 
-        console.log(`🎯 ダメージ方向インジケーター追加:`);
-        console.log(`   被ダメージ側座標: (${victimX}, ${victimY}, ${victimZ})`);
-        console.log(`   被ダメージ側向き: Yaw=${playerYaw.toFixed(1)}°, Pitch=${playerPitch.toFixed(1)}°`);
-        console.log(`   攻撃側座標: (${attackerX}, ${attackerY}, ${attackerZ})`);
-        console.log(`   攻撃方向ベクトル: (${attackDirection.x.toFixed(2)}, ${attackDirection.y.toFixed(2)}, ${attackDirection.z.toFixed(2)})`);
-        console.log(`   ダメージ: ${damage}`);
+        // console.log(`🎯 ダメージ方向インジケーター追加:`);
+        // console.log(`   被ダメージ側座標: (${victimX}, ${victimY}, ${victimZ})`);
+        // console.log(`   被ダメージ側向き: Yaw=${playerYaw.toFixed(1)}°, Pitch=${playerPitch.toFixed(1)}°`);
+        // console.log(`   攻撃側座標: (${attackerX}, ${attackerY}, ${attackerZ})`);
+        // console.log(`   攻撃方向ベクトル: (${attackDirection.x.toFixed(2)}, ${attackDirection.y.toFixed(2)}, ${attackDirection.z.toFixed(2)})`);
+        // console.log(`   ダメージ: ${damage}`);
     }
 }
 
@@ -2463,7 +2463,10 @@ function showDamageFlash() {
     setTimeout(() => {
         overlay.style.opacity = '0';
         setTimeout(() => {
-            document.body.removeChild(overlay);
+            // 要素が存在するかチェックしてから削除
+            if (overlay.parentNode) {
+                document.body.removeChild(overlay);
+            }
         }, 200);
     }, 50);
 }
@@ -2485,7 +2488,6 @@ function getRandomRespawnPosition() {
 
 // Handle player death and respawn
 function handlePlayerDeath() {
-    // console.log('💀 Player died! Respawning...');
 
     // Create blood splatter effect at death location for other players to see
     if (networkManager.isJoinedToRoom()) {
@@ -2519,6 +2521,58 @@ function handlePlayerDeath() {
     currentHorizontalRecoil = 0;
     recoilBuildup = 0;
 
+    // ヒットマーカーを完全にクリア
+    hitmarkers.forEach(hitmarker => hitmarker.destroy());
+    hitmarkers.length = 0;
+
+    // 画面上のすべてのヒットマーカー要素を強制削除
+    const allHitmarkers = document.querySelectorAll('[style*="z-index: 9999"]');
+    allHitmarkers.forEach(element => element.remove());
+
+    // より確実にヒットマーカーを削除 - すべての可能性を試す
+    const allDivs = document.querySelectorAll('div');
+    allDivs.forEach(div => {
+        const style = div.style.cssText || '';
+        const computedStyle = window.getComputedStyle(div);
+        const zIndex = computedStyle.zIndex;
+
+        // ヒットマーカーの特徴をチェック
+        if (style.includes('position: fixed') &&
+            style.includes('top: 50%') &&
+            style.includes('left: 50%') &&
+            style.includes('transform: translate(-50%, -50%)') &&
+            (zIndex === '9999' || style.includes('z-index: 9999'))) {
+            div.remove();
+        }
+    });
+
+    // 精密削除 - ヒットマーカーとダメージインジケーターのみを削除
+    const allFixedElements = document.querySelectorAll('div[style*="position: fixed"]');
+    allFixedElements.forEach(element => {
+        const style = element.style.cssText || '';
+        const id = element.id || '';
+
+        // 削除対象の条件
+        const isHitmarker = style.includes('position: fixed') &&
+            style.includes('top: 50%') &&
+            style.includes('left: 50%') &&
+            style.includes('transform: translate(-50%, -50%)');
+
+        const isDamageIndicator = style.includes('position: fixed') &&
+            style.includes('width: 306.2px') &&
+            style.includes('height: 306.2px') &&
+            style.includes('z-index: 9998');
+
+        // 除外対象
+        const isDebugMenu = id === 'debug-menu';
+        const isDamageFlash = style.includes('background-color: rgba(255, 0, 0, 0.3)');
+        const isRespawnMessage = style.includes('color: white') && style.includes('fontSize: 24px');
+
+        if ((isHitmarker || isDamageIndicator) && !isDebugMenu && !isDamageFlash && !isRespawnMessage) {
+            element.remove();
+        }
+    });
+
     // Send respawn event to network
     if (networkManager.isJoinedToRoom()) {
         networkManager.sendPlayerRespawnEvent(respawnPos);
@@ -2526,7 +2580,6 @@ function handlePlayerDeath() {
 
     // リスポーン完了 - フラグをリセット
     isRespawning = false;
-    // console.log('✅ Respawn completed!');
 
     // Show respawn message
     const message = document.createElement('div');
@@ -2570,7 +2623,6 @@ function applyDamageToPlayer(damage, attackPosition = null) {
     }
 
     health -= damage;
-    // console.log(`🩸 Player took ${damage} damage! Health: ${health}/100`);
 
     // Show damage feedback
     showDamageFlash();
@@ -2591,7 +2643,6 @@ function applyDamageToPlayer(damage, attackPosition = null) {
         health = 0;
         isRespawning = true; // リスポーンフラグを設定
         updateUI();
-        // console.log('💀 Player died! Starting respawn process...');
         setTimeout(handlePlayerDeath, 100); // 短い演出遅延（0.1秒）
     } else {
         updateUI();
@@ -3311,6 +3362,12 @@ class Hitmarker {
     // ヒットマーカーを削除
     destroy() {
         if (this.element && this.element.parentNode) {
+            // トランジション効果を無効にして即座に非表示
+            this.element.style.transition = 'none';
+            this.element.style.opacity = '0';
+            this.element.style.display = 'none';
+
+            // DOMから削除
             this.element.parentNode.removeChild(this.element);
         }
     }
@@ -3327,7 +3384,6 @@ function addHitmarker() {
     try {
         const hitmarker = new Hitmarker();
         hitmarkers.push(hitmarker);
-        console.log('🎯 ヒットマーカー表示！');
     } catch (error) {
         console.error('❌ ヒットマーカー作成エラー:', error);
     }
