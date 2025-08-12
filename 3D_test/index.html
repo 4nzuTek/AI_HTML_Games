@@ -30,7 +30,7 @@
             <input type="text" id="player-name" placeholder="Your Player Name" value="" />
             <div id="room-section">
                 <div id="create-section">
-                    <input type="number" id="room-id" placeholder="Room Number (1-9999)" min="1" max="9999" />
+                    <input type="number" id="room-id" placeholder="Room Number (1-10)" min="1" max="10" />
                     <button id="create-room-btn">Create Room</button>
                 </div>
                 <div id="join-section">
@@ -39,6 +39,9 @@
                     </select>
                     <button id="join-room-btn" disabled>Join Selected Room</button>
                     <button id="refresh-rooms-btn">Refresh Rooms</button>
+                </div>
+                <div id="auto-section">
+                    <button id="auto-match-btn">Auto Match</button>
                 </div>
             </div>
         </div>

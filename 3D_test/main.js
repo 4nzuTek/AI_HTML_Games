@@ -24,6 +24,12 @@ const DAMAGE_INDICATOR_DURATION = 2.0; // インジケーター表示時間（�
 const DAMAGE_INDICATOR_RADIUS = 80;    // インジケーターの半径（ピクセル）
 const DAMAGE_INDICATOR_DISTANCE = 100; // 画面中心からの距離（ピクセル）
 
+// ヒットマーカー設定
+const HITMARKER_DURATION = 0.15; // ヒットマーカー表示時間（秒）
+const HITMARKER_SIZE = 60;      // ヒットマーカーサイズ（ピクセル）
+const HITMARKER_THICKNESS = 4;  // ヒットマーカーの線の太さ（ピクセル）
+const HITMARKER_GAP = 12;       // 中心の空白部分のサイズ（ピクセル）
+
 // 反動設定（調整可能）
 const RECOIL_INTENSITY = 0.015;  // 基本反動の強さ（ラジアン）
 const RECOIL_EASING_SPEED = 30.0; // 反動到達速度（大きいほど速い）
@@ -54,6 +60,9 @@ let isThirdPerson = false;
 
 // ダメージ方向インジケーター管理
 let damageIndicators = [];
+
+// ヒットマーカー管理
+let hitmarkers = [];
 
 // 反動状態
 let targetRecoil = 0;         // 目標反動量（縦方向）
@@ -389,6 +398,7 @@ const createRoomBtn = document.getElementById('create-room-btn');
 const joinRoomBtn = document.getElementById('join-room-btn');
 const availableRoomsSelect = document.getElementById('available-rooms');
 const refreshRoomsBtn = document.getElementById('refresh-rooms-btn');
+const autoMatchBtn = document.getElementById('auto-match-btn');
 
 banner.style.display = 'block';
 
@@ -973,6 +983,11 @@ class NetworkManager {
             // console.log("Initializing P2P connection...");
             this.updateConnectionStatus("Initializing P2P...");
 
+            // Disable buttons during initialization
+            createRoomBtn.disabled = true;
+            joinRoomBtn.disabled = true;
+            autoMatchBtn.disabled = true;
+
             // Create PeerJS instance with random ID
             this.playerId = 'fps-' + Math.random().toString(36).substr(2, 9);
             this.peer = new Peer(this.playerId);
@@ -984,6 +999,7 @@ class NetworkManager {
                 this.updateConnectionStatus("Ready to connect");
                 createRoomBtn.disabled = false;
                 joinRoomBtn.disabled = false;
+                autoMatchBtn.disabled = false;
             });
 
             this.peer.on('connection', (conn) => {
@@ -1109,36 +1125,49 @@ class NetworkManager {
             const hostPeerId = `fps-room-${roomId}`;
             const conn = this.peer.connect(hostPeerId);
 
-            conn.on('open', () => {
-                // console.log('Connected to room:', roomId);
-                this.connections.set(hostPeerId, conn);
-                this.updateConnectionStatus(`Joined room ${roomId}!`);
-                this.showGameStartButton();
+            return new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    console.log(`⏰ Join room timeout for room ${roomId}`);
+                    resolve(false);
+                }, 5000); // 5 second timeout
 
-                // Send join message
-                conn.send({
-                    type: 'playerJoin',
-                    playerName: this.playerName,
-                    playerId: this.playerId
+                conn.on('open', () => {
+                    clearTimeout(timeout);
+                    // console.log('Connected to room:', roomId);
+                    this.connections.set(hostPeerId, conn);
+                    this.updateConnectionStatus(`Joined room ${roomId}!`);
+                    this.showGameStartButton();
+
+                    // Send join message
+                    conn.send({
+                        type: 'playerJoin',
+                        playerName: this.playerName,
+                        playerId: this.playerId
+                    });
+
+                    resolve(true);
+                });
+
+                conn.on('data', (data) => {
+                    this.handleNetworkMessage(data, hostPeerId);
+                });
+
+                conn.on('close', () => {
+                    clearTimeout(timeout);
+                    // console.log('Disconnected from room');
+                    this.connections.delete(hostPeerId);
+                    this.updateConnectionStatus("Disconnected from room");
+                    resolve(false);
+                });
+
+                conn.on('error', (err) => {
+                    clearTimeout(timeout);
+                    console.error('Connection error:', err);
+                    this.updateConnectionStatus(`Failed to join room ${roomId}: ${err.message}`);
+                    resolve(false);
                 });
             });
 
-            conn.on('data', (data) => {
-                this.handleNetworkMessage(data, hostPeerId);
-            });
-
-            conn.on('close', () => {
-                // console.log('Disconnected from room');
-                this.connections.delete(hostPeerId);
-                this.updateConnectionStatus("Disconnected from room");
-            });
-
-            conn.on('error', (err) => {
-                console.error('Connection error:', err);
-                this.updateConnectionStatus(`Failed to join room ${roomId}: ${err.message}`);
-            });
-
-            return true;
         } catch (error) {
             console.error("Failed to join room:", error);
             this.updateConnectionStatus("Failed to join room");
@@ -1151,14 +1180,22 @@ class NetworkManager {
         this.updateConnectionStatus("Searching for rooms...");
         this.availableRooms.clear();
 
-        // Check only rooms 1-10 for active hosts (reduced to minimize errors)
+        // Check rooms 1-10 for active hosts (limited range)
         const promises = [];
         for (let i = 1; i <= 10; i++) {
             promises.push(this.checkRoomExists(i));
         }
 
+        // Wait for all room checks to complete
         await Promise.allSettled(promises);
+
+        // Add a small delay to ensure all results are processed
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         this.updateRoomsList();
+
+        // Debug log
+        console.log(`🔍 Room search completed. Found ${this.availableRooms.size} rooms:`, Array.from(this.availableRooms.keys()));
     }
 
     async checkRoomExists(roomId) {
@@ -1171,7 +1208,7 @@ class NetworkManager {
                     testConn.close();
                 }
                 resolve(false);
-            }, 1000); // Reduced timeout for faster searching
+            }, 1500); // Increased timeout for more reliable detection
 
             testConn.on('open', () => {
                 clearTimeout(timeout);
@@ -1181,6 +1218,7 @@ class NetworkManager {
                     playerCount: '?',
                     peerId: hostPeerId
                 });
+                console.log(`✅ Found room ${roomId}`);
                 testConn.close();
                 resolve(true);
             });
@@ -1228,6 +1266,83 @@ class NetworkManager {
         document.getElementById('connection-panel').style.display = 'none';
         bannerBtn.style.display = 'block';
         bannerBtn.textContent = 'Start Game';
+    }
+
+    // Auto match functionality
+    async autoMatch(playerName) {
+        this.updateConnectionStatus("Searching for available rooms...");
+
+        try {
+            // First, refresh available rooms
+            await this.refreshAvailableRooms();
+
+            // Additional wait to ensure all room checks are complete
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            console.log(`🎯 Auto match decision: Found ${this.availableRooms.size} rooms`);
+
+            if (this.availableRooms.size > 0) {
+                // Join the first available room
+                const firstRoomId = Array.from(this.availableRooms.keys())[0];
+                this.updateConnectionStatus(`Joining room ${firstRoomId}...`);
+                console.log(`🎯 Auto match: Joining existing room ${firstRoomId}`);
+
+                const success = await this.joinRoom(firstRoomId, playerName);
+                if (success) {
+                    this.updateConnectionStatus(`Auto-joined room ${firstRoomId}!`);
+                    this.showGameStartButton();
+                } else {
+                    this.updateConnectionStatus("Failed to join room");
+                    this.resetAutoMatchButton();
+                }
+            } else {
+                // No rooms available, create a new one starting from 1
+                const newRoomId = await this.findNextAvailableRoomId();
+                this.updateConnectionStatus(`Creating new room ${newRoomId}...`);
+                console.log(`🎯 Auto match: Creating new room ${newRoomId} (no existing rooms found)`);
+
+                const success = await this.createRoom(newRoomId, playerName);
+                if (success) {
+                    this.updateConnectionStatus(`Created room ${newRoomId}! Waiting for players...`);
+                    this.showGameStartButton();
+                } else {
+                    this.updateConnectionStatus("Failed to create room");
+                    this.resetAutoMatchButton();
+                }
+            }
+        } catch (error) {
+            console.error("Auto match failed:", error);
+            this.updateConnectionStatus("Auto match failed");
+            this.resetAutoMatchButton();
+        }
+    }
+
+    resetAutoMatchButton() {
+        if (autoMatchBtn) {
+            autoMatchBtn.disabled = false;
+            autoMatchBtn.textContent = 'Auto Match';
+        }
+    }
+
+    // Find the next available room ID starting from 1 (max 10)
+    async findNextAvailableRoomId() {
+        // First check if we already found some rooms and find the next available ID
+        if (this.availableRooms.size > 0) {
+            const existingRoomIds = Array.from(this.availableRooms.keys()).sort((a, b) => a - b);
+            console.log(`🔍 Existing room IDs: ${existingRoomIds.join(', ')}`);
+
+            // Find the first gap in room IDs starting from 1 (max 10)
+            for (let i = 1; i <= Math.min(10, Math.max(...existingRoomIds) + 1); i++) {
+                if (!existingRoomIds.includes(i)) {
+                    console.log(`🎯 Found available room ID: ${i}`);
+                    return i;
+                }
+            }
+        }
+
+        // If no existing rooms found, start from 1
+        console.log(`🎯 No existing rooms found, starting from room ID 1`);
+        return 1;
     }
 
     // Network message handling
@@ -1953,11 +2068,11 @@ const PlayerNameStorage = {
 createRoomBtn.onclick = () => {
     const roomId = parseInt(roomIdInput.value);
     const playerName = playerNameInput.value.trim();
-    if (roomId && roomId >= 1 && roomId <= 9999 && playerName) {
+    if (roomId && roomId >= 1 && roomId <= 10 && playerName) {
         PlayerNameStorage.save(playerName); // Save player name
         networkManager.createRoom(roomId, playerName);
     } else {
-        alert('Please enter a room number (1-9999) and player name');
+        alert('Please enter a room number (1-10) and player name');
     }
 };
 
@@ -1974,6 +2089,19 @@ joinRoomBtn.onclick = () => {
 
 refreshRoomsBtn.onclick = () => {
     networkManager.refreshAvailableRooms();
+};
+
+// Auto match button event handler
+autoMatchBtn.onclick = () => {
+    const playerName = playerNameInput.value.trim();
+    if (!playerName) {
+        alert('Please enter your player name first');
+        return;
+    }
+
+    autoMatchBtn.disabled = true;
+    autoMatchBtn.textContent = 'Searching...';
+    networkManager.autoMatch(playerName);
 };
 
 // Enable/disable join button based on room selection
@@ -2037,6 +2165,10 @@ function resetGame() {
     // ダメージ方向インジケーターをクリア
     damageIndicators.forEach(indicator => indicator.destroy());
     damageIndicators.length = 0;
+
+    // ヒットマーカーをクリア
+    hitmarkers.forEach(hitmarker => hitmarker.destroy());
+    hitmarkers.length = 0;
 
     // 反動状態を安全にリセット
     targetRecoil = 0;
@@ -2710,6 +2842,10 @@ function updateBullets(delta) {
 
                     scene.remove(bullet);
                     bullets.splice(i, 1);
+
+                    // ヒットマーカーを表示（ネットワークプレイヤーに当たった時）
+                    addHitmarker();
+
                     hitNetworkPlayer = true;
                 }
             });
@@ -2730,6 +2866,10 @@ function updateBullets(delta) {
                 targets.splice(j, 1);
                 bullets.splice(i, 1);
                 updateUI();
+
+                // ヒットマーカーを表示（敵に当たった時）
+                addHitmarker();
+
                 hitTarget = true;
                 break;
             }
@@ -2742,6 +2882,10 @@ function updateBullets(delta) {
                 targets.splice(j, 1);
                 bullets.splice(i, 1);
                 updateUI();
+
+                // ヒットマーカーを表示（敵に当たった時）
+                addHitmarker();
+
                 hitTarget = true;
                 break;
             }
@@ -2891,6 +3035,7 @@ function animate() {
     updateNameplateBillboards();
     updateBloodParticles(delta); // 血しぶきパーティクルを更新
     updateDamageIndicators(); // ダメージ方向インジケーターを更新
+    updateHitmarkers(); // ヒットマーカーを更新
 
     // Update debug collision visualization
     if (DEBUG_COLLISION) {
@@ -3062,5 +3207,150 @@ let debugMenu = null;
 document.addEventListener('DOMContentLoaded', () => {
     debugMenu = createDebugMenu();
 });
+
+// ヒットマーカークラス
+class Hitmarker {
+    constructor() {
+        this.birthTime = performance.now() / 1000;
+        this.element = this.createHitmarkerElement();
+
+        // DOMに追加する前に要素が正しく作成されているかチェック
+        if (this.element && document.body) {
+            document.body.appendChild(this.element);
+        } else {
+            throw new Error('ヒットマーカー要素の作成に失敗しました');
+        }
+    }
+
+    // ヒットマーカー要素を作成
+    createHitmarkerElement() {
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.left = '50%';
+        container.style.transform = 'translate(-50%, -50%)';
+        container.style.width = HITMARKER_SIZE + 'px';
+        container.style.height = HITMARKER_SIZE + 'px';
+        container.style.pointerEvents = 'none';
+        container.style.zIndex = '9999';
+        container.style.transition = 'opacity 0.1s ease-out';
+
+        // 交差部分が消えたバツマークを作成（4つの線）
+        const lineLength = (HITMARKER_SIZE - HITMARKER_GAP) / 2;
+        const horizontalOffset = 4; // 左右の間隔を広げるオフセット
+        const lines = [
+            // 左上から右下への線（上半分）
+            {
+                top: '0',
+                left: `calc(50% + ${horizontalOffset}px)`,
+                width: HITMARKER_THICKNESS + 'px',
+                height: lineLength + 'px',
+                transform: 'translateX(-50%) rotate(45deg)',
+                transformOrigin: 'bottom center'
+            },
+            // 左上から右下への線（下半分）
+            {
+                bottom: '0',
+                left: `calc(50% + ${horizontalOffset}px)`,
+                width: HITMARKER_THICKNESS + 'px',
+                height: lineLength + 'px',
+                transform: 'translateX(-50%) rotate(-45deg)',
+                transformOrigin: 'top center'
+            },
+            // 右上から左下への線（上半分）
+            {
+                top: '0',
+                left: `calc(50% - ${horizontalOffset}px)`,
+                width: HITMARKER_THICKNESS + 'px',
+                height: lineLength + 'px',
+                transform: 'translateX(-50%) rotate(-45deg)',
+                transformOrigin: 'bottom center'
+            },
+            // 右上から左下への線（下半分）
+            {
+                bottom: '0',
+                left: `calc(50% - ${horizontalOffset}px)`,
+                width: HITMARKER_THICKNESS + 'px',
+                height: lineLength + 'px',
+                transform: 'translateX(-50%) rotate(45deg)',
+                transformOrigin: 'top center'
+            }
+        ];
+
+        lines.forEach(lineStyle => {
+            const line = document.createElement('div');
+            line.style.position = 'absolute';
+            line.style.backgroundColor = '#ff4444';
+            line.style.boxShadow = '0 0 6px rgba(255, 68, 68, 0.8)';
+            line.style.borderRadius = '2px';
+
+            // 各線のスタイルを適用
+            Object.assign(line.style, lineStyle);
+
+            container.appendChild(line);
+        });
+
+        return container;
+    }
+
+    // ヒットマーカーを更新
+    update() {
+        const now = performance.now() / 1000;
+        const age = now - this.birthTime;
+        const lifeRatio = Math.min(1, age / HITMARKER_DURATION);
+
+        // フェードアウト効果
+        const opacity = 1 - lifeRatio;
+        this.element.style.opacity = opacity.toString();
+
+        // サイズの変化（少し大きくなる）
+        const scale = 1 + (lifeRatio * 0.2);
+        this.element.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+
+    // ヒットマーカーを削除
+    destroy() {
+        if (this.element && this.element.parentNode) {
+            this.element.parentNode.removeChild(this.element);
+        }
+    }
+
+    // ヒットマーカーが期限切れかチェック
+    isExpired() {
+        const now = performance.now() / 1000;
+        return (now - this.birthTime) > HITMARKER_DURATION;
+    }
+}
+
+// ヒットマーカーを追加
+function addHitmarker() {
+    try {
+        const hitmarker = new Hitmarker();
+        hitmarkers.push(hitmarker);
+        console.log('🎯 ヒットマーカー表示！');
+    } catch (error) {
+        console.error('❌ ヒットマーカー作成エラー:', error);
+    }
+}
+
+// ヒットマーカーを更新
+function updateHitmarkers() {
+    for (let i = hitmarkers.length - 1; i >= 0; i--) {
+        const hitmarker = hitmarkers[i];
+
+        try {
+            if (hitmarker.isExpired()) {
+                hitmarker.destroy();
+                hitmarkers.splice(i, 1);
+            } else {
+                hitmarker.update();
+            }
+        } catch (error) {
+            console.error('❌ ヒットマーカー更新エラー:', error);
+            // エラーが発生したヒットマーカーを削除
+            hitmarkers.splice(i, 1);
+        }
+    }
+}
 
 

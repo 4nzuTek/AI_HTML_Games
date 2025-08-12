@@ -184,6 +184,32 @@ a:hover {
     background: #d97706;
 }
 
+#auto-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+#auto-match-btn {
+    background: #8b5cf6;
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+#auto-match-btn:hover {
+    background: #7c3aed;
+}
+
+#auto-match-btn:disabled {
+    background: #666;
+    cursor: not-allowed;
+}
+
 #connection-status {
     margin-top: 10px;
     font-size: 12px;
