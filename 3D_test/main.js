@@ -8,7 +8,7 @@ let nextPlayerColorIndex = 0; // Host manages color assignment order
 
 // ゲーム設定
 const WORLD_SIZE = 120;
-const PLAYER_EYE_HEIGHT = 1.7;
+const PLAYER_EYE_HEIGHT = 1.35; // 頭の中心にカメラが来るように調整
 const WALK_SPEED = 6;            // 歩行速度 m/s
 const SPRINT_MULTIPLIER = 1.6;   // 走行速度倍率
 const JUMP_SPEED = 6.5;          // ジャンプ力
@@ -654,7 +654,7 @@ document.addEventListener('mousemove', onMouseMove);
 const bullets = [];
 const BULLET_SPEED = 225; // m/s (高速テスト - 補間効果確認用)
 const BULLET_LIFETIME = 3; // seconds
-const BULLET_BASE_LENGTH = 3.0; // Base length for bullets
+const BULLET_BASE_LENGTH = 0.3; // Base length for bullets
 const BULLET_SPEED_SCALE = 0.02; // How much speed affects length
 
 // Function to create bullet geometry based on speed
@@ -662,6 +662,41 @@ function createBulletGeometry(speed) {
     // Length scales with speed for realistic bullet trail effect
     const length = BULLET_BASE_LENGTH + (speed * BULLET_SPEED_SCALE);
     return new THREE.CylinderGeometry(0.01, 0.01, length, 8);
+}
+
+// 弾道表示を更新する関数
+function updateBulletTrail(bullet, startPos, endPos) {
+    // 弾道の方向と長さを計算
+    const direction = new THREE.Vector3().subVectors(endPos, startPos);
+    let trailLength = direction.length();
+
+    // 衝突がない場合（長い弾道）の場合は、速度に基づいて長さを調整
+    if (bullet.userData && bullet.userData.velocity) {
+        const speed = bullet.userData.velocity.length();
+        const speedBasedLength = BULLET_BASE_LENGTH + (speed * BULLET_SPEED_SCALE);
+
+        // 実際の移動距離と速度ベースの長さのうち、大きい方を採用
+        trailLength = Math.max(trailLength, speedBasedLength);
+    }
+
+    // 弾道の中心位置を計算（開始位置から終了位置の中点）
+    const centerPos = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
+
+    // 新しい弾道ジオメトリを作成
+    const trailGeo = new THREE.CylinderGeometry(0.01, 0.01, trailLength, 8);
+
+    // 弾丸のジオメトリを更新
+    bullet.geometry.dispose();
+    bullet.geometry = trailGeo;
+
+    // 弾丸の位置を弾道の中心に設定
+    bullet.position.copy(centerPos);
+
+    // 弾道の方向に弾丸を回転
+    const quaternion = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    quaternion.setFromUnitVectors(up, direction.normalize());
+    bullet.setRotationFromQuaternion(quaternion);
 }
 
 // Make it bright and glowing for visibility
@@ -2700,9 +2735,48 @@ function updateBullets(delta) {
         // Check wall collision first (highest priority)
         const wallHits = raycaster.intersectObjects(walls, false);
         if (wallHits.length > 0) {
-            // Hit wall - stop bullet at hit point
+            // 壁に当たった - 弾道表示を壁の手前で止める
+            const hitPoint = wallHits[0].point;
+            updateBulletTrail(bullet, prevPos, hitPoint);
+            bullet.position.copy(hitPoint);
+
+            // 弾丸を削除し、それ以降の判定をスキップ
             scene.remove(bullet);
             bullets.splice(i, 1);
+
+            // 壁に当たった弾丸は完全に停止するため、以降の判定は行わない
+            continue;
+        }
+
+        // Check stage objects collision (buildings, obstacles, etc.)
+        const stageHits = raycaster.intersectObjects(stageObjects, false);
+        if (stageHits.length > 0) {
+            // ステージオブジェクトに当たった - 弾道表示をオブジェクトの手前で止める
+            const hitPoint = stageHits[0].point;
+            updateBulletTrail(bullet, prevPos, hitPoint);
+            bullet.position.copy(hitPoint);
+
+            // 弾丸を削除し、それ以降の判定をスキップ
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+
+            // ステージオブジェクトに当たった弾丸は完全に停止するため、以降の判定は行わない
+            continue;
+        }
+
+        // Check ground collision (prevent bullets from going underground)
+        if (newPos.y < 0.1) {
+            // 地面に当たった - 弾道表示を地面の手前で止める
+            const groundHitPoint = newPos.clone();
+            groundHitPoint.y = 0.1; // 地面の高さに調整
+            updateBulletTrail(bullet, prevPos, groundHitPoint);
+            bullet.position.copy(groundHitPoint);
+
+            // 弾丸を削除し、それ以降の判定をスキップ
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+
+            // 地面に当たった弾丸は完全に停止するため、以降の判定は行わない
             continue;
         }
 
@@ -2710,6 +2784,7 @@ function updateBullets(delta) {
         if (checkBulletPlayerCollision(bullet, prevPos, newPos)) {
             // 攻撃位置を計算（弾丸の前の位置から）
             const attackPosition = prevPos.clone();
+            updateBulletTrail(bullet, prevPos, attackPosition);
             applyDamageToPlayer(DAMAGE_PER_HIT, attackPosition);
             scene.remove(bullet);
             bullets.splice(i, 1);
@@ -2792,6 +2867,10 @@ function updateBullets(delta) {
                         networkManager.sendPlayerDamageEvent(playerId, DAMAGE_PER_HIT, prevPos);
                     }
 
+                    // 弾道表示をプレイヤーの位置で止める
+                    const playerHitPoint = prevPos.clone().add(userData.velocity.clone().normalize().multiplyScalar(0.1));
+                    updateBulletTrail(bullet, prevPos, playerHitPoint);
+
                     scene.remove(bullet);
                     bullets.splice(i, 1);
 
@@ -2813,6 +2892,10 @@ function updateBullets(delta) {
             // Check if bullet path passes through target
             const targetHits = raycaster.intersectObject(target, false);
             if (targetHits.length > 0) {
+                // 弾道表示をターゲットの位置で止める
+                const targetHitPoint = targetHits[0].point;
+                updateBulletTrail(bullet, prevPos, targetHitPoint);
+
                 scene.remove(target);
                 scene.remove(bullet);
                 targets.splice(j, 1);
@@ -2829,6 +2912,10 @@ function updateBullets(delta) {
             // Also check proximity at new position as fallback
             const distanceToTarget = newPos.distanceTo(target.position);
             if (distanceToTarget < 0.5) {
+                // 弾道表示をターゲットの位置で止める
+                const targetHitPoint = target.position.clone();
+                updateBulletTrail(bullet, prevPos, targetHitPoint);
+
                 scene.remove(target);
                 scene.remove(bullet);
                 targets.splice(j, 1);
@@ -2844,6 +2931,12 @@ function updateBullets(delta) {
         }
 
         if (hitTarget) continue;
+
+        // 何にも当たらず進んでいる場合 - 弾道表示を長く表示
+        const speed = userData.velocity.length();
+        const speedBasedLength = BULLET_BASE_LENGTH + (speed * BULLET_SPEED_SCALE);
+        const extendedEndPos = newPos.clone().add(userData.velocity.clone().normalize().multiplyScalar(speedBasedLength));
+        updateBulletTrail(bullet, prevPos, extendedEndPos);
 
         // Move bullet to new position
         bullet.position.copy(newPos);
