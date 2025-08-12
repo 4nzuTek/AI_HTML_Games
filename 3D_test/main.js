@@ -83,6 +83,7 @@ let isDebugMenuOpen = false;
 let isInvincible = false;
 let isAutoRotating = false; // 自動回転フラグ
 let autoRotateSpeed = 1.0; // 自動回転速度（ラジアン/秒）
+let showCollisionBoxes = false; // 衝突判定ボックスの表示フラグ
 
 // ダメージ方向インジケータークラス
 class DamageIndicator {
@@ -2932,43 +2933,224 @@ function checkStageCollision(position) {
     for (const obj of stageObjects) {
         if (!obj.userData.isStageObject) continue;
 
-        // オブジェクトの境界ボックスを取得
-        const bbox = new THREE.Box3().setFromObject(obj);
+        // 回転したオブジェクトかどうかをチェック（より厳密に）
+        const rotationThreshold = 0.01; // 回転の閾値（ラジアン）
+        if (Math.abs(obj.rotation.y) > rotationThreshold) {
+            // 回転したオブジェクトの場合は精密な衝突判定
+            if (checkRotatedObjectCollision(obj, position, playerBottom, playerTop)) {
+                return true;
+            }
+        } else {
+            // 回転していないオブジェクトの場合は従来のAABB判定
+            const bbox = new THREE.Box3().setFromObject(obj);
+            const playerBbox = new THREE.Box3();
+            playerBbox.setFromCenterAndSize(
+                new THREE.Vector3(playerCenterX, playerBottom + PLAYER_HEIGHT / 2, playerCenterZ),
+                new THREE.Vector3(PLAYER_RADIUS * 2, PLAYER_HEIGHT, PLAYER_RADIUS * 2)
+            );
 
-        // プレイヤーの境界ボックス
-        const playerBbox = new THREE.Box3();
-        playerBbox.setFromCenterAndSize(
-            new THREE.Vector3(playerCenterX, playerBottom + PLAYER_HEIGHT / 2, playerCenterZ),
-            new THREE.Vector3(PLAYER_RADIUS * 2, PLAYER_HEIGHT, PLAYER_RADIUS * 2)
-        );
-
-        // 衝突判定
-        if (playerBbox.intersectsBox(bbox)) {
-            return true;
+            if (playerBbox.intersectsBox(bbox)) {
+                return true;
+            }
         }
     }
     return false;
+}
+
+// 回転したオブジェクトとの精密な衝突判定
+function checkRotatedObjectCollision(obj, playerPosition, playerBottom, playerTop) {
+    // オブジェクトの幾何学情報を取得
+    const geometry = obj.geometry;
+    if (!geometry || !geometry.boundingBox) {
+        geometry.computeBoundingBox();
+    }
+
+    // オブジェクトのローカル座標での境界ボックス
+    const localBbox = geometry.boundingBox.clone();
+
+    // プレイヤーの位置をオブジェクトのローカル座標系に変換
+    const worldToLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+    const localPlayerPos = playerPosition.clone().applyMatrix4(worldToLocal);
+
+    // プレイヤーの境界ボックスをローカル座標系で計算
+    const localPlayerBbox = new THREE.Box3();
+    localPlayerBbox.setFromCenterAndSize(
+        new THREE.Vector3(
+            localPlayerPos.x,
+            localPlayerPos.y - PLAYER_EYE_HEIGHT + PLAYER_HEIGHT / 2,
+            localPlayerPos.z
+        ),
+        new THREE.Vector3(PLAYER_RADIUS * 2, PLAYER_HEIGHT, PLAYER_RADIUS * 2)
+    );
+
+    // デバッグ用：衝突判定ボックスの可視化
+    if (showCollisionBoxes) {
+        visualizeCollisionBoxes(obj, localBbox, localPlayerBbox, worldToLocal);
+    }
+
+    // ローカル座標系での衝突判定
+    return localPlayerBbox.intersectsBox(localBbox);
+}
+
+// 衝突判定ボックスの可視化（デバッグ用）
+function visualizeCollisionBoxes(obj, localBbox, localPlayerBbox, worldToLocal) {
+    // 既存のデバッグボックスを削除
+    scene.children.forEach(child => {
+        if (child.userData.isDebugBox) {
+            scene.remove(child);
+        }
+    });
+
+    // オブジェクトの境界ボックスをワールド座標系で可視化
+    const worldBbox = localBbox.clone().applyMatrix4(obj.matrixWorld);
+    const bboxGeometry = new THREE.BoxGeometry(
+        worldBbox.max.x - worldBbox.min.x,
+        worldBbox.max.y - worldBbox.min.y,
+        worldBbox.max.z - worldBbox.min.z
+    );
+    const bboxMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.5
+    });
+    const bboxMesh = new THREE.Mesh(bboxGeometry, bboxMaterial);
+    bboxMesh.position.copy(worldBbox.getCenter(new THREE.Vector3()));
+    bboxMesh.userData.isDebugBox = true;
+    scene.add(bboxMesh);
+
+    // プレイヤーの境界ボックスを可視化
+    const playerWorldBbox = localPlayerBbox.clone().applyMatrix4(new THREE.Matrix4().copy(worldToLocal).invert());
+    const playerBboxGeometry = new THREE.BoxGeometry(
+        playerWorldBbox.max.x - playerWorldBbox.min.x,
+        playerWorldBbox.max.y - playerWorldBbox.min.y,
+        playerWorldBbox.max.z - playerWorldBbox.min.z
+    );
+    const playerBboxMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.5
+    });
+    const playerBboxMesh = new THREE.Mesh(playerBboxGeometry, playerBboxMaterial);
+    playerBboxMesh.position.copy(playerWorldBbox.getCenter(new THREE.Vector3()));
+    playerBboxMesh.userData.isDebugBox = true;
+    scene.add(playerBboxMesh);
 }
 
 // ステージオブジェクトとの衝突解決
 function resolveStageCollision(oldPosition, newPosition) {
     const resolvedPosition = oldPosition.clone();
 
-    // X軸方向の移動を試行
+    // まず通常の軸方向スライディングを試行
     const testX = newPosition.clone();
     testX.z = oldPosition.z;
     if (!checkStageCollision(testX)) {
         resolvedPosition.x = testX.x;
     }
 
-    // Z軸方向の移動を試行
     const testZ = newPosition.clone();
     testZ.x = resolvedPosition.x;
     if (!checkStageCollision(testZ)) {
         resolvedPosition.z = testZ.z;
     }
 
+    // 回転したオブジェクトとの衝突がある場合は、回転面に沿ったスライディングを試行
+    if (checkStageCollision(resolvedPosition)) {
+        const rotatedSlideResult = resolveRotatedObjectCollision(oldPosition, newPosition);
+        if (rotatedSlideResult) {
+            return rotatedSlideResult;
+        }
+    }
+
     return resolvedPosition;
+}
+
+// 回転したオブジェクトとの衝突解決（回転面に沿ったスライディング）
+function resolveRotatedObjectCollision(oldPosition, newPosition) {
+    const movementVector = new THREE.Vector3().subVectors(newPosition, oldPosition);
+    if (movementVector.length() < 0.001) return null; // 移動量が小さすぎる場合はスキップ
+
+    // 衝突している回転オブジェクトを特定
+    const collidingRotatedObjects = [];
+    for (const obj of stageObjects) {
+        if (!obj.userData.isStageObject) continue;
+
+        const rotationThreshold = 0.01;
+        if (Math.abs(obj.rotation.y) > rotationThreshold) {
+            const playerBottom = newPosition.y - PLAYER_EYE_HEIGHT;
+            const playerTop = playerBottom + PLAYER_HEIGHT;
+            if (checkRotatedObjectCollision(obj, newPosition, playerBottom, playerTop)) {
+                collidingRotatedObjects.push(obj);
+            }
+        }
+    }
+
+    if (collidingRotatedObjects.length === 0) return null;
+
+    // 最も影響の大きいオブジェクトを選択（移動方向に最も近いもの）
+    let bestObject = collidingRotatedObjects[0];
+    let bestAlignment = 0;
+
+    for (const obj of collidingRotatedObjects) {
+        // オブジェクトのローカル座標系での法線ベクトル（Y軸回転を考慮）
+        const localNormal = new THREE.Vector3(0, 0, 1); // ローカルZ軸が法線
+        const worldNormal = localNormal.clone().applyQuaternion(obj.quaternion);
+
+        // 移動方向と法線の内積を計算
+        const alignment = Math.abs(movementVector.clone().normalize().dot(worldNormal));
+        if (alignment > bestAlignment) {
+            bestAlignment = alignment;
+            bestObject = obj;
+        }
+    }
+
+    // 選択されたオブジェクトの回転面に沿ったスライディングを計算
+    return calculateRotatedSlide(oldPosition, newPosition, bestObject);
+}
+
+// 回転面に沿ったスライディングを計算
+function calculateRotatedSlide(oldPosition, newPosition, rotatedObject) {
+    const movementVector = new THREE.Vector3().subVectors(newPosition, oldPosition);
+
+    // オブジェクトのローカル座標系での法線ベクトル
+    const localNormal = new THREE.Vector3(0, 0, 1); // ローカルZ軸が法線
+    const worldNormal = localNormal.clone().applyQuaternion(rotatedObject.quaternion);
+
+    // 移動方向を法線方向と平行方向に分解
+    const movementDirection = movementVector.clone().normalize();
+    const normalComponent = movementDirection.clone().multiplyScalar(movementDirection.dot(worldNormal));
+    const parallelComponent = movementDirection.clone().sub(normalComponent);
+
+    // 平行成分が十分に大きい場合のみスライディングを適用
+    if (parallelComponent.length() < 0.1) return null;
+
+    // スライディング方向を正規化
+    parallelComponent.normalize();
+
+    // スライディング距離を計算（元の移動距離を維持）
+    const slideDistance = movementVector.length();
+    const slideVector = parallelComponent.clone().multiplyScalar(slideDistance);
+
+    // スライディング後の位置を計算
+    const slidePosition = oldPosition.clone().add(slideVector);
+
+    // スライディング後の位置で衝突がないかチェック
+    if (!checkStageCollision(slidePosition)) {
+        return slidePosition;
+    }
+
+    // スライディング後も衝突がある場合は、より短い距離で試行
+    for (let factor = 0.9; factor > 0.1; factor -= 0.1) {
+        const reducedSlideVector = slideVector.clone().multiplyScalar(factor);
+        const reducedSlidePosition = oldPosition.clone().add(reducedSlideVector);
+
+        if (!checkStageCollision(reducedSlidePosition)) {
+            return reducedSlidePosition;
+        }
+    }
+
+    return null; // スライディングが不可能
 }
 
 // Init
@@ -3231,6 +3413,38 @@ function createDebugMenu() {
     speedContainer.appendChild(speedInput);
     speedContainer.appendChild(speedValue);
     menu.appendChild(speedContainer);
+
+    // 衝突判定ボックス表示のチェックボックス
+    const collisionBoxContainer = document.createElement('div');
+    collisionBoxContainer.style.marginBottom = '15px';
+
+    const collisionBoxCheckbox = document.createElement('input');
+    collisionBoxCheckbox.type = 'checkbox';
+    collisionBoxCheckbox.id = 'collision-box-checkbox';
+    collisionBoxCheckbox.checked = showCollisionBoxes;
+    collisionBoxCheckbox.addEventListener('change', (e) => {
+        showCollisionBoxes = e.target.checked;
+        console.log(`📦 衝突判定ボックス表示: ${showCollisionBoxes ? 'ON' : 'OFF'}`);
+
+        // オフにした場合は既存のデバッグボックスを削除
+        if (!showCollisionBoxes) {
+            scene.children.forEach(child => {
+                if (child.userData.isDebugBox) {
+                    scene.remove(child);
+                }
+            });
+        }
+    });
+
+    const collisionBoxLabel = document.createElement('label');
+    collisionBoxLabel.htmlFor = 'collision-box-checkbox';
+    collisionBoxLabel.textContent = '衝突判定ボックス表示';
+    collisionBoxLabel.style.marginLeft = '8px';
+    collisionBoxLabel.style.cursor = 'pointer';
+
+    collisionBoxContainer.appendChild(collisionBoxCheckbox);
+    collisionBoxContainer.appendChild(collisionBoxLabel);
+    menu.appendChild(collisionBoxContainer);
 
     // 閉じるボタン
     const closeButton = document.createElement('button');
