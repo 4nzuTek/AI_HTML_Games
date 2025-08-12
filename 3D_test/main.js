@@ -19,6 +19,11 @@ const RESERVE_START = 300;       // 初期予備弾数
 const RELOAD_TIME_S = 1.1;       // リロード時間（秒）
 const MOUSE_SENSITIVITY = 0.002; // マウス感度（標準FPS感度）
 
+// ダメージ方向インジケーター設定
+const DAMAGE_INDICATOR_DURATION = 2.0; // インジケーター表示時間（秒）
+const DAMAGE_INDICATOR_RADIUS = 80;    // インジケーターの半径（ピクセル）
+const DAMAGE_INDICATOR_DISTANCE = 100; // 画面中心からの距離（ピクセル）
+
 // 反動設定（調整可能）
 const RECOIL_INTENSITY = 0.015;  // 基本反動の強さ（ラジアン）
 const RECOIL_EASING_SPEED = 30.0; // 反動到達速度（大きいほど速い）
@@ -47,6 +52,9 @@ let health = 100;
 let lastShotAt = 0;
 let isThirdPerson = false;
 
+// ダメージ方向インジケーター管理
+let damageIndicators = [];
+
 // 反動状態
 let targetRecoil = 0;         // 目標反動量（縦方向）
 let currentRecoil = 0;        // 現在のスムージングされた反動量（縦方向）
@@ -56,6 +64,214 @@ let currentHorizontalRecoil = 0; // 現在のスムージングされた水平�
 // 反動蓄積状態
 let recoilBuildup = 0;        // 現在の反動蓄積レベル（0から1）
 let lastShotTime = 0;         // 最後の射撃時刻（減衰計算用）
+
+// デバッグ設定
+let isDebugMenuOpen = false;
+let isInvincible = false;
+
+// ダメージ方向インジケータークラス
+class DamageIndicator {
+    constructor(attackDirection, damage) {
+        this.attackDirection = attackDirection.clone().normalize(); // 攻撃方向ベクトル
+        this.damage = damage;
+        this.birthTime = performance.now() / 1000;
+        this.element = this.createIndicatorElement();
+        this.updatePosition();
+        document.body.appendChild(this.element);
+    }
+
+    // インジケーター要素を作成
+    createIndicatorElement() {
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.width = '30vh';
+        container.style.height = '30vh';
+        container.style.pointerEvents = 'none';
+        container.style.zIndex = '9998';
+        container.style.transition = 'opacity 0.3s ease-out';
+        container.style.transformOrigin = 'center';
+
+        // 円形の背景を作成（円周を表示）
+        const circle = document.createElement('div');
+        circle.style.position = 'absolute';
+        circle.style.width = '100%';
+        circle.style.height = '100%';
+        circle.style.borderRadius = '50%';
+        circle.style.backgroundColor = 'transparent';
+        circle.style.boxShadow = '0 0 10px rgba(255, 0, 0, 0.3)';
+        container.appendChild(circle);
+
+        // 円周上の三角形を作成
+        const triangle = document.createElement('div');
+        triangle.style.position = 'absolute';
+        triangle.style.width = '0';
+        triangle.style.height = '0';
+        triangle.style.borderLeft = '12px solid transparent';
+        triangle.style.borderRight = '12px solid transparent';
+        triangle.style.borderBottom = '24px solid rgba(255, 0, 0, 0.9)';
+        triangle.style.top = '50%';
+        triangle.style.left = '50%';
+        triangle.style.transform = 'translate(-50%, -33.33%)'; // 重心を基準にする（高さの1/3上）
+        triangle.style.filter = 'drop-shadow(0 0 4px rgba(255, 0, 0, 0.7))';
+        container.appendChild(triangle);
+
+        return container;
+    }
+
+    // インジケーターの位置を更新
+    updatePosition() {
+        const now = performance.now() / 1000;
+        const age = now - this.birthTime;
+        const lifeRatio = Math.min(1, age / DAMAGE_INDICATOR_DURATION);
+
+        // フェードアウト効果
+        const opacity = 1 - lifeRatio;
+        this.element.style.opacity = opacity.toString();
+
+        // カメラの前方ベクトルを取得
+        const cameraForward = new THREE.Vector3(0, 0, -1);
+        cameraForward.applyQuaternion(camera.quaternion);
+
+        // カメラの右方向ベクトルを取得
+        const cameraRight = new THREE.Vector3(1, 0, 0);
+        cameraRight.applyQuaternion(camera.quaternion);
+
+        // カメラの上方向ベクトルを取得
+        const cameraUp = new THREE.Vector3(0, 1, 0);
+        cameraUp.applyQuaternion(camera.quaternion);
+
+        // 攻撃方向を正規化
+        const attackDir = this.attackDirection.clone().normalize();
+
+        // 攻撃方向をカメラ座標系に変換
+        const dotForward = attackDir.dot(cameraForward);
+        const dotRight = attackDir.dot(cameraRight);
+        const dotUp = attackDir.dot(cameraUp);
+
+        // 画面座標を計算
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+
+        // 距離を計算（ダメージに応じて変化）
+        const distance = DAMAGE_INDICATOR_DISTANCE + (this.damage * 2);
+
+        // ダメージに応じてサイズを変更
+        const baseSize = window.innerHeight * 0.3; // 30vh
+        const size = baseSize + (this.damage * 2);
+        this.element.style.width = size + 'px';
+        this.element.style.height = size + 'px';
+
+        // インジケーターの位置を画面の真ん中に固定（サイズ変更後のサイズで計算）
+        const indicatorX = (window.innerWidth / 2) - (size / 2);
+        const indicatorY = (window.innerHeight / 2) - (size / 2);
+
+        this.element.style.left = indicatorX + 'px';
+        this.element.style.top = indicatorY + 'px';
+
+        // 円の中心座標を計算
+        const circleCenterX = indicatorX + (size / 2);
+        const circleCenterY = indicatorY + (size / 2);
+
+        // 攻撃方向の角度を計算（-πからπの範囲）- 右に90度ずらす
+        const angle = Math.atan2(dotRight, dotForward) + Math.PI / 2;
+
+        // 円周上の点の位置を計算
+        const circleRadius = size * 0.5; // 円の半径（サイズ変更後のサイズで計算）
+        const triangleHeight = 24; // 三角形の高さ（px）
+        const triangleX = Math.cos(angle) * (circleRadius + triangleHeight * 0.5); // 円周上 + 三角形の高さの半分
+        const triangleY = Math.sin(angle) * (circleRadius + triangleHeight * 0.5); // 円周上 + 三角形の高さの半分
+
+        // 三角形の実際の中心座標を計算
+        const triangleActualX = circleCenterX + triangleX;
+        const triangleActualY = circleCenterY + triangleY;
+
+        // 円周上の三角形を取得して位置と回転を更新
+        const triangle = this.element.children[1]; // 円周上の三角形
+        const triangleAngle = (angle * 180 / Math.PI) + 90; // 三角形を外側に向ける（90度追加）
+        triangle.style.transform = `translate(calc(-50% + ${triangleX}px), calc(-33.33% + ${triangleY}px)) rotate(${triangleAngle}deg)`;
+
+        // デバッグログ: 円の中心と三角形の中心を出力
+        console.log(`🎯 インジケーター配置デバッグ:`);
+        console.log(`   円の中心: (${circleCenterX.toFixed(1)}, ${circleCenterY.toFixed(1)})`);
+        console.log(`   三角形の中心: (${triangleActualX.toFixed(1)}, ${triangleActualY.toFixed(1)})`);
+        console.log(`   円の半径: ${circleRadius.toFixed(1)}px`);
+        console.log(`   角度: ${(angle * 180 / Math.PI).toFixed(1)}°`);
+        console.log(`   三角形の相対位置: (${triangleX.toFixed(1)}, ${triangleY.toFixed(1)})`);
+
+        // ダメージに応じて色を変更
+        const intensity = Math.min(255, 100 + (this.damage * 15));
+        const circle = this.element.children[0]; // 円形の背景
+        const triangleElement = this.element.children[1]; // 円周上の三角形
+
+        // 円形の背景の色を更新
+        circle.style.boxShadow = `0 0 ${10 + this.damage}px rgba(${intensity}, 0, 0, ${opacity * 0.3})`;
+
+        // 円周上の三角形の色を更新
+        triangleElement.style.borderBottomColor = `rgba(${intensity}, 0, 0, ${opacity * 0.9})`;
+        triangleElement.style.filter = `drop-shadow(0 0 ${4 + this.damage}px rgba(${intensity}, 0, 0, ${opacity * 0.7}))`;
+    }
+
+    // インジケーターを削除
+    destroy() {
+        if (this.element && this.element.parentNode) {
+            this.element.parentNode.removeChild(this.element);
+        }
+    }
+
+    // インジケーターが期限切れかチェック
+    isExpired() {
+        const now = performance.now() / 1000;
+        return (now - this.birthTime) > DAMAGE_INDICATOR_DURATION;
+    }
+}
+
+// ダメージ方向インジケーターを追加
+function addDamageIndicator(attackPosition, damage) {
+    // 攻撃方向を計算（プレイヤー位置から攻撃位置へのベクトル）
+    const attackDirection = new THREE.Vector3();
+    attackDirection.subVectors(playerPosition, attackPosition);
+
+    // 攻撃方向が有効な場合のみインジケーターを作成
+    if (attackDirection.length() > 0.1) {
+        const indicator = new DamageIndicator(attackDirection, damage);
+        damageIndicators.push(indicator);
+
+        // 被ダメージ側の向いている方角を計算
+        const playerYaw = yawObject.rotation.y * 180 / Math.PI;
+        const playerPitch = pitchObject.rotation.x * 180 / Math.PI;
+
+        // 攻撃側の座標
+        const attackerX = attackPosition.x.toFixed(2);
+        const attackerY = attackPosition.y.toFixed(2);
+        const attackerZ = attackPosition.z.toFixed(2);
+
+        // 被ダメージ側の座標
+        const victimX = playerPosition.x.toFixed(2);
+        const victimY = playerPosition.y.toFixed(2);
+        const victimZ = playerPosition.z.toFixed(2);
+
+        console.log(`🎯 ダメージ方向インジケーター追加:`);
+        console.log(`   被ダメージ側座標: (${victimX}, ${victimY}, ${victimZ})`);
+        console.log(`   被ダメージ側向き: Yaw=${playerYaw.toFixed(1)}°, Pitch=${playerPitch.toFixed(1)}°`);
+        console.log(`   攻撃側座標: (${attackerX}, ${attackerY}, ${attackerZ})`);
+        console.log(`   攻撃方向ベクトル: (${attackDirection.x.toFixed(2)}, ${attackDirection.y.toFixed(2)}, ${attackDirection.z.toFixed(2)})`);
+        console.log(`   ダメージ: ${damage}`);
+    }
+}
+
+// ダメージ方向インジケーターを更新
+function updateDamageIndicators() {
+    for (let i = damageIndicators.length - 1; i >= 0; i--) {
+        const indicator = damageIndicators[i];
+
+        if (indicator.isExpired()) {
+            indicator.destroy();
+            damageIndicators.splice(i, 1);
+        } else {
+            indicator.updatePosition();
+        }
+    }
+}
 
 // 反動用カスタムイージング関数
 function easeInOut(t, easeInPower, easeOutPower) {
@@ -75,12 +291,12 @@ let mouseDown = false;
 
 window.addEventListener('keydown', (e) => {
     keyState.set(e.code, true);
-    if (e.code === 'KeyP') toggleViewMode();
+    if (e.code === 'KeyP') toggleDebugMenu();
     if (e.code === 'KeyR') reload();
     if (e.code === 'KeyT') {
         // デバッグ：現在の角度を表示（クォータニオンベース）
-        console.log(`Debug - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
-        console.log(`Recoil - target: ${targetRecoil.toFixed(4)}, current: ${currentRecoil.toFixed(4)}`);
+        // console.log(`Debug - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
+        // console.log(`Recoil - target: ${targetRecoil.toFixed(4)}, current: ${currentRecoil.toFixed(4)}`);
 
         // 安全チェックと自動修正
         if (isNaN(yawObject.rotation.y) || isNaN(pitchObject.rotation.x)) {
@@ -98,7 +314,7 @@ window.addEventListener('keydown', (e) => {
     // Debug collision toggle (works anytime)
     if (e.code === 'Digit1') {
         DEBUG_COLLISION = !DEBUG_COLLISION;
-        console.log(`🔍 Debug collision visualization: ${DEBUG_COLLISION ? 'ON' : 'OFF'}`);
+        // console.log(`🔍 Debug collision visualization: ${DEBUG_COLLISION ? 'ON' : 'OFF'}`);
 
         // Clear existing debug hitboxes when turning off
         if (!DEBUG_COLLISION) {
@@ -135,15 +351,15 @@ window.addEventListener('keydown', (e) => {
         switch (e.code) {
             case 'Digit2':
                 StageCreator.createUrbanMap();
-                console.log('🏙️ Switched to Urban Map');
+                // console.log('🏙️ Switched to Urban Map');
                 break;
             case 'Digit3':
                 StageCreator.createForestMap();
-                console.log('🌲 Switched to Forest Map');
+                // console.log('🌲 Switched to Forest Map');
                 break;
             case 'Digit4':
                 StageCreator.createBasicArena();
-                console.log('🏗️ Switched to Basic Arena');
+                // console.log('🏗️ Switched to Basic Arena');
                 break;
         }
     }
@@ -238,7 +454,7 @@ class SkyboxLoader {
                     return await new Promise((resolve, reject) => {
                         loader.load(urls,
                             (texture) => {
-                                console.log(`✅ Cubemap skybox loaded: ${ext.toUpperCase()}`);
+                                // console.log(`✅ Cubemap skybox loaded: ${ext.toUpperCase()}`);
                                 resolve(texture);
                             },
                             undefined,
@@ -272,7 +488,7 @@ class SkyboxLoader {
                             loader.load(imagePath,
                                 (texture) => {
                                     texture.mapping = THREE.EquirectangularReflectionMapping;
-                                    console.log(`✅ Equirectangular skybox loaded: ${filename}.${ext.toUpperCase()}`);
+                                    // console.log(`✅ Equirectangular skybox loaded: ${filename}.${ext.toUpperCase()}`);
                                     resolve(texture);
                                 },
                                 undefined,
@@ -317,7 +533,7 @@ class SkyboxLoader {
         }
 
         // Fallback to gradient
-        console.log('🌈 No skybox files found, using gradient sky');
+        // console.log('🌈 No skybox files found, using gradient sky');
         return null;
     }
 }
@@ -333,7 +549,7 @@ SkyboxLoader.loadSkybox().then(texture => {
     }
 }).catch((error) => {
     // Error fallback: Add gradient sky (silent)
-    console.log('🌈 Using fallback gradient sky');
+    // console.log('🌈 Using fallback gradient sky');
     const sky = createGradientSky();
     scene.add(sky);
 });
@@ -452,7 +668,7 @@ function onMouseMove(e) {
 
     // Filter 1: Extreme values (>100px/frame)
     if (Math.abs(movementX) > 100 || Math.abs(movementY) > 100) {
-        console.log(`🚫 Filtered extreme movement: X=${movementX}, Y=${movementY}`);
+        // console.log(`🚫 Filtered extreme movement: X=${movementX}, Y=${movementY}`);
         return;
     }
 
@@ -464,7 +680,7 @@ function onMouseMove(e) {
             Math.abs(movementY - lastValidMovement.y)
         );
         if (acceleration > 150) {
-            console.log(`🚫 Filtered sudden acceleration: ${acceleration.toFixed(1)}`);
+            // console.log(`🚫 Filtered sudden acceleration: ${acceleration.toFixed(1)}`);
             return;
         }
     }
@@ -582,9 +798,9 @@ function applyRecoil() {
     targetRecoil += baseVerticalRecoil;
     targetHorizontalRecoil += horizontalRecoil;
 
-    console.log(`🔫 発射! 蓄積: ${oldBuildup.toFixed(3)} → ${recoilBuildup.toFixed(3)} (倍率: ${buildupMultiplier.toFixed(2)}x)`);
-    console.log(`      縦反動: ${oldTarget.toFixed(4)} → ${targetRecoil.toFixed(4)} (+${baseVerticalRecoil.toFixed(4)})`);
-    console.log(`      横反動: ${oldHorizontalTarget.toFixed(4)} → ${targetHorizontalRecoil.toFixed(4)} (+${horizontalRecoil.toFixed(4)})`);
+    // console.log(`🔫 発射! 蓄積: ${oldBuildup.toFixed(3)} → ${recoilBuildup.toFixed(3)} (倍率: ${buildupMultiplier.toFixed(2)}x)`);
+    // console.log(`      縦反動: ${oldTarget.toFixed(4)} → ${targetRecoil.toFixed(4)} (+${baseVerticalRecoil.toFixed(4)})`);
+    // console.log(`      横反動: ${oldHorizontalTarget.toFixed(4)} → ${targetHorizontalRecoil.toFixed(4)} (+${horizontalRecoil.toFixed(4)})`);
 }
 
 // 安全なシンプルイージングで反動を更新
@@ -703,7 +919,7 @@ function updateRecoil(delta) {
 
         // 蓄積減衰を時々ログ出力
         if (Math.abs(oldRecoilBuildup - recoilBuildup) > 0.001 && Math.random() < 0.05) {
-            console.log(`⏳ 反動蓄積減衰: ${oldRecoilBuildup.toFixed(3)} → ${recoilBuildup.toFixed(3)} (${timeSinceLastShot.toFixed(2)}s経過)`);
+            // console.log(`⏳ 反動蓄積減衰: ${oldRecoilBuildup.toFixed(3)} → ${recoilBuildup.toFixed(3)} (${timeSinceLastShot.toFixed(2)}s経過)`);
         }
     }
 
@@ -711,15 +927,15 @@ function updateRecoil(delta) {
     if (targetRecoil > 0.001 || currentRecoil > 0.001 || Math.abs(targetHorizontalRecoil) > 0.001 || Math.abs(currentHorizontalRecoil) > 0.001) {
         const progress = targetRecoil > 0 ? (currentRecoil / targetRecoil) : 0;
         const horizontalProgress = Math.abs(targetHorizontalRecoil) > 0 ? (Math.abs(currentHorizontalRecoil) / Math.abs(targetHorizontalRecoil)) : 0;
-        console.log(`📈 updateRecoil CALLED:`);
-        console.log(`   縦: current ${oldCurrent.toFixed(4)} → ${currentRecoil.toFixed(4)}, target: ${targetRecoil.toFixed(4)}, progress: ${progress.toFixed(3)}`);
-        console.log(`   横: current ${oldCurrentHorizontal.toFixed(4)} → ${currentHorizontalRecoil.toFixed(4)}, target: ${targetHorizontalRecoil.toFixed(4)}, progress: ${horizontalProgress.toFixed(3)}`);
-        console.log(`   pitch: ${oldPitch.toFixed(4)} → ${pitchObject.rotation.x.toFixed(4)} (${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°)`);
-        console.log(`   yaw: ${oldYaw.toFixed(4)} → ${yawObject.rotation.y.toFixed(4)} (${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°)`);
-        console.log(`   蓄積レベル: ${recoilBuildup.toFixed(3)}`);
+        // console.log(`📈 updateRecoil CALLED:`);
+        // console.log(`   縦: current ${oldCurrent.toFixed(4)} → ${currentRecoil.toFixed(4)}, target: ${targetRecoil.toFixed(4)}, progress: ${progress.toFixed(3)}`);
+        // console.log(`   横: current ${oldCurrentHorizontal.toFixed(4)} → ${currentHorizontalRecoil.toFixed(4)}, target: ${targetHorizontalRecoil.toFixed(4)}, progress: ${horizontalProgress.toFixed(3)}`);
+        // console.log(`   pitch: ${oldPitch.toFixed(4)} → ${pitchObject.rotation.x.toFixed(4)} (${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°)`);
+        // console.log(`   yaw: ${oldYaw.toFixed(4)} → ${yawObject.rotation.y.toFixed(4)} (${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°)`);
+        // console.log(`   蓄積レベル: ${recoilBuildup.toFixed(3)}`);
     } else if (Math.random() < 0.01) {
         // 反動がない時も関数が呼ばれていることを確認するため時々ログ出力
-        console.log(`📈 updateRecoil called (no recoil): vertical target=${targetRecoil.toFixed(4)}, horizontal target=${targetHorizontalRecoil.toFixed(4)}, buildup=${recoilBuildup.toFixed(3)}`);
+        // console.log(`📈 updateRecoil called (no recoil): vertical target=${targetRecoil.toFixed(4)}, horizontal target=${targetHorizontalRecoil.toFixed(4)}, buildup=${recoilBuildup.toFixed(3)}`);
     }
 }
 
@@ -754,7 +970,7 @@ class NetworkManager {
 
     async initialize() {
         try {
-            console.log("Initializing P2P connection...");
+            // console.log("Initializing P2P connection...");
             this.updateConnectionStatus("Initializing P2P...");
 
             // Create PeerJS instance with random ID
@@ -762,7 +978,7 @@ class NetworkManager {
             this.peer = new Peer(this.playerId);
 
             this.peer.on('open', (id) => {
-                console.log('P2P connection established with ID:', id);
+                // console.log('P2P connection established with ID:', id);
                 this.playerId = id;
                 this.isConnected = true;
                 this.updateConnectionStatus("Ready to connect");
@@ -789,10 +1005,10 @@ class NetworkManager {
     }
 
     handleIncomingConnection(conn) {
-        console.log('Incoming connection from:', conn.peer);
+        // console.log('Incoming connection from:', conn.peer);
 
         conn.on('open', () => {
-            console.log('Connection opened with:', conn.peer);
+            // console.log('Connection opened with:', conn.peer);
             this.connections.set(conn.peer, conn);
             this.updateConnectionStatus(`Connected with ${conn.peer}`);
 
@@ -814,7 +1030,7 @@ class NetworkManager {
                 pitch: pitchObject.rotation.x,
                 timestamp: Date.now()
             });
-            console.log(`📤 Host welcome: sending position (${playerPosition.x.toFixed(1)}, ${playerPosition.y.toFixed(1)}, ${playerPosition.z.toFixed(1)}) to ${conn.peer}`);
+            // console.log(`📤 Host welcome: sending position (${playerPosition.x.toFixed(1)}, ${playerPosition.y.toFixed(1)}, ${playerPosition.z.toFixed(1)}) to ${conn.peer}`);
         });
 
         conn.on('data', (data) => {
@@ -822,7 +1038,7 @@ class NetworkManager {
         });
 
         conn.on('close', () => {
-            console.log('Connection closed with:', conn.peer);
+            // console.log('Connection closed with:', conn.peer);
             this.connections.delete(conn.peer);
             this.removeNetworkPlayer(conn.peer);
         });
@@ -832,7 +1048,7 @@ class NetworkManager {
         if (!this.isConnected) return false;
 
         try {
-            console.log(`Creating room: ${roomId} as ${playerName}`);
+            // console.log(`Creating room: ${roomId} as ${playerName}`);
             this.playerName = playerName;
             this.currentRoom = roomId;
             this.isHost = true;
@@ -884,7 +1100,7 @@ class NetworkManager {
         if (!this.isConnected) return false;
 
         try {
-            console.log(`Joining room: ${roomId} as ${playerName}`);
+            // console.log(`Joining room: ${roomId} as ${playerName}`);
             this.updateConnectionStatus(`Connecting to room ${roomId}...`);
             this.playerName = playerName;
             this.currentRoom = roomId;
@@ -894,7 +1110,7 @@ class NetworkManager {
             const conn = this.peer.connect(hostPeerId);
 
             conn.on('open', () => {
-                console.log('Connected to room:', roomId);
+                // console.log('Connected to room:', roomId);
                 this.connections.set(hostPeerId, conn);
                 this.updateConnectionStatus(`Joined room ${roomId}!`);
                 this.showGameStartButton();
@@ -912,7 +1128,7 @@ class NetworkManager {
             });
 
             conn.on('close', () => {
-                console.log('Disconnected from room');
+                // console.log('Disconnected from room');
                 this.connections.delete(hostPeerId);
                 this.updateConnectionStatus("Disconnected from room");
             });
@@ -1054,7 +1270,7 @@ class NetworkManager {
         });
     }
 
-    sendPlayerDamageEvent(targetPlayerId, damage) {
+    sendPlayerDamageEvent(targetPlayerId, damage, attackPosition = null) {
         if (!this.currentRoom || this.connections.size === 0) return;
 
         const data = {
@@ -1064,6 +1280,15 @@ class NetworkManager {
             attackerId: this.playerId,
             timestamp: Date.now()
         };
+
+        // 攻撃位置が指定されている場合は追加
+        if (attackPosition) {
+            data.attackPosition = {
+                x: attackPosition.x,
+                y: attackPosition.y,
+                z: attackPosition.z
+            };
+        }
 
         // Send to all connected peers
         this.connections.forEach(conn => {
@@ -1117,11 +1342,11 @@ class NetworkManager {
     handleNetworkMessage(data, peerId) {
         switch (data.type) {
             case 'playerJoin':
-                console.log(`${data.playerName} joined the game`);
+                // console.log(`${data.playerName} joined the game`);
 
                 // Don't create network player for yourself
                 if (peerId === this.playerId) {
-                    console.log(`🚫 Ignoring own playerJoin message`);
+                    // console.log(`🚫 Ignoring own playerJoin message`);
                     break;
                 }
 
@@ -1131,7 +1356,7 @@ class NetworkManager {
                     // Assign color to new player (skip 0 for host)
                     assignedColorIndex = nextPlayerColorIndex + 1; // Host is 0, guests start from 1
                     nextPlayerColorIndex++;
-                    console.log(`🎯 Host assigning color index ${assignedColorIndex} to ${data.playerName}`);
+                    // console.log(`🎯 Host assigning color index ${assignedColorIndex} to ${data.playerName}`);
                 }
 
                 this.createNetworkPlayer(peerId, data.playerName, assignedColorIndex);
@@ -1141,7 +1366,7 @@ class NetworkManager {
                     const conn = this.connections.get(peerId);
                     if (conn && conn.open) {
                         // Send host info (always color index 0)
-                        console.log(`📤 Host sending own info to ${data.playerName}: color index 0`);
+                        // console.log(`📤 Host sending own info to ${data.playerName}: color index 0`);
                         conn.send({
                             type: 'playerJoin',
                             playerName: this.playerName,
@@ -1164,7 +1389,7 @@ class NetworkManager {
                         // Send info about all other existing players with their assigned colors AND positions
                         connectedPlayers.forEach((player, existingPeerId) => {
                             if (existingPeerId !== peerId && player.userData.playerName) {
-                                console.log(`📤 Host sending existing player ${player.userData.playerName} info: color index ${player.userData.colorIndex}`);
+                                // console.log(`📤 Host sending existing player ${player.userData.playerName} info: color index ${player.userData.colorIndex}`);
                                 conn.send({
                                     type: 'playerJoin',
                                     playerName: player.userData.playerName,
@@ -1185,13 +1410,13 @@ class NetworkManager {
                                         pitch: 0,
                                         timestamp: Date.now()
                                     });
-                                    console.log(`📤 Host sending existing player ${player.userData.playerName} position: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`);
+                                    // console.log(`📤 Host sending existing player ${player.userData.playerName} position: (${pos.y.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`);
                                 }
                             }
                         });
 
                         // IMPORTANT: Send the new player's own color assignment back to them
-                        console.log(`📤 Host sending new player ${data.playerName} their own color: index ${assignedColorIndex}`);
+                        // console.log(`📤 Host sending new player ${data.playerName} their own color: index ${assignedColorIndex}`);
                         conn.send({
                             type: 'playerColorAssignment',
                             colorIndex: assignedColorIndex
@@ -1200,7 +1425,7 @@ class NetworkManager {
                 }
                 break;
             case 'playerColorAssignment':
-                console.log(`🎨 Received color assignment: index ${data.colorIndex}`);
+                // console.log(`🎨 Received color assignment: index ${data.colorIndex}`);
                 // Update own player body color if it exists
                 if (playerBody && playerBody.children.length > 0) {
                     const playerColors = [
@@ -1217,7 +1442,7 @@ class NetworkManager {
                     const bodyMesh = playerBody.children[0]; // First child is the body mesh
                     if (bodyMesh && bodyMesh.material) {
                         bodyMesh.material.color.setHex(newColor);
-                        console.log(`🎨 Updated own player body color to #${newColor.toString(16)}`);
+                        // console.log(`🎨 Updated own player body color to #${newColor.toString(16)}`);
                     }
                 }
                 break;
@@ -1303,11 +1528,18 @@ class NetworkManager {
         // Handle damage received from network
         if (data.targetPlayerId === this.playerId) {
             // This player was hit
-            console.log(`🎯 Received damage from ${peerId}: ${data.damage}`);
-            applyDamageToPlayer(data.damage);
+            // console.log(`🎯 Received damage from ${peerId}: ${data.damage}`);
+
+            // 攻撃位置が送信されている場合はインジケーターを表示
+            let attackPosition = null;
+            if (data.attackPosition) {
+                attackPosition = new THREE.Vector3(data.attackPosition.x, data.attackPosition.y, data.attackPosition.z);
+            }
+
+            applyDamageToPlayer(data.damage, attackPosition);
         } else {
             // Another player was hit, just log for now
-            console.log(`📡 Player ${data.targetPlayerId} took ${data.damage} damage from ${data.attackerId}`);
+            // console.log(`📡 Player ${data.targetPlayerId} took ${data.damage} damage from ${data.attackerId}`);
         }
     }
 
@@ -1315,7 +1547,7 @@ class NetworkManager {
         // Handle respawn from network
         if (peerId === this.playerId) return; // Ignore own respawn
 
-        console.log(`🔄 Player ${peerId} respawned at (${data.x.toFixed(1)}, ${data.y.toFixed(1)}, ${data.z.toFixed(1)})`);
+        // console.log(`🔄 Player ${peerId} respawned at (${data.x.toFixed(1)}, ${data.y.toFixed(1)}, ${data.z.toFixed(1)})`);
 
         // Update network player position if they exist
         const player = connectedPlayers.get(peerId);
@@ -1335,7 +1567,7 @@ class NetworkManager {
         if (peerId === this.playerId) return; // Ignore own blood effects
 
         const bloodPosition = new THREE.Vector3(data.x, data.y, data.z);
-        console.log(`🩸 Blood effect from player ${peerId} at (${data.x.toFixed(1)}, ${data.y.toFixed(1)}, ${data.z.toFixed(1)}), large: ${data.isLargeSplatter}`);
+        // console.log(`🩸 Blood effect from player ${peerId} at (${data.x.toFixed(1)}, ${data.y.toFixed(1)}, ${data.z.toFixed(1)}), large: ${data.isLargeSplatter}`);
 
         // Create blood effect for other players
         if (data.isLargeSplatter) {
@@ -1352,7 +1584,7 @@ class NetworkManager {
             return;
         }
 
-        console.log(`✨ Creating new network player: ${playerName} (ID: ${peerId})`);
+        // console.log(`✨ Creating new network player: ${playerName} (ID: ${peerId})`);
 
         const networkPlayer = new THREE.Group();
 
@@ -1376,15 +1608,15 @@ class NetworkManager {
         let colorIndex;
         if (assignedColorIndex !== null && assignedColorIndex !== undefined) {
             colorIndex = assignedColorIndex % playerColors.length;
-            console.log(`🎨 Player ${playerName} assigned color index ${colorIndex} by host (received: ${assignedColorIndex})`);
+            // console.log(`🎨 Player ${playerName} assigned color index ${colorIndex} by host (received: ${assignedColorIndex})`);
         } else {
             // Fallback for host or when no color assigned
             colorIndex = connectedPlayers.size % playerColors.length;
-            console.log(`🎨 Player ${playerName} using fallback color index ${colorIndex} (assignedColorIndex was: ${assignedColorIndex})`);
+            // console.log(`🎨 Player ${playerName} using fallback color index ${colorIndex} (assignedColorIndex was: ${assignedColorIndex})`);
         }
 
         const playerColor = playerColors[colorIndex];
-        console.log(`   Color: #${playerColor.toString(16)}`);
+        // console.log(`   Color: #${playerColor.toString(16)}`);
 
         // Create unique material for this player
         const uniqueBodyMat = new THREE.MeshStandardMaterial({
@@ -1402,7 +1634,7 @@ class NetworkManager {
         head.position.y = 1.35;
         networkPlayer.add(head);
 
-        console.log(`🎨 Created player ${playerName} with color index ${colorIndex} (${playerColor.toString(16)})`);
+        // console.log(`🎨 Created player ${playerName} with color index ${colorIndex} (${playerColor.toString(16)})`);
 
         // Add name tag with billboard effect - ADD DIRECTLY TO SCENE, NOT TO PLAYER GROUP
         const canvas = document.createElement('canvas');
@@ -1435,8 +1667,8 @@ class NetworkManager {
         scene.add(networkPlayer);
         connectedPlayers.set(peerId, networkPlayer);
 
-        console.log(`📊 Total connected players: ${connectedPlayers.size}`);
-        console.log(`🎮 All player IDs:`, Array.from(connectedPlayers.keys()));
+        // console.log(`📊 Total connected players: ${connectedPlayers.size}`);
+        // console.log(`🎮 All player IDs:`, Array.from(connectedPlayers.keys()));
     }
 
     removeNetworkPlayer(peerId) {
@@ -1485,7 +1717,7 @@ class NetworkManager {
 // Stage Creator System
 class StageCreator {
     static createBasicArena() {
-        console.log('🏗️ Creating basic arena stage...');
+        // console.log('🏗️ Creating basic arena stage...');
 
         // Clear existing stage objects
         stageObjects.forEach(obj => scene.remove(obj));
@@ -1554,11 +1786,11 @@ class StageCreator {
             stageObjects.push(walkway);
         });
 
-        console.log(`✅ Basic arena created with ${stageObjects.length} objects`);
+        // console.log(`✅ Basic arena created with ${stageObjects.length} objects`);
     }
 
     static createUrbanMap() {
-        console.log('🏙️ Creating urban map stage...');
+        // console.log('🏙️ Creating urban map stage...');
 
         // Clear existing stage objects
         stageObjects.forEach(obj => scene.remove(obj));
@@ -1613,11 +1845,11 @@ class StageCreator {
             stageObjects.push(barrier);
         }
 
-        console.log(`✅ Urban map created with ${stageObjects.length} objects`);
+        // console.log(`✅ Urban map created with ${stageObjects.length} objects`);
     }
 
     static createForestMap() {
-        console.log('🌲 Creating forest map stage...');
+        // console.log('🌲 Creating forest map stage...');
 
         // Clear existing stage objects
         stageObjects.forEach(obj => scene.remove(obj));
@@ -1688,7 +1920,7 @@ class StageCreator {
             stageObjects.push(rock);
         }
 
-        console.log(`✅ Forest map created with ${stageObjects.length} objects`);
+        // console.log(`✅ Forest map created with ${stageObjects.length} objects`);
     }
 }
 
@@ -1802,6 +2034,10 @@ function resetGame() {
     playerBody.visible = false;
     isRespawning = false; // リスポーンフラグもリセット
 
+    // ダメージ方向インジケーターをクリア
+    damageIndicators.forEach(indicator => indicator.destroy());
+    damageIndicators.length = 0;
+
     // 反動状態を安全にリセット
     targetRecoil = 0;
     currentRecoil = 0;
@@ -1856,7 +2092,7 @@ const BLOOD_PARTICLE_LIFETIME = 1.5; // 血しぶきの持続時間（秒）
 
 // Create blood splatter effect (for death)
 function createBloodSplatter(position) {
-    console.log('🩸 Creating blood splatter effect...');
+    // console.log('🩸 Creating blood splatter effect...');
 
     // Blood particle material (red, emissive)
     const bloodMaterial = new THREE.MeshBasicMaterial({
@@ -2117,7 +2353,7 @@ function getRandomRespawnPosition() {
 
 // Handle player death and respawn
 function handlePlayerDeath() {
-    console.log('💀 Player died! Respawning...');
+    // console.log('💀 Player died! Respawning...');
 
     // Create blood splatter effect at death location for other players to see
     if (networkManager.isJoinedToRoom()) {
@@ -2131,7 +2367,7 @@ function handlePlayerDeath() {
     magazine = MAG_SIZE;
     reserveAmmo = RESERVE_START;
     isReloading = false; // リロード状態もリセット
-    console.log('🔫 Ammo restored to full!');
+    // console.log('🔫 Ammo restored to full!');
 
     // Get random respawn position
     const respawnPos = getRandomRespawnPosition();
@@ -2158,7 +2394,7 @@ function handlePlayerDeath() {
 
     // リスポーン完了 - フラグをリセット
     isRespawning = false;
-    console.log('✅ Respawn completed!');
+    // console.log('✅ Respawn completed!');
 
     // Show respawn message
     const message = document.createElement('div');
@@ -2183,18 +2419,34 @@ function handlePlayerDeath() {
 }
 
 // Apply damage to player
-function applyDamageToPlayer(damage) {
+function applyDamageToPlayer(damage, attackPosition = null) {
     // プレイヤーがすでにリスポーン中の場合はダメージを無視
     if (isRespawning) {
-        console.log('⚠️ Player is respawning, ignoring damage');
+        // console.log('⚠️ Player is respawning, ignoring damage');
+        return;
+    }
+
+    // 無敵状態の場合はHPを減らさない
+    if (isInvincible) {
+        console.log(`🛡️ 無敵状態のためダメージを無効化: ${damage}`);
+        // ダメージ演出とインジケーターは表示する
+        showDamageFlash();
+        if (attackPosition) {
+            addDamageIndicator(attackPosition, damage);
+        }
         return;
     }
 
     health -= damage;
-    console.log(`🩸 Player took ${damage} damage! Health: ${health}/100`);
+    // console.log(`🩸 Player took ${damage} damage! Health: ${health}/100`);
 
     // Show damage feedback
     showDamageFlash();
+
+    // ダメージ方向インジケーターを表示（攻撃位置が分かる場合）
+    if (attackPosition) {
+        addDamageIndicator(attackPosition, damage);
+    }
 
     // Create small blood effect when taking damage (but not dying)
     // Only for network - other players will see our blood
@@ -2207,7 +2459,7 @@ function applyDamageToPlayer(damage) {
         health = 0;
         isRespawning = true; // リスポーンフラグを設定
         updateUI();
-        console.log('💀 Player died! Starting respawn process...');
+        // console.log('💀 Player died! Starting respawn process...');
         setTimeout(handlePlayerDeath, 100); // 短い演出遅延（0.1秒）
     } else {
         updateUI();
@@ -2263,7 +2515,7 @@ function checkBulletPlayerCollision(bullet, bulletPrevPos, bulletNewPos) {
                     bodyHeight,
                     0x00ff00
                 );
-                console.log(`🎯 Body hit detected at step ${step}/${numSteps}, distance: ${travelDistance.toFixed(2)}m`);
+                // console.log(`🎯 Body hit detected at step ${step}/${numSteps}, distance: ${travelDistance.toFixed(2)}m`);
                 return true;
             }
         }
@@ -2279,7 +2531,7 @@ function checkBulletPlayerCollision(bullet, bulletPrevPos, bulletNewPos) {
                     headRadius * 2,
                     0x00ffff
                 );
-                console.log(`🎯 Head hit detected at step ${step}/${numSteps}, distance: ${travelDistance.toFixed(2)}m`);
+                // console.log(`🎯 Head hit detected at step ${step}/${numSteps}, distance: ${travelDistance.toFixed(2)}m`);
                 return true;
             }
         }
@@ -2311,7 +2563,7 @@ function checkBulletPlayerCollision(bullet, bulletPrevPos, bulletNewPos) {
     const hitPlayer = bodyHits.length > 0 || headHits.length > 0;
 
     if (hitPlayer) {
-        console.log(`🎯 Raycast hit detected, distance: ${travelDistance.toFixed(2)}m, body: ${bodyHits.length > 0}, head: ${headHits.length > 0}`);
+        // console.log(`🎯 Raycast hit detected, distance: ${travelDistance.toFixed(2)}m, body: ${bodyHits.length > 0}, head: ${headHits.length > 0}`);
         // Show debug visualization when hit
         showDebugHitbox(
             new THREE.Vector3(playerPosition.x, bodyBottom + bodyHeight / 2, playerPosition.z),
@@ -2367,8 +2619,10 @@ function updateBullets(delta) {
 
         // Check player collision (only for network bullets)
         if (checkBulletPlayerCollision(bullet, prevPos, newPos)) {
-            console.log('🎯 Player hit by bullet!');
-            applyDamageToPlayer(DAMAGE_PER_HIT);
+            // console.log('🎯 Player hit by bullet!');
+            // 攻撃位置を計算（弾丸の前の位置から）
+            const attackPosition = prevPos.clone();
+            applyDamageToPlayer(DAMAGE_PER_HIT, attackPosition);
             scene.remove(bullet);
             bullets.splice(i, 1);
             continue;
@@ -2421,7 +2675,7 @@ function updateBullets(delta) {
                                 bodyHeight,
                                 0xff0000
                             );
-                            console.log(`🎯 Network player ${playerId} body hit at step ${netStep}/${networkNumSteps}, distance: ${networkTravelDistance.toFixed(2)}m`);
+                            // console.log(`🎯 Network player ${playerId} body hit at step ${netStep}/${networkNumSteps}, distance: ${networkTravelDistance.toFixed(2)}m`);
                             hitThisPlayer = true;
                             break;
                         }
@@ -2438,7 +2692,7 @@ function updateBullets(delta) {
                                 headRadius * 2,
                                 0xff6600
                             );
-                            console.log(`🎯 Network player ${playerId} head hit at step ${netStep}/${networkNumSteps}, distance: ${networkTravelDistance.toFixed(2)}m`);
+                            // console.log(`🎯 Network player ${playerId} head hit at step ${netStep}/${networkNumSteps}, distance: ${networkTravelDistance.toFixed(2)}m`);
                             hitThisPlayer = true;
                             break;
                         }
@@ -2446,11 +2700,12 @@ function updateBullets(delta) {
                 }
 
                 if (hitThisPlayer) {
-                    console.log(`🎯 Hit network player ${playerId}!`);
+                    // console.log(`🎯 Hit network player ${playerId}!`);
 
                     // Send damage event to network
                     if (networkManager.isJoinedToRoom()) {
-                        networkManager.sendPlayerDamageEvent(playerId, DAMAGE_PER_HIT);
+                        // 攻撃位置を送信（弾丸の前の位置から）
+                        networkManager.sendPlayerDamageEvent(playerId, DAMAGE_PER_HIT, prevPos);
                     }
 
                     scene.remove(bullet);
@@ -2566,13 +2821,13 @@ window.addEventListener('load', () => {
         return;
     }
 
-    console.log('PeerJS loaded successfully');
+    // console.log('PeerJS loaded successfully');
 
     // Load and restore saved player name
     const savedPlayerName = PlayerNameStorage.load();
     if (savedPlayerName) {
         playerNameInput.value = savedPlayerName;
-        console.log('Restored player name:', savedPlayerName);
+        // console.log('Restored player name:', savedPlayerName);
     } else {
         // Set default name for new users
         playerNameInput.value = 'Player1';
@@ -2635,6 +2890,7 @@ function animate() {
     networkManager.updateNetworkPlayers(delta);
     updateNameplateBillboards();
     updateBloodParticles(delta); // 血しぶきパーティクルを更新
+    updateDamageIndicators(); // ダメージ方向インジケーターを更新
 
     // Update debug collision visualization
     if (DEBUG_COLLISION) {
@@ -2693,7 +2949,7 @@ function animate() {
 
         // Occasional debug logging (reduced frequency)
         if (Math.random() < 0.001) { // 0.1% chance to log
-            console.log(`Camera angles - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
+            // console.log(`Camera angles - Yaw: ${(yawObject.rotation.y * 180 / Math.PI).toFixed(1)}°, Pitch: ${(pitchObject.rotation.x * 180 / Math.PI).toFixed(1)}°`);
         }
 
         // Method 1: Try simple euler application first
@@ -2714,5 +2970,97 @@ function animate() {
     renderer.render(scene, camera);
 }
 animate();
+
+// デバッグメニューを作成
+function createDebugMenu() {
+    // 既存のデバッグメニューがあれば削除
+    const existingMenu = document.getElementById('debug-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+
+    const menu = document.createElement('div');
+    menu.id = 'debug-menu';
+    menu.style.position = 'fixed';
+    menu.style.top = '20px';
+    menu.style.left = '20px';
+    menu.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    menu.style.color = 'white';
+    menu.style.padding = '20px';
+    menu.style.borderRadius = '10px';
+    menu.style.fontFamily = 'Arial, sans-serif';
+    menu.style.fontSize = '14px';
+    menu.style.zIndex = '10000';
+    menu.style.display = 'none';
+    menu.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+
+    // タイトル
+    const title = document.createElement('h3');
+    title.textContent = 'デバッグメニュー';
+    title.style.margin = '0 0 15px 0';
+    title.style.color = '#00ff00';
+    menu.appendChild(title);
+
+    // 無敵状態のチェックボックス
+    const invincibleContainer = document.createElement('div');
+    invincibleContainer.style.marginBottom = '10px';
+
+    const invincibleCheckbox = document.createElement('input');
+    invincibleCheckbox.type = 'checkbox';
+    invincibleCheckbox.id = 'invincible-checkbox';
+    invincibleCheckbox.checked = isInvincible;
+    invincibleCheckbox.addEventListener('change', (e) => {
+        isInvincible = e.target.checked;
+        console.log(`🛡️ 無敵状態: ${isInvincible ? 'ON' : 'OFF'}`);
+    });
+
+    const invincibleLabel = document.createElement('label');
+    invincibleLabel.htmlFor = 'invincible-checkbox';
+    invincibleLabel.textContent = '無敵状態';
+    invincibleLabel.style.marginLeft = '8px';
+    invincibleLabel.style.cursor = 'pointer';
+
+    invincibleContainer.appendChild(invincibleCheckbox);
+    invincibleContainer.appendChild(invincibleLabel);
+    menu.appendChild(invincibleContainer);
+
+    // 閉じるボタン
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '閉じる (P)';
+    closeButton.style.backgroundColor = '#ff4444';
+    closeButton.style.color = 'white';
+    closeButton.style.border = 'none';
+    closeButton.style.padding = '8px 12px';
+    closeButton.style.borderRadius = '5px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.fontSize = '12px';
+    closeButton.addEventListener('click', toggleDebugMenu);
+    menu.appendChild(closeButton);
+
+    document.body.appendChild(menu);
+    return menu;
+}
+
+// デバッグメニューの表示/非表示を切り替え
+function toggleDebugMenu() {
+    const menu = document.getElementById('debug-menu');
+    if (!menu) {
+        createDebugMenu();
+        return;
+    }
+
+    isDebugMenuOpen = !isDebugMenuOpen;
+    menu.style.display = isDebugMenuOpen ? 'block' : 'none';
+
+    if (isDebugMenuOpen) {
+        console.log('🔧 デバッグメニューを開きました');
+    }
+}
+
+// デバッグメニューを初期化
+let debugMenu = null;
+document.addEventListener('DOMContentLoaded', () => {
+    debugMenu = createDebugMenu();
+});
 
 
