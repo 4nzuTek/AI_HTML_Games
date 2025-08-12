@@ -19,6 +19,10 @@ const RESERVE_START = 300;       // 初期予備弾数
 const RELOAD_TIME_S = 1.1;       // リロード時間（秒）
 const MOUSE_SENSITIVITY = 0.002; // マウス感度（標準FPS感度）
 
+// プレイヤー衝突判定設定
+const PLAYER_RADIUS = 0.25;      // プレイヤーの半径
+const PLAYER_HEIGHT = 1.8;       // プレイヤーの高さ
+
 // ダメージ方向インジケーター設定
 const DAMAGE_INDICATOR_DURATION = 2.0; // インジケーター表示時間（秒）
 const DAMAGE_INDICATOR_RADIUS = 80;    // インジケーターの半径（ピクセル）
@@ -306,17 +310,15 @@ window.addEventListener('keydown', (e) => {
         return; // Don't process stage switching when using debug toggle
     }
 
-    // Stage switching (only when playing)
+    // Stage switching (only when playing) - アーバンステージのみ
     if (pointerLocked && !isPaused) {
         switch (e.code) {
             case 'Digit2':
                 StageCreator.createUrbanMap();
-                break;
-            case 'Digit3':
-                StageCreator.createForestMap();
-                break;
-            case 'Digit4':
-                StageCreator.createBasicArena();
+                // ネットワークプレイヤーにもステージ変更を通知
+                if (networkManager.isJoinedToRoom()) {
+                    networkManager.sendStageChangeEvent('urban');
+                }
                 break;
         }
     }
@@ -1448,6 +1450,24 @@ class NetworkManager {
         });
     }
 
+    // ステージ変更イベントを送信
+    sendStageChangeEvent(stageType) {
+        if (!this.currentRoom || this.connections.size === 0) return;
+
+        const data = {
+            type: 'stageChange',
+            stageType: stageType,
+            timestamp: Date.now()
+        };
+
+        // Send to all connected peers
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                conn.send(data);
+            }
+        });
+    }
+
     handleNetworkMessage(data, peerId) {
         switch (data.type) {
             case 'playerJoin':
@@ -1559,6 +1579,9 @@ class NetworkManager {
             case 'playerBloodEffect':
                 this.handlePlayerBloodEffect(data, peerId);
                 break;
+            case 'stageChange':
+                this.handleStageChange(data, peerId);
+                break;
         }
     }
 
@@ -1665,6 +1688,22 @@ class NetworkManager {
             createBloodSplatter(bloodPosition);
         } else {
             createSmallBloodEffect(bloodPosition);
+        }
+    }
+
+    // ステージ変更を処理
+    handleStageChange(data, peerId) {
+        // 自分が送信したステージ変更は無視
+        if (peerId === this.playerId) return;
+
+        // ステージタイプに応じてステージを作成
+        switch (data.stageType) {
+            case 'urban':
+                StageCreator.createUrbanMap();
+                console.log('🌆 アーバンステージに変更されました');
+                break;
+            default:
+                console.warn('未知のステージタイプ:', data.stageType);
         }
     }
 
@@ -1797,73 +1836,10 @@ class NetworkManager {
 
 // Stage Creator System
 class StageCreator {
+    // アーバンステージのみを残し、他のステージは削除
     static createBasicArena() {
-        // Clear existing stage objects
-        stageObjects.forEach(obj => scene.remove(obj));
-        stageObjects.length = 0;
-
-        // Central platform
-        const platformGeo = new THREE.CylinderGeometry(8, 8, 1, 32);
-        const platformMat = new THREE.MeshStandardMaterial({
-            color: 0x4a90a4,
-            metalness: 0.2,
-            roughness: 0.7
-        });
-        const platform = new THREE.Mesh(platformGeo, platformMat);
-        platform.position.set(0, 0.5, 0);
-        platform.receiveShadow = true;
-        platform.castShadow = true;
-        scene.add(platform);
-        stageObjects.push(platform);
-
-        // Corner boxes for cover
-        const boxGeo = new THREE.BoxGeometry(3, 2, 3);
-        const boxMat = new THREE.MeshStandardMaterial({
-            color: 0x8b7355,
-            metalness: 0.1,
-            roughness: 0.9
-        });
-
-        const corners = [
-            [12, 1, 12],
-            [-12, 1, 12],
-            [12, 1, -12],
-            [-12, 1, -12]
-        ];
-
-        corners.forEach(([x, y, z]) => {
-            const box = new THREE.Mesh(boxGeo, boxMat);
-            box.position.set(x, y, z);
-            box.receiveShadow = true;
-            box.castShadow = true;
-            scene.add(box);
-            stageObjects.push(box);
-        });
-
-        // Elevated walkways
-        const walkwayGeo = new THREE.BoxGeometry(20, 0.5, 2);
-        const walkwayMat = new THREE.MeshStandardMaterial({
-            color: 0x666666,
-            metalness: 0.3,
-            roughness: 0.6
-        });
-
-        const walkways = [
-            [0, 3, 15],
-            [0, 3, -15],
-            [15, 3, 0],
-            [-15, 3, 0]
-        ];
-
-        walkways.forEach(([x, y, z]) => {
-            const walkway = new THREE.Mesh(walkwayGeo, walkwayMat);
-            walkway.position.set(x, y, z);
-            if (x !== 0) walkway.rotation.y = Math.PI / 2;
-            walkway.receiveShadow = true;
-            walkway.castShadow = true;
-            scene.add(walkway);
-            stageObjects.push(walkway);
-        });
+        // アーバンステージに自動変更
+        this.createUrbanMap();
     }
 
     static createUrbanMap() {
@@ -1893,6 +1869,7 @@ class StageCreator {
             building.position.set(x, y, z);
             building.receiveShadow = true;
             building.castShadow = true;
+            building.userData.isStageObject = true; // ステージオブジェクトとしてマーク
             scene.add(building);
             stageObjects.push(building);
         });
@@ -1916,80 +1893,15 @@ class StageCreator {
             barrier.rotation.y = angle;
             barrier.receiveShadow = true;
             barrier.castShadow = true;
+            barrier.userData.isStageObject = true; // ステージオブジェクトとしてマーク
             scene.add(barrier);
             stageObjects.push(barrier);
         }
     }
 
     static createForestMap() {
-        // Clear existing stage objects
-        stageObjects.forEach(obj => scene.remove(obj));
-        stageObjects.length = 0;
-
-        // Tree trunks
-        const trunkGeo = new THREE.CylinderGeometry(0.5, 0.8, 6, 8);
-        const trunkMat = new THREE.MeshStandardMaterial({
-            color: 0x8b4513,
-            metalness: 0.0,
-            roughness: 1.0
-        });
-
-        // Tree canopies
-        const canopyGeo = new THREE.SphereGeometry(2.5, 8, 6);
-        const canopyMat = new THREE.MeshStandardMaterial({
-            color: 0x228b22,
-            metalness: 0.0,
-            roughness: 0.9
-        });
-
-        // Generate random tree positions
-        for (let i = 0; i < 15; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 8 + Math.random() * 12;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
-
-            // Tree trunk
-            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.set(x, 3, z);
-            trunk.receiveShadow = true;
-            trunk.castShadow = true;
-            scene.add(trunk);
-            stageObjects.push(trunk);
-
-            // Tree canopy
-            const canopy = new THREE.Mesh(canopyGeo, canopyMat);
-            canopy.position.set(x, 7 + Math.random() * 1, z);
-            canopy.receiveShadow = true;
-            canopy.castShadow = true;
-            scene.add(canopy);
-            stageObjects.push(canopy);
-        }
-
-        // Rock formations
-        const rockGeo = new THREE.DodecahedronGeometry(1.5);
-        const rockMat = new THREE.MeshStandardMaterial({
-            color: 0x696969,
-            metalness: 0.1,
-            roughness: 0.9
-        });
-
-        for (let i = 0; i < 8; i++) {
-            const x = (Math.random() - 0.5) * 30;
-            const z = (Math.random() - 0.5) * 30;
-
-            const rock = new THREE.Mesh(rockGeo, rockMat);
-            rock.position.set(x, 0.75, z);
-            rock.rotation.set(
-                Math.random() * Math.PI,
-                Math.random() * Math.PI,
-                Math.random() * Math.PI
-            );
-            rock.receiveShadow = true;
-            rock.castShadow = true;
-            scene.add(rock);
-            stageObjects.push(rock);
-        }
+        // アーバンステージに自動変更
+        this.createUrbanMap();
     }
 }
 
@@ -2968,8 +2880,23 @@ function moveAndCollide(delta) {
     const moveX = (inputX * cos + inputZ * sin) * speed * delta;
     const moveZ = (-inputX * sin + inputZ * cos) * speed * delta;
 
-    playerPosition.x += moveX;
-    playerPosition.z += moveZ;
+    // 移動前の位置を保存
+    const oldPosition = playerPosition.clone();
+
+    // 新しい位置を計算
+    const newPosition = playerPosition.clone();
+    newPosition.x += moveX;
+    newPosition.z += moveZ;
+
+    // ステージオブジェクトとの衝突判定
+    if (checkStageCollision(newPosition)) {
+        // 衝突した場合、移動を制限
+        const collisionResponse = resolveStageCollision(oldPosition, newPosition);
+        playerPosition.copy(collisionResponse);
+    } else {
+        // 衝突しない場合、新しい位置に移動
+        playerPosition.copy(newPosition);
+    }
 
     // world bounds
     const margin = 2.0;
@@ -2995,11 +2922,60 @@ function moveAndCollide(delta) {
     }
 }
 
+// ステージオブジェクトとの衝突判定
+function checkStageCollision(position) {
+    const playerBottom = position.y - PLAYER_EYE_HEIGHT;
+    const playerTop = playerBottom + PLAYER_HEIGHT;
+    const playerCenterX = position.x;
+    const playerCenterZ = position.z;
+
+    for (const obj of stageObjects) {
+        if (!obj.userData.isStageObject) continue;
+
+        // オブジェクトの境界ボックスを取得
+        const bbox = new THREE.Box3().setFromObject(obj);
+
+        // プレイヤーの境界ボックス
+        const playerBbox = new THREE.Box3();
+        playerBbox.setFromCenterAndSize(
+            new THREE.Vector3(playerCenterX, playerBottom + PLAYER_HEIGHT / 2, playerCenterZ),
+            new THREE.Vector3(PLAYER_RADIUS * 2, PLAYER_HEIGHT, PLAYER_RADIUS * 2)
+        );
+
+        // 衝突判定
+        if (playerBbox.intersectsBox(bbox)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ステージオブジェクトとの衝突解決
+function resolveStageCollision(oldPosition, newPosition) {
+    const resolvedPosition = oldPosition.clone();
+
+    // X軸方向の移動を試行
+    const testX = newPosition.clone();
+    testX.z = oldPosition.z;
+    if (!checkStageCollision(testX)) {
+        resolvedPosition.x = testX.x;
+    }
+
+    // Z軸方向の移動を試行
+    const testZ = newPosition.clone();
+    testZ.x = resolvedPosition.x;
+    if (!checkStageCollision(testZ)) {
+        resolvedPosition.z = testZ.z;
+    }
+
+    return resolvedPosition;
+}
+
 // Init
 resetGame();
 
-// Create default stage
-StageCreator.createBasicArena();
+// Create default stage - アーバンステージをデフォルトに
+StageCreator.createUrbanMap();
 
 // Initialize P2P when page loads
 window.addEventListener('load', () => {
