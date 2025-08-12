@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mini FPS - Three.js</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- Three.js (using older stable version to avoid deprecation warning) -->
+    <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+    <!-- PeerJS for P2P multiplayer (no server required) -->
+    <script src="https://unpkg.com/peerjs@1.5.0/dist/peerjs.min.js"></script>
+    <script src="main.js" defer></script>
+</head>
+
+<body>
+    <div id="hud">
+        <span>Health: <strong id="health">100</strong></span>
+        <span>Ammo: <strong id="ammo">12</strong>/<strong id="reserve">36</strong></span>
+        <span>Targets: <strong id="targets">0</strong></span>
+    </div>
+    <div id="help">
+        Mouse: Look / Left Click: Shoot / R: Reload<br />
+        WASD: Move / Space: Jump / Shift: Sprint / P: Toggle View<br />
+        2: Urban Stage / T: Debug | Watch Console for Camera Jump Logs
+    </div>
+    <div id="banner">
+        <div id="banner-text">FPS Demo - Online Multiplayer</div>
+        <div id="connection-panel">
+            <input type="text" id="player-name" placeholder="Your Player Name" value="" />
+            <div id="room-section">
+                <div id="create-section">
+                    <input type="number" id="room-id" placeholder="Room Number (1-10)" min="1" max="10" />
+                    <button id="create-room-btn">Create Room</button>
+                </div>
+                <div id="join-section">
+                    <select id="available-rooms">
+                        <option value="">Select a room to join...</option>
+                    </select>
+                    <button id="join-room-btn" disabled>Join Selected Room</button>
+                    <button id="refresh-rooms-btn">Refresh Rooms</button>
+                </div>
+                <div id="auto-section">
+                    <button id="auto-match-btn">Auto Match</button>
+                </div>
+            </div>
+        </div>
+        <button id="banner-btn" style="display:none;">Start Game</button>
+        <div id="connection-status">Disconnected</div>
+    </div>
+    <div id="crosshair" aria-hidden="true">
+        <div class="line vertical"></div>
+        <div class="line horizontal"></div>
+    </div>
+
+    <!-- リロードゲージ -->
+    <div id="reload-container" class="reload-container">
+        <div class="reload-text">Reloading...</div>
+        <div class="reload-bar">
+            <div class="reload-progress"></div>
+        </div>
+    </div>
+
+    <!-- scripts are loaded via defer in <head> -->
+</body>
+
+</html>
