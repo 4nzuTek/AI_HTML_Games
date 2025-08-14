@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>座標パズルゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- タイトル画面 -->
+        <div id="titleScreen" class="screen active">
+            <header>
+                <h1>座標パズルゲーム</h1>
+                <p class="subtitle">関数カードで座標を操作してターゲットを目指そう！</p>
+            </header>
+
+            <div class="menu-buttons">
+                <button id="challengeMenuBtn" class="menu-btn">チャレンジ</button>
+                <button id="randomMenuBtn" class="menu-btn">ランダムハント</button>
+                <button id="shopMenuBtn" class="menu-btn">ショップ</button>
+            </div>
+        </div>
+
+        <!-- チャレンジ画面 -->
+        <div id="challengeScreen" class="screen">
+            <header>
+                <h2>チャレンジモード</h2>
+                <button id="backToTitleBtn" class="back-btn">← タイトルに戻る</button>
+            </header>
+
+            <div class="game-layout">
+                <!-- 左側：ゲーム情報 -->
+                <div class="game-left">
+                    <!-- ゲーム情報表示エリア -->
+                    <div class="game-info">
+                        <div class="current-position">
+                            <h3>現在位置</h3>
+                            <div class="coordinate">(<span id="currentX">0</span>, <span id="currentY">0</span>)</div>
+                        </div>
+                        <div class="target-position">
+                            <h3>ターゲット座標</h3>
+                            <div class="coordinate">(<span id="targetX">0</span>, <span id="targetY">0</span>)</div>
+                        </div>
+                        <div class="hand-info">
+                            <h3>残りハンド</h3>
+                            <div class="hand-count"><span id="handCount">5</span>/5</div>
+                        </div>
+                    </div>
+
+                    <!-- ゲーム結果表示エリア -->
+                    <div id="resultArea" class="result-area hidden">
+                        <div id="resultMessage"></div>
+                        <button id="restartBtn" class="restart-btn">もう一度プレイ</button>
+                    </div>
+
+                    <!-- ゲーム開始ボタン -->
+                    <div class="start-area">
+                        <button id="startBtn" class="start-btn">ゲーム開始</button>
+                    </div>
+                </div>
+
+                <!-- 右側：関数エリア -->
+                <div class="game-right">
+                    <!-- 使用した関数エリア -->
+                    <div class="used-functions">
+                        <h3>使用した関数</h3>
+                        <div class="function-list-header">
+                            <div>X</div>
+                            <div>Y</div>
+                            <div>レアリティ</div>
+                        </div>
+                        <div id="usedFunctionCards" class="used-cards"></div>
+                    </div>
+
+                    <!-- 所持関数 -->
+                    <div class="owned-functions">
+                        <h3>所持関数</h3>
+                        <div class="function-list-header">
+                            <div>X</div>
+                            <div>Y</div>
+                            <div>レアリティ</div>
+                        </div>
+                        <div id="ownedFunctionCards" class="function-cards owned-cards">
+                            <!-- 所持関数カードがここに表示される -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ランダムハント画面 -->
+        <div id="randomScreen" class="screen">
+            <header>
+                <h2>ランダムハントモード</h2>
+                <button id="backToTitleBtn2" class="back-btn">← タイトルに戻る</button>
+            </header>
+
+            <div class="game-layout">
+                <!-- 左側：ゲーム情報 -->
+                <div class="game-left">
+                    <!-- ゲーム情報表示エリア -->
+                    <div class="game-info">
+                        <div class="current-position">
+                            <h3>現在位置</h3>
+                            <div class="coordinate">(<span id="currentX2">0</span>, <span id="currentY2">0</span>)</div>
+                        </div>
+                        <div class="target-position">
+                            <h3>ターゲット座標</h3>
+                            <div class="coordinate">(<span id="targetX2">0</span>, <span id="targetY2">0</span>)</div>
+                        </div>
+                        <div class="hand-info">
+                            <h3>残りハンド</h3>
+                            <div class="hand-count"><span id="handCount2">5</span>/5</div>
+                        </div>
+                    </div>
+
+                    <!-- ゲーム結果表示エリア -->
+                    <div id="resultArea2" class="result-area hidden">
+                        <div id="resultMessage2"></div>
+                        <button id="restartBtn2" class="restart-btn">もう一度プレイ</button>
+                    </div>
+
+                    <!-- ゲーム開始ボタン -->
+                    <div class="start-area">
+                        <button id="startBtn2" class="start-btn">ゲーム開始</button>
+                    </div>
+                </div>
+
+                <!-- 右側：関数エリア -->
+                <div class="game-right">
+                    <!-- 使用した関数エリア -->
+                    <div class="used-functions">
+                        <h3>使用した関数</h3>
+                        <div class="function-list-header">
+                            <div>X</div>
+                            <div>Y</div>
+                            <div>レアリティ</div>
+                        </div>
+                        <div id="usedFunctionCards2" class="used-cards"></div>
+                    </div>
+
+                    <!-- 所持関数 -->
+                    <div class="owned-functions">
+                        <h3>所持関数</h3>
+                        <div class="function-list-header">
+                            <div>X</div>
+                            <div>Y</div>
+                            <div>レアリティ</div>
+                        </div>
+                        <div id="ownedFunctionCards2" class="function-cards owned-cards">
+                            <!-- 所持関数カードがここに表示される -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ショップ画面 -->
+        <div id="shopScreen" class="screen">
+            <header>
+                <h2>関数ショップ</h2>
+                <button id="backToTitleBtn3" class="back-btn">← タイトルに戻る</button>
+            </header>
+
+            <main>
+                <div class="shop-info">
+                    <h3>商品一覧</h3>
+                    <p>30分ごとに商品が入れ替わります</p>
+                </div>
+
+                <div class="shop-items">
+                    <div class="shop-item">
+                        <div class="item-info">
+                            <div class="function-text">X+ 3 , Y* 2</div>
+                            <div class="rarity">レア</div>
+                        </div>
+                        <div class="item-price">100 コイン</div>
+                        <button class="buy-btn">購入</button>
+                    </div>
+
+                    <div class="shop-item">
+                        <div class="item-info">
+                            <div class="function-text">X- 1 , Y/ 3</div>
+                            <div class="rarity">コモン</div>
+                        </div>
+                        <div class="item-price">50 コイン</div>
+                        <button class="buy-btn">購入</button>
+                    </div>
+
+                    <div class="shop-item">
+                        <div class="item-info">
+                            <div class="function-text">X^ 2 , Y+ 5</div>
+                            <div class="rarity">エピック</div>
+                        </div>
+                        <div class="item-price">200 コイン</div>
+                        <button class="buy-btn">購入</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

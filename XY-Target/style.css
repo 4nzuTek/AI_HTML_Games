@@ -1,0 +1,553 @@
+/* 全体のスタイル */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: #36363C;
+    height: 100vh;
+    color: #ffffff;
+    overflow: hidden;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 画面管理 */
+.screen {
+    display: none;
+    height: 100%;
+    flex-direction: column;
+}
+
+.screen.active {
+    display: flex;
+}
+
+/* ヘッダー */
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+h1 {
+    color: #ffffff;
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+}
+
+h2 {
+    color: #ffffff;
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+.subtitle {
+    color: #cccccc;
+    font-size: 1.2rem;
+    margin-bottom: 40px;
+}
+
+/* 戻るボタン */
+.back-btn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 10px 20px;
+    border: 1px solid #ffffff;
+    background: transparent;
+    color: #ffffff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.back-btn:hover {
+    background: #ffffff;
+    color: #36363C;
+}
+
+/* タイトル画面のメニューボタン */
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    margin-top: 50px;
+    flex: 1;
+    justify-content: center;
+}
+
+.menu-btn {
+    padding: 20px 40px;
+    border: 1px solid #ffffff;
+    background: transparent;
+    color: #ffffff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1.5rem;
+    min-width: 300px;
+}
+
+.menu-btn:hover {
+    background: #ffffff;
+    color: #36363C;
+}
+
+/* ゲームレイアウト */
+.game-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    flex: 1;
+    min-height: 0;
+}
+
+/* 左側：ゲーム情報 */
+.game-left {
+    background: #2a2a30;
+    border: 1px solid #ffffff;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0;
+}
+
+/* 右側：関数エリア */
+.game-right {
+    background: #2a2a30;
+    border: 1px solid #ffffff;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0;
+}
+
+/* ゲーム情報エリア */
+.game-info {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 20px;
+    background: #36363C;
+    border: 1px solid #ffffff;
+    flex-shrink: 0;
+}
+
+.current-position,
+.target-position,
+.hand-info {
+    text-align: center;
+}
+
+.current-position h3,
+.target-position h3,
+.hand-info h3 {
+    color: #ffffff;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.coordinate {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.coordinate span {
+    display: inline-block;
+    padding: 5px 10px;
+    border: 1px solid #ffffff;
+    margin: 0 2px;
+}
+
+#currentX,
+#targetX,
+#currentX2,
+#targetX2 {
+    background: #ff6b6b;
+    color: #ffffff;
+}
+
+#currentY,
+#targetY,
+#currentY2,
+#targetY2 {
+    background: #4ecdc4;
+    color: #ffffff;
+}
+
+.hand-count {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #ff6b6b;
+}
+
+/* 使用した関数エリア */
+.used-functions {
+    flex-shrink: 0;
+}
+
+.used-functions h3 {
+    color: #ffffff;
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+
+.used-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #36363C;
+    border: 1px solid #ffffff;
+}
+
+/* 所持関数エリア */
+.owned-functions {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.owned-functions h3 {
+    color: #ffffff;
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+/* 関数リストの見出し */
+.function-list-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px;
+    gap: 10px;
+    padding: 10px;
+    background: #2a2a30;
+    border: 1px solid #ffffff;
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* 所持関数カード */
+.owned-cards {
+    display: flex;
+    flex-direction: column;
+    /* gap: 8px; */
+    overflow-y: auto;
+    padding: 0px;
+    background: #36363C;
+    border: 1px solid #ffffff;
+    flex: 1;
+    min-height: 0;
+}
+
+/* 関数カード */
+.function-card {
+    background: #36363C;
+    color: #ffffff;
+    /* padding: 12px; */
+    border: 1px solid #ffffff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    font-size: 0.9rem;
+    /* min-height: 50px; */
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.function-card:hover {
+    background: #ffffff;
+    color: #36363C;
+}
+
+.function-card.used {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #2a2a30;
+}
+
+.function-text {
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.function-text .x-coord {
+    color: #ff6b6b;
+}
+
+.function-text .y-coord {
+    color: #4ecdc4;
+}
+
+.function-text .operator {
+    color: #ffd93d;
+}
+
+.rarity {
+    font-size: 0.8rem;
+    color: #ffd93d;
+    text-align: center;
+}
+
+/* 結果エリア */
+.result-area {
+    text-align: center;
+    padding: 20px;
+    background: #36363C;
+    border: 1px solid #ffffff;
+    flex-shrink: 0;
+}
+
+.result-area.hidden {
+    display: none;
+}
+
+#resultMessage,
+#resultMessage2 {
+    font-size: 1.3rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+.result-success {
+    color: #28a745;
+}
+
+.result-failure {
+    color: #dc3545;
+}
+
+.restart-btn {
+    padding: 12px 30px;
+    background: #36363C;
+    color: #ffffff;
+    border: 1px solid #ffffff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.restart-btn:hover {
+    background: #ffffff;
+    color: #36363C;
+}
+
+/* 開始ボタンエリア */
+.start-area {
+    text-align: center;
+    margin-top: auto;
+    flex-shrink: 0;
+}
+
+.start-btn {
+    padding: 15px 40px;
+    background: #28a745;
+    color: #ffffff;
+    border: 1px solid #28a745;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.start-btn:hover {
+    background: #ffffff;
+    color: #28a745;
+}
+
+.start-btn:disabled {
+    background: #6c757d;
+    border-color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* ショップエリア */
+.shop-info {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #36363C;
+    border: 1px solid #ffffff;
+    flex-shrink: 0;
+}
+
+.shop-info h3 {
+    color: #ffffff;
+    margin-bottom: 10px;
+    font-size: 1.3rem;
+}
+
+.shop-info p {
+    color: #cccccc;
+    font-size: 1rem;
+}
+
+.shop-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.shop-item {
+    background: #36363C;
+    border: 1px solid #ffffff;
+    padding: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.item-info {
+    margin-bottom: 15px;
+}
+
+.item-info .function-text {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.item-info .rarity {
+    color: #ffd93d;
+    font-size: 0.9rem;
+}
+
+.item-price {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #28a745;
+    margin-bottom: 15px;
+}
+
+.buy-btn {
+    padding: 10px 20px;
+    background: #28a745;
+    color: #ffffff;
+    border: 1px solid #28a745;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.buy-btn:hover {
+    background: #ffffff;
+    color: #28a745;
+}
+
+/* スクロールバーのスタイル */
+.used-cards::-webkit-scrollbar,
+.owned-cards::-webkit-scrollbar,
+.shop-items::-webkit-scrollbar {
+    width: 8px;
+}
+
+.used-cards::-webkit-scrollbar-track,
+.owned-cards::-webkit-scrollbar-track,
+.shop-items::-webkit-scrollbar-track {
+    background: #2a2a30;
+}
+
+.used-cards::-webkit-scrollbar-thumb,
+.owned-cards::-webkit-scrollbar-thumb,
+.shop-items::-webkit-scrollbar-thumb {
+    background: #ffffff;
+}
+
+.used-cards::-webkit-scrollbar-thumb:hover,
+.owned-cards::-webkit-scrollbar-thumb:hover,
+.shop-items::-webkit-scrollbar-thumb:hover {
+    background: #cccccc;
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 1200px) {
+    .game-layout {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .game-left,
+    .game-right {
+        min-height: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    .game-left,
+    .game-right {
+        padding: 20px;
+    }
+
+    .used-cards {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+
+    .function-list-header {
+        grid-template-columns: 1fr 1fr 60px;
+        font-size: 0.8rem;
+    }
+
+    .function-card {
+        grid-template-columns: 1fr 1fr 60px;
+        font-size: 0.8rem;
+    }
+
+    .function-filters {
+        flex-wrap: wrap;
+    }
+
+    .menu-buttons {
+        gap: 15px;
+    }
+
+    .menu-btn {
+        min-width: 250px;
+        font-size: 1.2rem;
+        padding: 15px 30px;
+    }
+
+    .shop-items {
+        grid-template-columns: 1fr;
+    }
+
+    .back-btn {
+        position: static;
+        margin-bottom: 20px;
+    }
+}
