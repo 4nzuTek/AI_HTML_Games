@@ -2361,19 +2361,49 @@ function showDamageFlash() {
     }, 50);
 }
 
-// Random respawn position
+// 安全なリスポーン位置を取得（オブジェクトとの衝突を避ける）
 function getRandomRespawnPosition() {
-    const angle = Math.random() * Math.PI * 2;
-    const radius = RESPAWN_RADIUS_MIN + Math.random() * (RESPAWN_RADIUS_MAX - RESPAWN_RADIUS_MIN);
-    const x = Math.cos(angle) * radius;
-    const z = Math.sin(angle) * radius;
-
-    // Make sure position is within world bounds
+    const maxAttempts = 50; // 最大試行回数
     const bound = WORLD_SIZE / 2 - 3;
-    const clampedX = Math.max(-bound, Math.min(bound, x));
-    const clampedZ = Math.max(-bound, Math.min(bound, z));
 
-    return new THREE.Vector3(clampedX, PLAYER_EYE_HEIGHT, clampedZ);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = RESPAWN_RADIUS_MIN + Math.random() * (RESPAWN_RADIUS_MAX - RESPAWN_RADIUS_MIN);
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+
+        // ワールド境界内に制限
+        const clampedX = Math.max(-bound, Math.min(bound, x));
+        const clampedZ = Math.max(-bound, Math.min(bound, z));
+
+        const testPosition = new THREE.Vector3(clampedX, PLAYER_EYE_HEIGHT, clampedZ);
+
+        // ステージオブジェクトとの衝突をチェック
+        if (!checkStageCollision(testPosition)) {
+            return testPosition; // 安全な位置が見つかった
+        }
+    }
+
+    // 最大試行回数に達した場合は、原点付近の安全な位置を探す
+    console.warn('リスポーン位置の検索が失敗しました。原点付近を探索します。');
+
+    // 原点から同心円状に探索
+    for (let searchRadius = 2; searchRadius <= 20; searchRadius += 2) {
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+            const x = Math.cos(angle) * searchRadius;
+            const z = Math.sin(angle) * searchRadius;
+
+            const testPosition = new THREE.Vector3(x, PLAYER_EYE_HEIGHT, z);
+
+            if (!checkStageCollision(testPosition)) {
+                return testPosition;
+            }
+        }
+    }
+
+    // 最後の手段：原点に配置（通常は安全）
+    console.warn('安全なリスポーン位置が見つかりませんでした。原点に配置します。');
+    return new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0);
 }
 
 // Handle player death and respawn
