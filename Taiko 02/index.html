@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太鼓の達人クローン</title>
+    <link rel="icon" type="image/png" href="Wada_Don.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="wrap">
+        <canvas id="game" width="1280" height="720"></canvas>
+        <div id="hud" class="safe">
+            <div id="score" class="score">スコア: 0</div>
+            <div id="combo" class="combo">コンボ: 0</div>
+            <div id="accuracy" class="accuracy">精度: 100%</div>
+            <div id="menu" class="menu">
+                <div class="offset-controls">
+                    <label for="offsetInput">ノートオフセット: <input type="number" id="offsetInput" min="-3000" max="3000"
+                            value="0" step="10">ms</label>
+                </div>
+            </div>
+        </div>
+        <div id="songSelect" class="song-select hidden">
+            <div class="song-list">
+                <div class="song-item" data-song="ペットショップ大戦">
+                    <div class="song-title">ペットショップ大戦</div>
+                    <div class="song-subtitle">--chacol feat. Focco</div>
+                    <div class="song-difficulty">
+                        <span class="difficulty oni">鬼: 10</span>
+                        <span class="difficulty hard">難: 7</span>
+                        <span class="difficulty normal">普: 5</span>
+                    </div>
+                </div>
+            </div>
+            <button id="backBtn" class="btn secondary">戻る</button>
+        </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>

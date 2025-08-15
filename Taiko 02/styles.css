@@ -1,0 +1,233 @@
+@charset "UTF-8";
+
+:root {
+    --c-bg: #0e0e12;
+    --c-fg: #e7e7ee;
+    --c-accent: #6be675;
+    --c-red: #ff6b6b;
+    --c-blue: #4ecdc4;
+    --c-yellow: #ffd93d;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 16px;
+    --space-4: 24px;
+    --radius: 12px;
+    --elev: 0 10px 30px rgba(0, 0, 0, .25);
+    --font-ui: ui-sans-serif, system-ui;
+    --font-num: "Roboto Mono", monospace;
+}
+
+html,
+body,
+#wrap {
+    height: 100%;
+    margin: 0;
+    background: var(--c-bg);
+    color: var(--c-fg);
+    font-family: var(--font-ui);
+}
+
+#wrap {
+    display: grid;
+    place-items: center;
+    position: relative;
+}
+
+#game {
+    background: #14141a;
+    border-radius: var(--radius);
+    box-shadow: var(--elev);
+}
+
+.safe {
+    position: absolute;
+    inset: 0;
+    padding: var(--space-3);
+    pointer-events: none;
+}
+
+.btn {
+    pointer-events: auto;
+    height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn.primary {
+    background: var(--c-accent);
+    color: #08140b;
+}
+
+.btn.secondary {
+    background: rgba(231, 231, 238, 0.1);
+    color: var(--c-fg);
+    border: 1px solid rgba(231, 231, 238, 0.2);
+}
+
+/* HUD要素 */
+.score,
+.combo,
+.accuracy {
+    position: absolute;
+    pointer-events: auto;
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.score {
+    top: var(--space-3);
+    left: var(--space-3);
+}
+
+.combo {
+    top: var(--space-3);
+    right: var(--space-3);
+}
+
+.accuracy {
+    top: calc(var(--space-3) + 30px);
+    right: var(--space-3);
+}
+
+.menu {
+    position: absolute;
+    bottom: var(--space-3);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.offset-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    align-items: center;
+    background: rgba(231, 231, 238, 0.05);
+    border: 1px solid rgba(231, 231, 238, 0.1);
+    border-radius: var(--radius);
+    padding: var(--space-2);
+    min-width: 300px;
+}
+
+.offset-controls label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--c-fg);
+    pointer-events: auto;
+}
+
+.offset-controls input[type="range"] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(231, 231, 238, 0.1);
+    outline: none;
+    pointer-events: auto;
+}
+
+.offset-controls input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--c-accent);
+    cursor: pointer;
+}
+
+.offset-controls input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--c-accent);
+    cursor: pointer;
+    border: none;
+}
+
+.btn.small {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+}
+
+/* 曲選択画面 */
+.song-select {
+    position: absolute;
+    inset: 0;
+    background: rgba(14, 14, 18, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+}
+
+.song-select.hidden {
+    display: none;
+}
+
+.song-list {
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: var(--space-4);
+}
+
+.song-item {
+    background: rgba(231, 231, 238, 0.05);
+    border: 1px solid rgba(231, 231, 238, 0.1);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+    margin-bottom: var(--space-2);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.song-item:hover {
+    background: rgba(231, 231, 238, 0.1);
+    border-color: var(--c-accent);
+}
+
+.song-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: var(--space-1);
+}
+
+.song-subtitle {
+    font-size: 14px;
+    opacity: 0.7;
+    margin-bottom: var(--space-2);
+}
+
+.song-difficulty {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.difficulty {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.difficulty.oni {
+    background: var(--c-red);
+    color: #fff;
+}
+
+.difficulty.hard {
+    background: var(--c-blue);
+    color: #fff;
+}
+
+.difficulty.normal {
+    background: var(--c-yellow);
+    color: #000;
+}
