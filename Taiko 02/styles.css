@@ -231,3 +231,25 @@ body,
     background: var(--c-yellow);
     color: #000;
 }
+
+.difficulty.easy {
+    background: var(--c-accent);
+    color: #08140b;
+}
+
+/* 読み込み中とエラー表示 */
+.loading,
+.no-songs {
+    text-align: center;
+    padding: var(--space-4);
+    color: var(--c-fg);
+    opacity: 0.7;
+}
+
+.loading {
+    font-style: italic;
+}
+
+.no-songs {
+    color: var(--c-red);
+}

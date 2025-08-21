@@ -179,6 +179,57 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
         }
     }
 
+    // 現在のBPMを取得する関数（ドンカマ2000対応）
+    function getCurrentBpm(gameTime) {
+        if (!songData.bpmChanges || songData.bpmChanges.length === 0) {
+            return songData.bpm;
+        }
+
+        // 現在の時間に対応するBPMを検索
+        let currentBpm = songData.bpm;
+        for (let i = songData.bpmChanges.length - 1; i >= 0; i--) {
+            if (gameTime >= songData.bpmChanges[i].time) {
+                currentBpm = songData.bpmChanges[i].bpm;
+                break;
+            }
+        }
+        return currentBpm;
+    }
+
+    // 現在のスクロール速度を取得する関数（ドンカマ2000対応）
+    function getCurrentScroll(gameTime) {
+        if (!songData.scrollChanges || songData.scrollChanges.length === 0) {
+            return 1.0;
+        }
+
+        // 現在の時間に対応するスクロール速度を検索
+        let currentScroll = 1.0;
+        for (let i = songData.scrollChanges.length - 1; i >= 0; i--) {
+            if (gameTime >= songData.scrollChanges[i].time) {
+                currentScroll = songData.scrollChanges[i].scroll;
+                break;
+            }
+        }
+        return currentScroll;
+    }
+
+    // ノートの移動速度を計算する関数（ドンカマ2000対応）
+    function calculateNoteSpeed(gameTime) {
+        const currentBpm = getCurrentBpm(gameTime);
+        const currentScroll = getCurrentScroll(gameTime);
+        const beatsPerSecond = currentBpm / 60;
+        const timeToJudgment = BEATS_TO_JUDGMENT / beatsPerSecond;
+
+        // スクロール速度を適用
+        const adjustedTimeToJudgment = timeToJudgment / currentScroll;
+
+        return {
+            beatsPerSecond,
+            timeToJudgment: adjustedTimeToJudgment,
+            scroll: currentScroll
+        };
+    }
+
     function updateNotes(adjustedGameTime) {
         // ユーザー設定のオフセットを適用
         const userOffset = (gameState.noteOffset || 0) / 1000; // ミリ秒を秒に変換
@@ -188,18 +239,15 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
         for (let i = 0; i < notes.length; i++) {
             const note = notes[i];
             if (!note.hit && !note.missed && !activeNotes.includes(note)) {
-                // 拍数ベースでノートの流れを制御
-                const beatsPerSecond = songData.bpm / 60;
-                const timeToJudgment = BEATS_TO_JUDGMENT / beatsPerSecond;
+                // ドンカマ2000対応：ノート生成時のBPMとスクロール速度を使用
+                const noteSpeed = calculateNoteSpeed(note.time);
                 const noteArrivalTime = note.time;
-                const noteSpawnTime = noteArrivalTime - timeToJudgment; // ノートが生成される時間
+                const noteSpawnTime = noteArrivalTime - noteSpeed.timeToJudgment; // ノートが生成される時間
 
                 // ノートが生成される時間からアクティブにする（時間順に順番に生成）
-                // ノートが生成される時間からアクティブにする（時間順に順番に生成）
-                // 現在の時間がノート生成時間に達した時のみ生成
                 if (adjustedTimeWithOffset >= noteSpawnTime && adjustedTimeWithOffset < noteSpawnTime + 0.1 && !activeNotes.includes(note)) {
                     activeNotes.push(note);
-                    // console.log(`ノート生成: ${note.type}, 譜面時間: ${note.time.toFixed(3)}s, 生成時間: ${noteSpawnTime.toFixed(3)}s, 到着時間: ${noteArrivalTime.toFixed(3)}s, 現在時間: ${adjustedTimeWithOffset.toFixed(3)}s, 6拍時間: ${timeToJudgment.toFixed(3)}s`);
+                    // console.log(`ノート生成: ${note.type}, 譜面時間: ${note.time.toFixed(3)}s, 生成時間: ${noteSpawnTime.toFixed(3)}s, 到着時間: ${noteArrivalTime.toFixed(3)}s, 現在時間: ${adjustedTimeWithOffset.toFixed(3)}s, BPM: ${getCurrentBpm(note.time)}, スクロール: ${getCurrentScroll(note.time)}`);
                 }
             }
         }
@@ -207,8 +255,8 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
         // ミスしたノートを処理（不可ヒット済みのノーツは除外）
         for (let i = activeNotes.length - 1; i >= 0; i--) {
             const note = activeNotes[i];
-            const beatsPerSecond = songData.bpm / 60;
-            const timeToJudgment = BEATS_TO_JUDGMENT / beatsPerSecond;
+            // ドンカマ2000対応：ノート到着時のBPMとスクロール速度を使用
+            const noteSpeed = calculateNoteSpeed(note.time);
             const noteArrivalTime = note.time;
 
             // 不可ヒット済みのノーツはミス判定から除外
@@ -418,29 +466,28 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
             const userOffset = (gameState.noteOffset || 0) / 1000; // ミリ秒を秒に変換
             const adjustedTimeWithOffset = adjustedGameTime + userOffset;
 
-            // 拍数ベースでノートの位置を計算
-            const beatsPerSecond = songData.bpm / 60;
-            const timeToJudgment = BEATS_TO_JUDGMENT / beatsPerSecond;
+            // ドンカマ2000対応：ノート生成時のBPMとスクロール速度を使用して位置を計算
+            const noteSpeed = calculateNoteSpeed(note.time);
             const timeUntilArrival = note.time - adjustedTimeWithOffset;
 
             let noteX;
-            if (timeUntilArrival > timeToJudgment) {
+            if (timeUntilArrival > noteSpeed.timeToJudgment) {
                 // まだ生成されていない
                 noteX = NOTE_SPAWN_X;
             } else if (timeUntilArrival > 0) {
                 // 判定枠に向かって移動中
-                const progress = 1 - (timeUntilArrival / timeToJudgment);
+                const progress = 1 - (timeUntilArrival / noteSpeed.timeToJudgment);
                 noteX = NOTE_SPAWN_X + (JUDGMENT_X - NOTE_SPAWN_X) * progress;
             } else {
                 // 判定枠を通過して左に流れ続ける（元の速度を維持）
                 const passedTime = Math.abs(timeUntilArrival);
-                const originalSpeed = (NOTE_SPAWN_X - JUDGMENT_X) / timeToJudgment; // 元の速度を計算
+                const originalSpeed = (NOTE_SPAWN_X - JUDGMENT_X) / noteSpeed.timeToJudgment; // 元の速度を計算
                 const passedDistance = passedTime * originalSpeed;
                 noteX = JUDGMENT_X - passedDistance;
 
                 // 判定枠到着の瞬間をログ出力（最初の1回のみ）
                 if (timeUntilArrival > -0.016 && !note.arrivalLogged) { // 16ms以内の初回のみ
-                    console.log(`判定枠到着: ${note.type}, 譜面時間: ${note.time.toFixed(3)}s, ゲーム時間: ${adjustedTimeWithOffset.toFixed(3)}s, 座標: ${noteX.toFixed(0)}px, 時間差: ${timeUntilArrival.toFixed(3)}s`);
+                    console.log(`判定枠到着: ${note.type}, 譜面時間: ${note.time.toFixed(3)}s, ゲーム時間: ${adjustedTimeWithOffset.toFixed(3)}s, 座標: ${noteX.toFixed(0)}px, 時間差: ${timeUntilArrival.toFixed(3)}s, BPM: ${getCurrentBpm(note.time)}, スクロール: ${getCurrentScroll(note.time)}`);
                     note.arrivalLogged = true;
                 }
             }
@@ -478,25 +525,24 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
                 const note = activeNotes[i];
                 const userOffset = (gameState.noteOffset || 0) / 1000;
                 const adjustedTimeWithOffset = adjustedGameTime + userOffset;
-                const beatsPerSecond = songData.bpm / 60;
-                const timeToJudgment = BEATS_TO_JUDGMENT / beatsPerSecond;
+                const noteSpeed = calculateNoteSpeed(note.time);
                 const noteArrivalTime = note.time;
                 const timeUntilArrival = note.time - adjustedTimeWithOffset;
 
                 let debugNoteX;
-                if (timeUntilArrival > timeToJudgment) {
+                if (timeUntilArrival > noteSpeed.timeToJudgment) {
                     debugNoteX = NOTE_SPAWN_X;
                 } else if (timeUntilArrival > 0) {
-                    const progress = 1 - (timeUntilArrival / timeToJudgment);
+                    const progress = 1 - (timeUntilArrival / noteSpeed.timeToJudgment);
                     debugNoteX = NOTE_SPAWN_X + (JUDGMENT_X - NOTE_SPAWN_X) * progress;
                 } else {
                     const passedTime = Math.abs(timeUntilArrival);
-                    const originalSpeed = (NOTE_SPAWN_X - JUDGMENT_X) / timeToJudgment; // 元の速度を計算
+                    const originalSpeed = (NOTE_SPAWN_X - JUDGMENT_X) / noteSpeed.timeToJudgment; // 元の速度を計算
                     const passedDistance = passedTime * originalSpeed;
                     debugNoteX = JUDGMENT_X - passedDistance;
                 }
 
-                ctx.fillText(`ノート${i + 1}: ${note.type}, 到着時間: ${noteArrivalTime.toFixed(2)}s, X位置: ${debugNoteX.toFixed(0)}px, 残り時間: ${timeUntilArrival.toFixed(2)}s`, 20, 180 + i * 15);
+                ctx.fillText(`ノート${i + 1}: ${note.type}, 到着時間: ${noteArrivalTime.toFixed(2)}s, X位置: ${debugNoteX.toFixed(0)}px, 残り時間: ${timeUntilArrival.toFixed(2)}s, BPM: ${getCurrentBpm(note.time)}, スクロール: ${getCurrentScroll(note.time).toFixed(2)}`, 20, 260 + i * 15);
             }
         }
 
@@ -511,15 +557,15 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
     }
 
     function renderJudgments(ctx) {
-        const judgmentY = NOTE_LANE_Y - 80;
+        const judgmentY = NOTE_LANE_Y - 120; // 判定ラインから120px上に配置
 
         // ヒット判定（最新の判定が手前に表示されるように逆順で描画）
         for (let i = hitNotes.length - 1; i >= 0; i--) {
             const hit = hitNotes[i];
-            const age = gameTime - hit.time;
+            const age = Math.max(0, gameTime - hit.time); // 負の値を防ぐ
             if (age < 1.0) {
                 const alpha = 1.0 - age;
-                const y = judgmentY - age * 30;
+                const y = judgmentY - age * 40; // 上に移動（速度を調整）
 
                 // 判定テキストと色を設定
                 let judgmentText;
@@ -584,10 +630,10 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
         // ミス判定（最新の判定が手前に表示されるように逆順で描画）
         for (let i = missedNotes.length - 1; i >= 0; i--) {
             const miss = missedNotes[i];
-            const age = gameTime - miss.time;
+            const age = Math.max(0, gameTime - miss.time); // 負の値を防ぐ
             if (age < 1.0) {
                 const alpha = 1.0 - age;
-                const y = judgmentY - age * 30;
+                const y = judgmentY - age * 40; // 上に移動（速度を調整）
 
                 ctx.globalAlpha = alpha;
                 ctx.font = 'bold 32px ui-sans-serif, system-ui';
@@ -644,13 +690,21 @@ export function createGameScene(gameState, Input, Audio, TjaParser, onGameEnd) {
             ctx.fillText(`ゲーム時間: ${gameTime.toFixed(2)}s`, 20, 80);
             ctx.fillText(`調整時間: ${adjustedGameTime.toFixed(2)}s`, 20, 100);
             ctx.fillText(`オフセット: ${songData.offset}s`, 20, 120);
-            ctx.fillText(`BPM: ${songData.bpm}`, 20, 140);
-            ctx.fillText(`ユーザーオフセット: ${(gameState.noteOffset || 0)}ms`, 20, 160);
+            ctx.fillText(`現在BPM: ${getCurrentBpm(adjustedGameTime)}`, 20, 140);
+            ctx.fillText(`現在スクロール: ${getCurrentScroll(adjustedGameTime).toFixed(2)}`, 20, 160);
+            ctx.fillText(`ユーザーオフセット: ${(gameState.noteOffset || 0)}ms`, 20, 180);
 
-            // 拍数計算のデバッグ
-            const beatsPerSecond = songData.bpm / 60;
-            const timeToJudgment = BEATS_TO_JUDGMENT / beatsPerSecond;
-            ctx.fillText(`6拍の時間: ${timeToJudgment.toFixed(3)}s`, 20, 180);
+            // ドンカマ2000対応のデバッグ情報
+            const noteSpeed = calculateNoteSpeed(adjustedGameTime);
+            ctx.fillText(`6拍の時間: ${noteSpeed.timeToJudgment.toFixed(3)}s`, 20, 200);
+
+            // BPM変化情報
+            if (songData.bpmChanges && songData.bpmChanges.length > 0) {
+                ctx.fillText(`BPM変化数: ${songData.bpmChanges.length}`, 20, 220);
+            }
+            if (songData.scrollChanges && songData.scrollChanges.length > 0) {
+                ctx.fillText(`スクロール変化数: ${songData.scrollChanges.length}`, 20, 240);
+            }
         }
     }
 

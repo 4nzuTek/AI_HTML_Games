@@ -21,14 +21,23 @@ export function createTjaParser() {
             bpm: 120,
             offset: 0,
             wave: '',
-            courses: {}
+            courses: {},
+            // ドンカマ2000対応の追加データ
+            bpmChanges: [],
+            measureChanges: [],
+            scrollChanges: [],
+            gogoEvents: [],
+            barlineEvents: []
         };
 
         let currentCourse = null;
         let currentNotes = [];
         let measureLength = 4; // デフォルト4拍子
         let currentBpm = song.bpm;
+        let currentScroll = 1.0; // デフォルトスクロール速度
         let time = 0;
+        let isGogo = false; // GOGO状態
+        let barlineVisible = true; // 小節線表示状態
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -40,6 +49,11 @@ export function createTjaParser() {
             } else if (line.startsWith('BPM:')) {
                 song.bpm = parseFloat(line.substring(4));
                 currentBpm = song.bpm;
+                // 初期BPM変化を記録
+                song.bpmChanges.push({
+                    time: 0,
+                    bpm: currentBpm
+                });
             } else if (line.startsWith('OFFSET:')) {
                 song.offset = parseFloat(line.substring(7));
             } else if (line.startsWith('WAVE:')) {
@@ -48,7 +62,7 @@ export function createTjaParser() {
                 if (currentCourse) {
                     song.courses[currentCourse.name] = {
                         ...currentCourse,
-                        notes: parseNotes(currentNotes, currentBpm, measureLength)
+                        notes: parseNotes(currentNotes, song.bpmChanges, song.measureChanges, song.scrollChanges, song.gogoEvents, song.barlineEvents)
                     };
                 }
                 currentCourse = {
@@ -58,6 +72,12 @@ export function createTjaParser() {
                 };
                 currentNotes = [];
                 time = 0;
+                // コース開始時に状態をリセット
+                currentBpm = song.bpm;
+                currentScroll = 1.0;
+                measureLength = 4;
+                isGogo = false;
+                barlineVisible = true;
             } else if (line.startsWith('LEVEL:')) {
                 if (currentCourse) {
                     currentCourse.level = parseInt(line.substring(6));
@@ -71,15 +91,79 @@ export function createTjaParser() {
                 const bpmChange = parseFloat(line.substring(10));
                 if (!isNaN(bpmChange) && bpmChange > 0) {
                     currentBpm = bpmChange;
-                    console.log(`TJAパーサー: BPM変更: ${currentBpm}`);
+                    song.bpmChanges.push({
+                        time: time,
+                        bpm: currentBpm
+                    });
+                    console.log(`TJAパーサー: BPM変更: ${currentBpm} (時間: ${time.toFixed(3)}s)`);
                 }
+            } else if (line.startsWith('MEASURE:')) {
+                // 小節長変更コマンド
+                const measureStr = line.substring(8).trim();
+                const measureParts = measureStr.split('/');
+                if (measureParts.length === 2) {
+                    const numerator = parseFloat(measureParts[0]);
+                    const denominator = parseFloat(measureParts[1]);
+                    if (!isNaN(numerator) && !isNaN(denominator) && denominator > 0) {
+                        measureLength = numerator / denominator * 4; // 4/4を基準に変換
+                        song.measureChanges.push({
+                            time: time,
+                            measure: measureLength,
+                            original: measureStr
+                        });
+                        console.log(`TJAパーサー: 小節長変更: ${measureStr} (${measureLength.toFixed(3)}) (時間: ${time.toFixed(3)}s)`);
+                    }
+                }
+            } else if (line.startsWith('SCROLL:')) {
+                // スクロール速度変更コマンド
+                const scrollSpeed = parseFloat(line.substring(7));
+                if (!isNaN(scrollSpeed) && scrollSpeed > 0) {
+                    currentScroll = scrollSpeed;
+                    song.scrollChanges.push({
+                        time: time,
+                        scroll: currentScroll
+                    });
+                    console.log(`TJAパーサー: スクロール速度変更: ${currentScroll} (時間: ${time.toFixed(3)}s)`);
+                }
+            } else if (line.startsWith('GOGOSTART')) {
+                // GOGO開始
+                isGogo = true;
+                song.gogoEvents.push({
+                    time: time,
+                    type: 'start'
+                });
+                console.log(`TJAパーサー: GOGO開始 (時間: ${time.toFixed(3)}s)`);
+            } else if (line.startsWith('GOGOEND')) {
+                // GOGO終了
+                isGogo = false;
+                song.gogoEvents.push({
+                    time: time,
+                    type: 'end'
+                });
+                console.log(`TJAパーサー: GOGO終了 (時間: ${time.toFixed(3)}s)`);
+            } else if (line.startsWith('BARLINEOFF')) {
+                // 小節線非表示
+                barlineVisible = false;
+                song.barlineEvents.push({
+                    time: time,
+                    visible: false
+                });
+                console.log(`TJAパーサー: 小節線非表示 (時間: ${time.toFixed(3)}s)`);
+            } else if (line.startsWith('BARLINEON')) {
+                // 小節線表示
+                barlineVisible = true;
+                song.barlineEvents.push({
+                    time: time,
+                    visible: true
+                });
+                console.log(`TJAパーサー: 小節線表示 (時間: ${time.toFixed(3)}s)`);
             } else if (line.startsWith('#')) {
                 // コメント行は無視
             } else if (line.includes(',')) {
                 // ノート行
                 const parts = line.split(',');
                 const notes = parts[0];
-                let measure = 4; // デフォルト値
+                let measure = measureLength; // 現在の小節長を使用
 
                 // 小節長の解析を改善
                 if (parts[1]) {
@@ -89,7 +173,7 @@ export function createTjaParser() {
                         if (!isNaN(parsedMeasure) && parsedMeasure > 0) {
                             measure = parsedMeasure;
                         } else {
-                            console.warn(`TJAパーサー: 無効な小節長: "${measureStr}", デフォルト値4を使用`);
+                            console.warn(`TJAパーサー: 無効な小節長: "${measureStr}", 現在の小節長${measureLength}を使用`);
                         }
                     }
                 }
@@ -132,7 +216,13 @@ export function createTjaParser() {
                                     currentNotes.push({
                                         time: noteTimeValue,
                                         type: finalType,
-                                        originalType: noteType
+                                        originalType: noteType,
+                                        // ドンカマ2000対応の追加情報
+                                        bpm: currentBpm,
+                                        scroll: currentScroll,
+                                        measure: measure,
+                                        isGogo: isGogo,
+                                        barlineVisible: barlineVisible
                                     });
                                     addedNotes++;
                                 } else {
@@ -143,7 +233,7 @@ export function createTjaParser() {
                     }
 
                     if (addedNotes > 0) {
-                        console.log(`TJAパーサー: ノート行処理: "${notes}", 追加ノート数=${addedNotes}, 時間=${time.toFixed(3)}s`);
+                        console.log(`TJAパーサー: ノート行処理: "${notes}", 追加ノート数=${addedNotes}, 時間=${time.toFixed(3)}s, BPM=${currentBpm}, スクロール=${currentScroll}, 小節長=${measure.toFixed(3)}`);
                     }
 
                     const timeIncrement = (60 / currentBpm) * measure;
@@ -160,15 +250,23 @@ export function createTjaParser() {
         if (currentCourse) {
             song.courses[currentCourse.name] = {
                 ...currentCourse,
-                notes: parseNotes(currentNotes, currentBpm, measureLength)
+                notes: parseNotes(currentNotes, song.bpmChanges, song.measureChanges, song.scrollChanges, song.gogoEvents, song.barlineEvents)
             };
         }
+
+        // ドンカマ2000対応の統計情報を出力
+        console.log(`TJAパーサー: ドンカマ2000対応統計:`);
+        console.log(`  BPM変化数: ${song.bpmChanges.length}`);
+        console.log(`  小節長変化数: ${song.measureChanges.length}`);
+        console.log(`  スクロール変化数: ${song.scrollChanges.length}`);
+        console.log(`  GOGOイベント数: ${song.gogoEvents.length}`);
+        console.log(`  小節線イベント数: ${song.barlineEvents.length}`);
 
         return song;
     }
 
     // ノートを時間順にソート
-    function parseNotes(notes, bpm, measureLength) {
+    function parseNotes(notes, bpmChanges, measureChanges, scrollChanges, gogoEvents, barlineEvents) {
         // 元のノートの詳細情報をログ出力
         const originalTypeStats = {};
         notes.forEach(note => {

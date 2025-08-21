@@ -1,77 +1,55 @@
+import { SongLoader } from '../core/song-loader.js';
+
 export function createMenuScene(gameState, onSongSelect) {
     let isActive = false;
     let selectedSongIndex = 0;
     let selectedDifficultyIndex = 1; // Normal
     let songs = [];
+    let songInfos = []; // SongLoaderから取得した曲情報
     let difficulties = ['Easy', 'Normal', 'Hard', 'Oni'];
     let currentState = 'menu'; // 'menu', 'songSelect', 'difficultySelect'
-
-    // 曲の定義（フォルダ名とファイル名のマッピング）
-    const songDefinitions = [
-        {
-            displayName: 'ペットショップ大戦',
-            folderName: 'ペットショップ大戦',
-            fileName: 'ペットショップ大戦.tja',
-            audioFile: 'ペットショップ大戦.ogg'
-        },
-        {
-            displayName: 'いただきバベル',
-            folderName: 'いただきバベル (Prod. ケンモチヒデフミ)',
-            fileName: 'いただきバベル (Prod. ケンモチヒデフミ).tja',
-            audioFile: 'いただきバベル (Prod. ケンモチヒデフミ).ogg'
-        },
-        {
-            displayName: 'ハロー！ハロウィン',
-            folderName: 'ハロー！ハロウィン',
-            fileName: 'ハロー！ハロウィン.tja',
-            audioFile: 'ハロー！ハロウィン.ogg'
-        }
-    ];
-
-    // 曲名からファイルパスを取得する関数
-    function getSongPaths(displayName) {
-        const songDef = songDefinitions.find(def => def.displayName === displayName);
-        if (songDef) {
-            return {
-                tjaPath: `Songs/${songDef.folderName}/${songDef.fileName}`,
-                audioPath: `Songs/${songDef.folderName}/${songDef.audioFile}`
-            };
-        }
-        return null;
-    }
+    let songLoader = new SongLoader();
+    let isLoading = false;
 
     // 曲リストを動的に読み込み
     async function loadSongs() {
-        try {
-            // 各曲のTJAファイルの存在を確認
-            const availableSongs = [];
-            for (const songDef of songDefinitions) {
-                try {
-                    const response = await fetch(`Songs/${songDef.folderName}/${songDef.fileName}`);
-                    if (response.ok) {
-                        availableSongs.push(songDef.displayName);
-                        console.log(`曲が見つかりました: ${songDef.displayName}`);
-                    } else {
-                        console.log(`曲が見つかりません: ${songDef.displayName}`);
-                    }
-                } catch (error) {
-                    console.log(`曲の確認中にエラー: ${songDef.displayName}`, error);
-                }
-            }
+        if (isLoading) return;
 
-            songs = availableSongs;
-            console.log('利用可能な曲:', songs);
+        isLoading = true;
+        try {
+            console.log('メニューシーン: 曲の読み込み開始');
+            songInfos = await songLoader.loadSongs();
+
+            // 曲名のリストを作成
+            songs = songInfos.map(song => song.title || song.folderName);
+
+            console.log('メニューシーン: 読み込み完了', {
+                songCount: songs.length,
+                songs: songs,
+                songInfos: songInfos.map(s => ({ folderName: s.folderName, title: s.title }))
+            });
 
             // 曲が見つからない場合は固定リストを使用
             if (songs.length === 0) {
                 songs = ['ペットショップ大戦'];
-                console.log('利用可能な曲がないため、固定リストを使用');
+                console.log('メニューシーン: 利用可能な曲がないため、固定リストを使用');
             }
         } catch (error) {
+            console.error('メニューシーン: 曲の読み込みに失敗', error);
             // エラーの場合は固定リストを使用
             songs = ['ペットショップ大戦', 'いただきバベル', 'ハロー！ハロウィン'];
-            console.log('エラーにより固定曲リストを使用:', songs);
+            console.log('メニューシーン: エラーにより固定曲リストを使用:', songs);
+        } finally {
+            isLoading = false;
         }
+    }
+
+    // 選択された曲の情報を取得
+    function getSelectedSongInfo() {
+        if (selectedSongIndex >= 0 && selectedSongIndex < songInfos.length) {
+            return songInfos[selectedSongIndex];
+        }
+        return null;
     }
 
     // オフセット設定の読み込み
@@ -111,6 +89,15 @@ export function createMenuScene(gameState, onSongSelect) {
             }
         }
 
+        // 保存された曲を読み込んで初期選択位置を設定
+        const savedSong = localStorage.getItem('taikoLastSong');
+        if (savedSong !== null) {
+            const songIndex = songs.findIndex(song => song === savedSong);
+            if (songIndex !== -1) {
+                selectedSongIndex = songIndex;
+            }
+        }
+
         // オフセット設定はmain.jsで処理されるため、ここでは何もしない
     }
 
@@ -124,45 +111,64 @@ export function createMenuScene(gameState, onSongSelect) {
         if (currentState === 'menu') {
             // メニュー画面ではEnterキーで曲選択へ
             if (window.Input && window.Input.isPressed('Enter')) {
+                console.log('メニューシーン: メインメニューでEnterキーが押されました');
                 currentState = 'songSelect';
             }
         } else if (currentState === 'songSelect') {
             // 曲選択画面
             if (window.Input && window.Input.isPressed('ArrowUp')) {
                 selectedSongIndex = (selectedSongIndex - 1 + songs.length) % songs.length;
+                console.log(`メニューシーン: 曲選択 - 上矢印キー、選択曲: ${songs[selectedSongIndex]}`);
             } else if (window.Input && window.Input.isPressed('ArrowDown')) {
                 selectedSongIndex = (selectedSongIndex + 1) % songs.length;
+                console.log(`メニューシーン: 曲選択 - 下矢印キー、選択曲: ${songs[selectedSongIndex]}`);
             } else if (window.Input && window.Input.isPressed('Enter')) {
+                console.log('メニューシーン: 曲選択でEnterキーが押されました - 難易度選択へ');
                 currentState = 'difficultySelect';
             } else if (window.Input && window.Input.isPressed('Escape')) {
+                console.log('メニューシーン: 曲選択でEscapeキーが押されました - メインメニューへ');
                 currentState = 'menu';
             }
         } else if (currentState === 'difficultySelect') {
             // 難易度選択画面
             if (window.Input && window.Input.isPressed('ArrowLeft')) {
                 selectedDifficultyIndex = (selectedDifficultyIndex - 1 + difficulties.length) % difficulties.length;
+                console.log(`メニューシーン: 難易度選択 - 左矢印キー、選択難易度: ${difficulties[selectedDifficultyIndex]}`);
             } else if (window.Input && window.Input.isPressed('ArrowRight')) {
                 selectedDifficultyIndex = (selectedDifficultyIndex + 1) % difficulties.length;
+                console.log(`メニューシーン: 難易度選択 - 右矢印キー、選択難易度: ${difficulties[selectedDifficultyIndex]}`);
             } else if (window.Input && window.Input.isPressed('Enter')) {
+                console.log('メニューシーン: 難易度選択でEnterキーが押されました - ゲーム開始処理を開始');
                 // ゲーム開始
-                gameState.selectedSong = songs[selectedSongIndex];
-                gameState.selectedDifficulty = difficulties[selectedDifficultyIndex];
+                console.log('メニューシーン: Enterキーが押されました - ゲーム開始処理を開始');
+                const selectedSongInfo = getSelectedSongInfo();
+                console.log('メニューシーン: 選択された曲情報:', selectedSongInfo);
 
-                // 選択された難易度を保存
-                localStorage.setItem('taikoLastDifficulty', gameState.selectedDifficulty);
+                if (selectedSongInfo) {
+                    gameState.selectedSong = selectedSongInfo.folderName;
+                    gameState.selectedDifficulty = difficulties[selectedDifficultyIndex];
+                    gameState.selectedSongTjaPath = selectedSongInfo.tjaPath;
+                    gameState.selectedSongAudioPath = selectedSongInfo.audioPath;
 
-                // ファイルパス情報を追加
-                const songPaths = getSongPaths(gameState.selectedSong);
-                if (songPaths) {
-                    gameState.selectedSongTjaPath = songPaths.tjaPath;
-                    gameState.selectedSongAudioPath = songPaths.audioPath;
+                    // 選択された難易度と曲を保存
+                    localStorage.setItem('taikoLastDifficulty', gameState.selectedDifficulty);
+                    localStorage.setItem('taikoLastSong', gameState.selectedSong);
+
+                    console.log(`メニューシーン: ゲーム開始`, {
+                        song: gameState.selectedSong,
+                        difficulty: gameState.selectedDifficulty,
+                        tjaPath: gameState.selectedSongTjaPath,
+                        audioPath: gameState.selectedSongAudioPath
+                    });
+
+                    console.log('メニューシーン: onSongSelect()を呼び出します');
+                    onSongSelect();
+                    console.log('メニューシーン: onSongSelect()の呼び出し完了');
+                } else {
+                    console.error('メニューシーン: 選択された曲の情報が見つかりません');
                 }
-
-                console.log(`ゲーム開始: ${gameState.selectedSong} (${gameState.selectedDifficulty})`);
-                console.log(`TJAファイル: ${gameState.selectedSongTjaPath}`);
-                console.log(`音声ファイル: ${gameState.selectedSongAudioPath}`);
-                onSongSelect();
             } else if (window.Input && window.Input.isPressed('Escape')) {
+                console.log('メニューシーン: 難易度選択でEscapeキーが押されました - 曲選択へ');
                 currentState = 'songSelect';
             }
         }
@@ -180,6 +186,16 @@ export function createMenuScene(gameState, onSongSelect) {
         } else if (currentState === 'difficultySelect') {
             renderDifficultySelect(ctx);
         }
+
+        // デバッグ情報表示
+        ctx.fillStyle = '#ffff00';
+        ctx.font = '12px ui-sans-serif, system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(`現在の状態: ${currentState}`, 20, 20);
+        ctx.fillText(`選択曲インデックス: ${selectedSongIndex}`, 20, 35);
+        ctx.fillText(`選択難易度インデックス: ${selectedDifficultyIndex}`, 20, 50);
+        ctx.fillText(`曲数: ${songs.length}`, 20, 65);
+        ctx.fillText(`読み込み中: ${isLoading}`, 20, 80);
     }
 
     function renderMenu(ctx) {
@@ -199,6 +215,15 @@ export function createMenuScene(gameState, onSongSelect) {
         ctx.fillStyle = '#4ecdc4';
         ctx.fillText(`ノートオフセット: ${-(gameState.noteOffset || 0)}ms`, 640, 350);
 
+        // 曲の読み込み状況表示
+        if (isLoading) {
+            ctx.fillStyle = '#ffd93d';
+            ctx.fillText('曲を読み込み中...', 640, 380);
+        } else {
+            ctx.fillStyle = '#6be675';
+            ctx.fillText(`利用可能な曲: ${songs.length}曲`, 640, 380);
+        }
+
         // 操作説明
         ctx.font = '16px ui-sans-serif, system-ui';
         ctx.fillStyle = '#e7e7ee';
@@ -215,9 +240,17 @@ export function createMenuScene(gameState, onSongSelect) {
         ctx.textAlign = 'center';
         ctx.fillText('曲選択', 640, 100);
 
+        if (isLoading) {
+            ctx.fillStyle = '#ffd93d';
+            ctx.font = '20px ui-sans-serif, system-ui';
+            ctx.fillText('曲を読み込み中...', 640, 300);
+            return;
+        }
+
         // 曲リスト描画
         for (let i = 0; i < songs.length; i++) {
             const song = songs[i];
+            const songInfo = songInfos[i];
             const y = 200 + i * 60;
             const isSelected = i === selectedSongIndex;
 
@@ -230,6 +263,13 @@ export function createMenuScene(gameState, onSongSelect) {
             ctx.font = 'bold 24px ui-sans-serif, system-ui';
             ctx.textAlign = 'left';
             ctx.fillText(song, 220, y + 8);
+
+            // サブタイトル表示
+            if (songInfo && songInfo.subtitle && songInfo.subtitle !== '--') {
+                ctx.font = '16px ui-sans-serif, system-ui';
+                ctx.fillStyle = isSelected ? '#14141a' : '#888';
+                ctx.fillText(songInfo.subtitle, 220, y + 30);
+            }
         }
 
         // 操作説明

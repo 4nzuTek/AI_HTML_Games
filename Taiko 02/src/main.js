@@ -3,7 +3,6 @@ import { createAudio } from './core/audio.js';
 import { createTjaParser } from './core/tja-parser.js';
 import { createGameScene } from './scenes/game-scene.js';
 import { createMenuScene } from './scenes/menu-scene.js';
-import { createSongSelectScene } from './scenes/song-select-scene.js';
 
 // Canvas初期化
 const canvas = document.getElementById('game');
@@ -28,6 +27,8 @@ const gameState = {
     accuracy: 100,
     selectedSong: null,
     selectedDifficulty: 'Normal',
+    selectedSongTjaPath: null,
+    selectedSongAudioPath: null,
     noteOffset: 0 // ノートオフセット設定（ミリ秒）
 };
 
@@ -35,6 +36,7 @@ const gameState = {
 function loadSettings() {
     const savedOffset = localStorage.getItem('taikoNoteOffset');
     const savedDifficulty = localStorage.getItem('taikoLastDifficulty');
+    const savedSong = localStorage.getItem('taikoLastSong');
 
     if (savedOffset !== null) {
         gameState.noteOffset = parseInt(savedOffset);
@@ -42,12 +44,18 @@ function loadSettings() {
     if (savedDifficulty !== null) {
         gameState.selectedDifficulty = savedDifficulty;
     }
+    if (savedSong !== null) {
+        gameState.selectedSong = savedSong;
+    }
 }
 
 // 設定をローカルストレージに保存
 function saveSettings() {
     localStorage.setItem('taikoNoteOffset', gameState.noteOffset.toString());
     localStorage.setItem('taikoLastDifficulty', gameState.selectedDifficulty);
+    if (gameState.selectedSong) {
+        localStorage.setItem('taikoLastSong', gameState.selectedSong);
+    }
 }
 
 // 設定を読み込み
@@ -77,6 +85,7 @@ const scenes = {
 
 // シーン切り替え
 function switchScene(sceneName) {
+    console.log(`シーン切り替え: ${sceneName}`);
     if (currentScene) {
         currentScene.leave();
     }
